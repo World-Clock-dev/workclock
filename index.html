@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="Employee time and attendance application">
+  <title>Employee Time Clock</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="employeeSection">
+    <header class="brand"><div class="brandMark">WC</div><div><strong>WorkClock</strong><span>Employee Time Clock</span></div></header>
+    <section id="employeeLogin" class="card narrow">
+      <h1>Employee Sign In</h1><p class="muted">Use your approved name and private 4-digit PIN.</p>
+      <label>Employee Name<input id="employeeLoginName" autocomplete="username" placeholder="Full name" maxlength="120"></label>
+      <label>4-Digit PIN<span class="passwordField"><input id="employeePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" placeholder="••••"><button type="button" class="eyeBtn" data-toggle-password="employeePin">Show</button></span></label>
+      <button id="employeeLoginBtn" class="primary">Sign In</button>
+      <div id="employeeLoginError" class="error"></div>
+      <button id="forgotEmployeeBtn" class="linkBtn">Forgot your PIN?</button>
+      <div id="employeeRecovery" class="recovery hide"><label>Employee Name<input id="recoveryEmployeeName" maxlength="120" placeholder="Full name"></label><button id="requestPinResetBtn" class="secondary">Email Manager a Reset Request</button></div>
+      <div id="employeeRecoveryMsg" class="muted small"></div>
+    </section>
+
+    <section id="employeeApp" class="hide">
+      <section class="card">
+        <div class="signedIn"><div><div class="eyebrow">SIGNED IN AS</div><div id="employeeNameDisplay" class="name">—</div></div><button id="employeeLogoutBtn" class="secondary">Sign Out</button></div>
+        <div class="clockRow"><div><div id="clock" class="clock">--:--</div><div id="dateText" class="muted"></div></div><div id="status"></div></div>
+        <div class="actions"><button id="in" class="success">Clock In</button><button id="out" class="danger">Clock Out</button></div>
+        <div id="earlyNoteWrap" class="noteWrap hide"><label>Clock Out Reason<select id="earlyNote"><option>Ending shift</option><option>Doctor appointment</option><option>Emergency</option><option>Project completed</option><option>Client request</option></select></label><p class="muted small">Choose the reason that best describes why you are ending your shift.</p></div>
+        <div id="shift" class="shift hide"><div><div class="eyebrow">CLOCK IN TIME</div><strong id="clockedAt">--</strong></div><div><div class="eyebrow">RUNNING TIME</div><strong id="running">00:00:00</strong></div><div class="shiftActive">● Currently clocked in</div></div>
+      </section>
+      <section class="stats two"><div class="stat"><span>PAID HOURS TODAY</span><strong id="hoursToday">0.00</strong><small id="earnedToday">$0.00</small></div><div class="stat"><span>PAID HOURS THIS WEEK</span><strong id="hoursWeek">0.00</strong><small id="earnedWeek">$0.00</small></div></section>
+      <section class="card"><div class="sectionHead"><div><h2>Weekly Summary</h2><div id="weekTitle" class="muted">Current week</div></div><div class="weekNav"><button id="prev">‹</button><input id="weekDate" type="date"><button id="next">›</button></div></div><div id="days" class="days"></div><div class="totals"><div><span>WEEK TOTAL</span><strong id="weekTotal">0.00</strong></div><div><span>WEEK EARNED</span><strong id="weekEarned">$0.00</strong></div></div></section>
+      <a class="managerLink" href="/?manager=1">Manager Dashboard →</a>
+      <p class="footer">Your time, earnings, and location records are private to your login.</p>
+    </section>
+  </main>
+
+  <main id="managerSection" class="hide">
+    <section id="managerLogin" class="card narrow managerLogin"><header class="brand"><div class="brandMark">WC</div><div><strong>WorkClock</strong><span>Manager</span></div></header><h1>Manager Sign In</h1>
+      <label>Username<input id="managerUser" autocomplete="username" value="manager" maxlength="120"></label>
+      <label>Password<span class="passwordField"><input id="managerPass" type="password" autocomplete="current-password" placeholder="Manager password"><button type="button" class="eyeBtn" data-toggle-password="managerPass">Show</button></span></label>
+      <button id="forgotManagerBtn" class="linkBtn">Forgot manager password?</button><div id="managerRecovery" class="recovery hide"><label>Manager Username<input id="recoveryManagerUsername" maxlength="120" value="manager"></label><button id="requestManagerResetBtn" class="secondary">Email Reset Link</button></div><div id="managerRecoveryMsg" class="muted small"></div>
+      <div id="managerResetBox" class="recovery hide"><h2>Set New Manager Password</h2><label>New Password<input id="resetManagerPassword" type="password" minlength="12"></label><label>Confirm Password<input id="resetManagerPasswordConfirm" type="password" minlength="12"></label><button id="completeManagerResetBtn" class="primary">Set New Password</button><div id="managerResetMsg" class="muted small"></div></div>
+      <button id="managerLoginBtn" class="primary">Sign In</button><div id="loginError" class="error"></div><a class="managerLink" href="/">← Employee Clock</a>
+    </section>
+    <section id="managerApp" class="hide managerWrap">
+      <header class="managerHeader"><div class="brand"><div class="brandMark">WC</div><div><strong>WorkClock</strong><span>Manager Dashboard</span></div></div><button id="logoutBtn" class="secondary">Log Out</button></header>
+      <section class="card"><div class="sectionHead"><div><h2>Employees</h2><p class="muted">Add employees, set wages, and manage their PINs.</p></div></div><div class="formGrid"><label>Name<input id="newName" maxlength="120" placeholder="Full name"></label><label>Employee Email (optional)<input id="newEmail" type="email" maxlength="254" placeholder="employee@example.com"></label><label>Hourly Wage ($)<input id="newWage" type="number" min="0" max="100000" step="0.01" placeholder="25.00"></label><label>4-Digit PIN<input id="newPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••"></label><button id="addEmployee" class="primary">Add / Update Employee</button></div><div id="employeeMsg" class="muted small"></div><div id="approvedList" class="pills"></div></section>
+      <section class="card"><h2>Application Settings</h2><p class="muted">These settings apply to future clock-out checks and paid-day calculations.</p><div class="formGrid three"><label>Clock-out radius (miles)<input id="radiusSetting" type="number" min="0.1" max="100" step="0.1"></label><label>Project-completed minimum paid hours<input id="projectMinSetting" type="number" min="0" max="24" step="0.25"></label><label>Maximum active employees<input id="maxEmployeesSetting" type="number" min="1" max="1000" step="1"></label><button id="saveSettings" class="primary">Save Settings</button></div><div id="settingsMsg" class="muted small"></div></section>
+      <section class="card"><h2>Manager Password</h2><div class="formGrid three"><label>Current Password<input id="currentManagerPassword" type="password"></label><label>New Password<input id="newManagerPassword" type="password" minlength="12"></label><label>Confirm New Password<input id="confirmManagerPassword" type="password" minlength="12"></label><button id="changeManagerPasswordBtn" class="primary">Change Password</button></div><div id="managerPasswordMsg" class="muted small"></div></section>
+      <section class="card"><div class="controls"><label>View By<select id="period"><option value="week">Weekly</option><option value="day">Daily</option></select></label><label>Date<input id="mdate" type="date"></label><input id="search" placeholder="Search employee"><button id="refresh" class="secondary">Refresh</button><a href="/">Employee Clock →</a></div><div id="range" class="range"></div></section>
+      <section class="stats four"><div class="stat"><span>ACTIVE EMPLOYEES</span><strong id="empCount">0</strong></div><div class="stat"><span>PAID HOURS</span><strong id="mHours">0.00</strong></div><div class="stat"><span>PAYROLL</span><strong id="payroll">$0.00</strong></div><div class="stat"><span>REJECTED CLOCK OUTS</span><strong id="rejected">0</strong></div></section>
+      <section id="weeklyCard" class="card"><h2>Weekly Paid Hours & Earnings</h2><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Wage</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>Total</th><th>Earnings</th></tr></thead><tbody id="weeklyRows"></tbody></table></div></section>
+      <section class="card"><h2>Shift Details</h2><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Actual Hours</th><th>Actual Earned</th><th>In Location</th><th>Out Location</th><th>Reason</th><th>Rejected</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
