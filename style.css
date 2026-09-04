@@ -143,15 +143,7 @@ body:has(#managerSection:not(.hide) #managerLogin:not(.hide)){
   background:linear-gradient(200deg, rgba(15,110,99,.18) 0%, rgba(17,24,39,.85) 100%);
 }
 .cardHero--employee{background-image:url('https://finecoatpainters.com/wp-content/uploads/2026/08/Commercial-Hero-Images.jpg')}
-.cardHeroTag{
-  position:relative;z-index:1;
-  color:#fff;font-size:.8125rem;font-weight:600;
-  padding:5px 12px;
-  background:rgba(255,255,255,.14);
-  border:1px solid rgba(255,255,255,.3);
-  border-radius:999px;
-  backdrop-filter:blur(2px);
-}
+
 
 /* Manager sign-in reuses its own inner .brand as the hero, since it already sits inside the card */
 .managerLogin{padding-top:0;overflow:hidden}
