@@ -110,3 +110,63 @@ export async function settingNumber(key, fallback) {
 export async function audit(actorType, actorId, action, metadata = {}) {
   await sql`INSERT INTO audit_logs(actor_type,actor_id,action,metadata) VALUES(${actorType},${actorId},${action},${JSON.stringify(metadata)}::jsonb)`;
 }
+
+// ---------------------------------------------------------------------------
+// Shared pay-period settings and site geofence
+// ---------------------------------------------------------------------------
+export async function getPaySettings() {
+  const rows = await sql`SELECT key,value FROM app_settings WHERE key IN
+    ('clock_out_radius_miles','project_completed_min_paid_hours','full_day_round_threshold_hours')`;
+  const m = {}; for (const r of rows) m[r.key] = r.value;
+  return {
+    clock_out_radius_miles: Number(m.clock_out_radius_miles ?? 3),
+    project_completed_min_paid_hours: Number(m.project_completed_min_paid_hours ?? 8),
+    full_day_round_threshold_hours: Number(m.full_day_round_threshold_hours ?? 7.75),
+  };
+}
+export async function getSite() {
+  const rows = await sql`SELECT key,value FROM app_settings WHERE key IN ('site_lat','site_lng','site_label')`;
+  const m = {}; for (const r of rows) m[r.key] = r.value;
+  const lat = Number(m.site_lat), lng = Number(m.site_lng);
+  const configured = m.site_lat && m.site_lng && Number.isFinite(lat) && Number.isFinite(lng);
+  return { configured, lat: configured ? lat : null, lng: configured ? lng : null, label: m.site_label || '' };
+}
+
+// ---------------------------------------------------------------------------
+// Shift pay calculation — the single source of truth used by every endpoint
+// that shows or totals hours/earnings, so the rules can never drift apart.
+// ---------------------------------------------------------------------------
+export function hoursBetween(clockIn, clockOut) {
+  return Math.max(0, (new Date(clockOut || Date.now()) - new Date(clockIn)) / 3600000);
+}
+const FULL_DAY_REASONS = new Set(['project completed', 'client request']);
+export function computePaidHours(shift, settings) {
+  if (shift.cancelled) return 0;
+  const actual = hoursBetween(shift.clock_in, shift.clock_out);
+  if (!shift.clock_out) return actual; // still an open shift — show the running total, no pay rule applies yet
+  const minimum = Number(settings.project_completed_min_paid_hours ?? 8);
+  const threshold = Number(settings.full_day_round_threshold_hours ?? 7.75);
+  // A manager's explicit override always wins, regardless of reason or hours.
+  if (shift.approval_status === 'adjusted' && shift.approved_paid_hours != null) {
+    return Number(shift.approved_paid_hours);
+  }
+  // An unattended 12-hour auto clock-out isn't a real worked duration — assume
+  // a standard day until a manager reviews it and says otherwise.
+  if (shift.auto_clocked_out) return minimum;
+  // Close enough to a full day that the reason picked in the last few minutes
+  // shouldn't matter — round up, and never let it reduce genuine overtime.
+  if (actual >= threshold) return Math.max(actual, minimum);
+  // Project completed / client request, left meaningfully early: paid the
+  // standard minimum provisionally, pending manager review.
+  if (FULL_DAY_REASONS.has(String(shift.clock_out_note || '').toLowerCase())) return minimum;
+  // Personal reason, doctor, emergency, or an early plain "ending shift":
+  // paid exactly the hours actually worked.
+  return actual;
+}
+export function needsApproval(shift, settings) {
+  if (shift.cancelled || !shift.clock_out) return false;
+  const actual = hoursBetween(shift.clock_in, shift.clock_out);
+  const threshold = Number(settings.full_day_round_threshold_hours ?? 7.75);
+  if (actual >= threshold) return false; // already earns the minimum on its own merits, nothing to review
+  return FULL_DAY_REASONS.has(String(shift.clock_out_note || '').toLowerCase()) && shift.approval_status === 'pending';
+}
