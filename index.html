@@ -6,12 +6,16 @@
   <meta name="theme-color" content="#111827">
   <meta name="description" content="Employee time and attendance application">
   <title>Employee Time Clock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main id="employeeSection">
     <header class="brand"><div class="brandMark">WC</div><div><strong>WorkClock</strong><span>Employee Time Clock</span></div></header>
     <section id="employeeLogin" class="card narrow">
+      <div class="cardHero cardHero--employee" aria-hidden="true"><span class="cardHeroTag">Fine Coat Painters</span></div>
       <h1>Employee Sign In</h1><p class="muted">Use your approved name and private 4-digit PIN.</p>
       <label>Employee Name<input id="employeeLoginName" autocomplete="username" placeholder="Full name" maxlength="120"></label>
       <label>4-Digit PIN<span class="passwordField"><input id="employeePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" placeholder="••••"><button type="button" class="eyeBtn" data-toggle-password="employeePin">Show</button></span></label>
@@ -24,14 +28,14 @@
 
     <section id="employeeApp" class="hide">
       <section class="card">
-        <div class="signedIn"><div><div class="eyebrow">SIGNED IN AS</div><div id="employeeNameDisplay" class="name">—</div></div><button id="employeeLogoutBtn" class="secondary">Sign Out</button></div>
+        <div class="signedIn"><div><div class="eyebrow">Signed in as</div><div id="employeeNameDisplay" class="name">—</div></div><button id="employeeLogoutBtn" class="secondary">Sign Out</button></div>
         <div class="clockRow"><div><div id="clock" class="clock">--:--</div><div id="dateText" class="muted"></div></div><div id="status"></div></div>
         <div class="actions"><button id="in" class="success">Clock In</button><button id="out" class="danger">Clock Out</button></div>
         <div id="earlyNoteWrap" class="noteWrap hide"><label>Clock Out Reason<select id="earlyNote"><option>Ending shift</option><option>Doctor appointment</option><option>Emergency</option><option>Project completed</option><option>Client request</option></select></label><p class="muted small">Choose the reason that best describes why you are ending your shift.</p></div>
-        <div id="shift" class="shift hide"><div><div class="eyebrow">CLOCK IN TIME</div><strong id="clockedAt">--</strong></div><div><div class="eyebrow">RUNNING TIME</div><strong id="running">00:00:00</strong></div><div class="shiftActive">● Currently clocked in</div></div>
+        <div id="shift" class="shift hide"><div><div class="eyebrow">Clock in time</div><strong id="clockedAt">--</strong></div><div><div class="eyebrow">Running time</div><strong id="running">00:00:00</strong></div><div class="shiftActive">● Currently clocked in</div></div>
       </section>
-      <section class="stats two"><div class="stat"><span>PAID HOURS TODAY</span><strong id="hoursToday">0.00</strong><small id="earnedToday">$0.00</small></div><div class="stat"><span>PAID HOURS THIS WEEK</span><strong id="hoursWeek">0.00</strong><small id="earnedWeek">$0.00</small></div></section>
-      <section class="card"><div class="sectionHead"><div><h2>Weekly Summary</h2><div id="weekTitle" class="muted">Current week</div></div><div class="weekNav"><button id="prev">‹</button><input id="weekDate" type="date"><button id="next">›</button></div></div><div id="days" class="days"></div><div class="totals"><div><span>WEEK TOTAL</span><strong id="weekTotal">0.00</strong></div><div><span>WEEK EARNED</span><strong id="weekEarned">$0.00</strong></div></div></section>
+      <section class="stats two"><div class="stat"><span>Paid hours today</span><strong id="hoursToday">0.00</strong><small id="earnedToday">$0.00</small></div><div class="stat"><span>Paid hours this week</span><strong id="hoursWeek">0.00</strong><small id="earnedWeek">$0.00</small></div></section>
+      <section class="card"><div class="sectionHead"><div><h2>Weekly Summary</h2><div id="weekTitle" class="muted">Current week</div></div><div class="weekNav"><button id="prev" aria-label="Previous week">‹</button><input id="weekDate" type="date"><button id="next" aria-label="Next week">›</button></div></div><div id="days" class="days"></div><div class="totals"><div><span>Week total</span><strong id="weekTotal">0.00</strong></div><div><span>Week earned</span><strong id="weekEarned">$0.00</strong></div></div></section>
       <a class="managerLink" href="/?manager=1">Manager Dashboard →</a>
       <p class="footer">Your time, earnings, and location records are private to your login.</p>
     </section>
@@ -51,8 +55,8 @@
       <section class="card"><h2>Application Settings</h2><p class="muted">These settings apply to future clock-out checks and paid-day calculations.</p><div class="formGrid three"><label>Clock-out radius (miles)<input id="radiusSetting" type="number" min="0.1" max="100" step="0.1"></label><label>Project-completed minimum paid hours<input id="projectMinSetting" type="number" min="0" max="24" step="0.25"></label><label>Maximum active employees<input id="maxEmployeesSetting" type="number" min="1" max="1000" step="1"></label><button id="saveSettings" class="primary">Save Settings</button></div><div id="settingsMsg" class="muted small"></div></section>
       <section class="card"><h2>Manager Password</h2><div class="formGrid three"><label>Current Password<input id="currentManagerPassword" type="password"></label><label>New Password<input id="newManagerPassword" type="password" minlength="12"></label><label>Confirm New Password<input id="confirmManagerPassword" type="password" minlength="12"></label><button id="changeManagerPasswordBtn" class="primary">Change Password</button></div><div id="managerPasswordMsg" class="muted small"></div></section>
       <section class="card"><div class="controls"><label>View By<select id="period"><option value="week">Weekly</option><option value="day">Daily</option></select></label><label>Date<input id="mdate" type="date"></label><input id="search" placeholder="Search employee"><button id="refresh" class="secondary">Refresh</button><a href="/">Employee Clock →</a></div><div id="range" class="range"></div></section>
-      <section class="stats four"><div class="stat"><span>ACTIVE EMPLOYEES</span><strong id="empCount">0</strong></div><div class="stat"><span>PAID HOURS</span><strong id="mHours">0.00</strong></div><div class="stat"><span>PAYROLL</span><strong id="payroll">$0.00</strong></div><div class="stat"><span>REJECTED CLOCK OUTS</span><strong id="rejected">0</strong></div></section>
-      <section id="weeklyCard" class="card"><h2>Weekly Paid Hours & Earnings</h2><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Wage</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>Total</th><th>Earnings</th></tr></thead><tbody id="weeklyRows"></tbody></table></div></section>
+      <section class="stats four"><div class="stat"><span>Active employees</span><strong id="empCount">0</strong></div><div class="stat"><span>Paid hours</span><strong id="mHours">0.00</strong></div><div class="stat"><span>Payroll</span><strong id="payroll">$0.00</strong></div><div class="stat"><span>Rejected clock outs</span><strong id="rejected">0</strong></div></section>
+      <section id="weeklyCard" class="card"><h2>Weekly Paid Hours &amp; Earnings</h2><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Wage</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>Total</th><th>Earnings</th></tr></thead><tbody id="weeklyRows"></tbody></table></div></section>
       <section class="card"><h2>Shift Details</h2><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Clock In</th><th>Clock Out</th><th>Actual Hours</th><th>Actual Earned</th><th>In Location</th><th>Out Location</th><th>Reason</th><th>Rejected</th></tr></thead><tbody id="rows"></tbody></table></div></section>
     </section>
   </main>
