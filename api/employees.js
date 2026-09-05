@@ -19,7 +19,9 @@ export default async function handler(req, res) {
     const manager = await requireManager(req, res); if (!manager) return;
     if (!requireSameOrigin(req, res)) return;
     if (req.method === 'GET') {
-      const rows = await sql`SELECT id,name,email,hourly_wage,active,(pin_hash IS NOT NULL) AS has_pin FROM employees WHERE active=true ORDER BY name`;
+      const rows = await sql`SELECT id,name,email,hourly_wage,active,(pin_hash IS NOT NULL) AS has_pin,
+        EXISTS(SELECT 1 FROM shifts s WHERE s.employee_id=e.id AND s.clock_out IS NULL) AS has_open_shift
+        FROM employees e WHERE active=true ORDER BY name`;
       return json(res, 200, { employees: rows });
     }
     if (req.method === 'POST') {
