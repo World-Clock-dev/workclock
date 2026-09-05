@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron-close-stale-shifts", "schedule": "0 9 * * *" }
+  ]
+}

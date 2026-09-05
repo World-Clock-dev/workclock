@@ -34,6 +34,7 @@ For production, verify the sending domain in Resend. The admin recipient remains
 ## Required core environment variables
 - `DATABASE_URL` — Neon PostgreSQL connection string
 - `SESSION_SECRET` — random secret, at least 32 characters
+- `CRON_SECRET` — random secret used to authenticate the Vercel stale-shift cron job
 
 ## Database
 Run `schema.sql` against a fresh Neon database. For an existing WorkClock v2 database, run the same schema; it contains `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` migrations for the email/reset tables.
@@ -44,4 +45,12 @@ Run `schema.sql` against a fresh Neon database. For an existing WorkClock v2 dat
 - Manager resets an employee PIN from the dashboard; the employee's existing sessions are revoked.
 
 ## Deployment
-GitHub repository → Vercel project → Neon database. Use a separate Neon database for testing so test shifts never enter production payroll data.
+1. Push the complete project, including `vercel.json`, to GitHub. The Vercel Cron schedule is defined there.
+2. In Vercel, import the GitHub repository and add all environment variables from `.env.example` under Project Settings → Environment Variables.
+3. Set `CRON_SECRET` to a long random value. Vercel sends it as `Authorization: Bearer <CRON_SECRET>` when invoking the scheduled function.
+4. Deploy to production. The cron schedule in `vercel.json` runs `/api/cron-close-stale-shifts` once daily at 09:00 UTC.
+5. In Neon, run `schema.sql` against the production database before employees begin using the application.
+6. Create the first manager with `node scripts/create-manager.mjs` using the production `DATABASE_URL`, or run the equivalent SQL securely.
+7. After deployment, sign in as manager, configure the job-site latitude/longitude, clock-out radius, payroll settings, and employees.
+
+Use a separate Neon database for testing so test shifts never enter production payroll data. Never commit `.env` or any real secrets to GitHub.
