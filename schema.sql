@@ -112,21 +112,3 @@ CREATE TABLE IF NOT EXISTS pin_reset_requests (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS pin_reset_requests_created_idx ON pin_reset_requests(created_at DESC);
-
--- v4: shift accountability, manager approval workflow, and job-site geofencing
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS clock_out_message TEXT;
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS approval_status TEXT CHECK (approval_status IN ('pending','approved','adjusted'));
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS approved_by BIGINT REFERENCES manager_users(id);
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS approved_paid_hours NUMERIC(6,2);
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS auto_clocked_out BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS closed_by_manager BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS cancelled BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE shifts ADD COLUMN IF NOT EXISTS stale_notice_seen BOOLEAN NOT NULL DEFAULT true;
-
-INSERT INTO app_settings(key, value) VALUES
-  ('full_day_round_threshold_hours', '7.75'),
-  ('site_lat', ''),
-  ('site_lng', ''),
-  ('site_label', '')
-ON CONFLICT (key) DO NOTHING;
