@@ -11,6 +11,7 @@
   --teal:#0F6E63;
   --teal-deep:#0B4F47;
   --gold:#C98A2C;
+  --gold-ink:#8A5A17;
   --grass:#2E7D4F;
   --grass-deep:#245F3D;
   --clay:#B23F30;
@@ -166,6 +167,16 @@ body:has(#managerSection:not(.hide) #managerLogin:not(.hide)){
    ========================================================= */
 label{display:block;font-size:.8125rem;font-weight:600;color:var(--ink-soft);margin:16px 0 6px}
 label:first-of-type{margin-top:20px}
+/* The clock card is intentionally dark (see #employeeApp > .card:first-child
+   below) — its one label (Clock Out Reason) needs light text or it's
+   effectively invisible against that background. */
+#employeeApp > .card:first-child label{color:rgba(255,255,255,.82)}
+textarea{
+  width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-family:inherit;font-size:.9375rem;
+  resize:vertical;min-height:64px;transition:border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+textarea:focus-visible{outline:none;border-color:var(--teal);box-shadow:0 0 0 4px rgba(15,110,99,.15)}
 input[type="text"],input[type="email"],input[type="password"],input[type="number"],input:not([type]),select{
   width:100%;
   padding:12px 14px;
@@ -265,7 +276,10 @@ button.success:active,button.danger:active{transform:scale(.97)}
 
 .clockRow{display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 4px}
 .clock{font-family:var(--font-display);font-size:2.5rem;font-weight:700;letter-spacing:-.02em;color:#fff;font-variant-numeric:tabular-nums}
-#status{font-size:.8125rem;color:var(--gold);font-weight:600}
+#status{font-size:.8125rem;font-weight:600}
+.status{color:var(--gold-light,#E0B15C)}
+.status.ok{color:#7FE0A8}
+.status.bad{color:#FF9E8C}
 
 .noteWrap{margin-top:14px;padding-top:14px;border-top:1px dashed rgba(255,255,255,.2)}
 .noteWrap select{margin-top:6px}
@@ -299,11 +313,12 @@ button.success:active,button.danger:active{transform:scale(.97)}
 .weekNav button:hover{background:#EAEEEC}
 .weekNav input{padding:8px 10px;font-size:.8125rem}
 .days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:16px}
-/* app.js populates this with one cell per day — generic fallback so whatever it inserts looks intentional */
-.days > *{
-  background:var(--canvas);border:1px solid var(--line);border-radius:8px;
-  padding:8px 4px;text-align:center;font-size:.75rem;color:var(--text-soft);
-}
+.day{background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 4px;text-align:center}
+.day > div:first-child{margin-bottom:6px}
+.dn{font-size:.6875rem;font-weight:700;color:var(--text-soft);letter-spacing:.02em}
+.dd{font-size:.6875rem;color:var(--text-soft);margin-top:1px}
+.dh{font-family:var(--font-display);font-size:.9375rem;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.dm{font-size:.6875rem;color:var(--teal);font-weight:600;margin-top:1px}
 .totals{display:flex;justify-content:space-between;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .totals span{display:block;font-size:.75rem;color:var(--text-soft)}
 .totals strong{font-family:var(--font-display);font-size:1.125rem;color:var(--ink)}
@@ -332,12 +347,24 @@ button.success:active,button.danger:active{transform:scale(.97)}
 .formGrid button{grid-column:1/-1}
 
 .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-/* app.js populates this with employee chips (and its own empty-state text) at runtime —
-   style whatever it inserts generically rather than guessing its exact markup */
-.pills > *{
+.pill{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
   background:var(--canvas);border:1px solid var(--line);border-radius:999px;
-  padding:6px 12px;font-size:.8125rem;font-weight:500;color:var(--ink);
+  padding:6px 8px 6px 14px;font-size:.8125rem;
 }
+.pill > b{font-weight:700;color:var(--ink)}
+.pill > span{color:var(--text-soft)}
+.pill .onClock{color:var(--grass-deep)}
+.pill button{
+  border:1.5px solid var(--line);background:var(--surface);color:var(--ink);
+  font-size:.75rem;font-weight:600;padding:6px 12px;border-radius:999px;
+  transition:background-color .15s var(--ease), border-color .15s var(--ease);
+}
+.pill button:hover{background:#EAEEEC}
+.pill button.clockout{border-color:var(--clay);color:var(--clay-deep)}
+.pill button.clockout:hover{background:var(--clay);color:#fff}
+.pill button.remove{border-color:transparent;background:none;color:var(--text-soft)}
+.pill button.remove:hover{color:var(--clay)}
 
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .controls select,.controls input{width:auto;padding:9px 12px}
@@ -356,11 +383,63 @@ tbody td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--text)
 tbody tr:last-child td{border-bottom:none}
 tbody tr{transition:background-color .12s var(--ease)}
 tbody tr:hover{background:var(--canvas)}
-#payroll{color:var(--gold)}
+#payroll{color:var(--gold-ink)}
 
 /* =========================================================
-   Responsive — tablet and up
+   Missed clock-out notice
    ========================================================= */
+.noticeBox{
+  background:#FBF3E4;border:1px solid #ECD6A8;border-radius:var(--radius-md);
+  padding:16px 18px;
+}
+.noticeBox h2{font-size:.9375rem;color:var(--gold-ink)}
+.noticeBox p{margin:6px 0 12px}
+.noticeBox button{width:auto;margin-top:0;padding:8px 16px;font-size:.8125rem}
+
+/* =========================================================
+   Job site location sub-section (inside Application Settings)
+   ========================================================= */
+.siteBlock{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line)}
+.siteBlock h2{font-size:.9375rem}
+.siteBlock .formGrid{margin-top:12px}
+.siteBlock button{margin-top:14px;width:auto;padding:10px 16px;font-size:.8125rem}
+
+/* =========================================================
+   Needs Your Attention — exceptions
+   ========================================================= */
+.exceptions{display:flex;flex-direction:column;gap:18px;margin-top:14px}
+.exGroup h3{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-soft);margin:0 0 8px}
+.exRow{
+  display:flex;flex-direction:column;gap:2px;
+  padding:10px 12px;border-radius:var(--radius-sm);background:var(--canvas);
+  margin-bottom:6px;font-size:.8125rem;
+}
+.exRow:last-child{margin-bottom:0}
+.exRow b{color:var(--ink)}
+.exRow span{color:var(--text-soft)}
+.exRow.bad{background:#FBEAE6;border:1px solid #F0C7BC}
+.exRow.bad span{color:var(--clay-deep)}
+.exRow.pending{background:#FBF3E4;border:1px solid #ECD6A8}
+.exActions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.exActions button{
+  width:auto;margin-top:0;padding:7px 14px;font-size:.75rem;
+  background:var(--surface);border:1.5px solid var(--line);color:var(--ink);
+}
+.exActions button:hover{background:#fff;border-color:var(--teal)}
+.adjustHours{width:80px !important;padding:7px 10px !important;font-size:.8125rem}
+
+/* =========================================================
+   Small status tags used inline in the Shift Details table
+   ========================================================= */
+.tag{
+  display:inline-block;font-size:.6875rem;font-weight:700;
+  padding:2px 8px;border-radius:999px;margin:3px 4px 0 0;
+  background:var(--canvas);color:var(--text-soft);
+}
+.tag.warn{background:#FBF3E4;color:var(--gold-ink)}
+.tag.bad{background:#FBEAE6;color:var(--clay-deep)}
+
+
 @media (min-width:640px){
   #employeeSection,#managerSection{padding:36px 24px 64px}
   .card{padding:32px}
