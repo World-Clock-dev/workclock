@@ -85,7 +85,7 @@ export async function getEmployeeSession(req) {
   if (!token) return null;
   const h = hashToken(token);
   const rows = await sql`
-    SELECT e.id,e.name,e.hourly_wage,e.active
+    SELECT e.id,e.name,e.job_title,e.hourly_wage,e.active
     FROM employee_sessions s JOIN employees e ON e.id=s.employee_id
     WHERE s.token_hash=${h} AND s.expires_at>now() AND e.active=true LIMIT 1`;
   return rows[0] || null;

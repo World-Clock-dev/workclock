@@ -45,3 +45,7 @@ Run `schema.sql` against a fresh Neon database. For an existing WorkClock v2 dat
 
 ## Deployment
 GitHub repository → Vercel project → Neon database. Use a separate Neon database for testing so test shifts never enter production payroll data.
+
+
+## v4.1 Front-end refresh
+The application UI now includes a responsive visual hero treatment, painting/work imagery, polished cards, hover states, subtle page/section transitions, image zoom effects, live-status animation, responsive mobile layouts, and reduced-motion accessibility support. The supplied image URLs are used as remote visual assets so the app remains lightweight.
