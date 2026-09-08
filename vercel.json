@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
-  ],
-  "crons": [
-    { "path": "/api/auto-clockout", "schedule": "0 0 * * *" }
-  ]
-}
