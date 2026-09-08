@@ -15,3 +15,15 @@ main{animation:pageIn .65s cubic-bezier(.2,.8,.2,1) both}.card,.stat,.dashboardH
 @keyframes pageIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes noticeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}}@keyframes shine{0%,65%{transform:translateX(-90px) rotate(-35deg)}100%{transform:translateX(230px) rotate(-35deg)}}@keyframes slowKen{from{transform:scale(1)}to{transform:scale(1.06)}}
 @media(max-width:800px){.authVisual{height:180px;grid-template-columns:1.7fr 1fr 1fr}.authContent{padding:22px 20px}.dashboardHero,.managerHero{grid-template-columns:1fr;min-height:0}.dashboardHeroImage,.managerHeroImage{height:190px;min-height:190px;order:-1}.dashboardHeroImage:after,.managerHeroImage:after{background:linear-gradient(180deg,rgba(15,23,42,.05),#0f172a)}.dashboardHeroContent,.managerHeroCopy{padding:25px 22px 28px}.dashboardHero h1,.managerHero h1{font-size:30px}.managerHeroImage{order:0}.managerHeroCopy{order:-1}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}}
+
+/* v4.2 usability polish */
+.earningsHero .stat:first-child{background:linear-gradient(135deg,#eff6ff,#ffffff)}
+.earningsHero .stat:last-child{background:linear-gradient(135deg,#ecfdf5,#ffffff)}
+.earningsCard{position:relative;overflow:hidden}
+.earningsCard:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#2563eb,#06b6d4,#16a34a)}
+.day{position:relative;overflow:hidden}.day:after{content:"";position:absolute;right:-18px;bottom:-28px;width:70px;height:70px;border-radius:50%;background:rgba(37,99,235,.05)}
+.dayEarnedLabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-top:2px}
+.earnedCell{font-weight:900;font-size:15px}.hoursCell,.earnCell{display:block}.earnCell{font-size:11px;color:var(--success);font-weight:800;margin-top:3px}
+#dailyEarningsCard{scroll-margin-top:20px}.managerWrap>.card:first-of-type{position:relative}.managerWrap>.card:first-of-type:before{content:"SHIFT CONTROL";position:absolute;right:20px;top:18px;font-size:10px;font-weight:900;letter-spacing:.1em;color:#64748b}
+.tableBtn.approve{box-shadow:0 4px 12px rgba(22,101,52,.12)}
+@media(max-width:800px){.managerWrap>.card:first-of-type:before{display:none}.earningsHero .stat{padding:16px}.days{grid-template-columns:repeat(2,1fr)}}

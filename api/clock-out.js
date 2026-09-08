@@ -1,14 +1,14 @@
 import { sql,json,validCoords,distanceMiles,requireEmployee,requireSameOrigin,settingNumber,audit } from './_db.js';
 import { safeAdminEmail,appUrl } from './_email.js';
 
-const ALLOWED = new Set(['Ending shift','Personal reason','Doctor appointment','Emergency','Project completed','Client request','Manager approval','Other']);
+const ALLOWED = new Set(['End of scheduled shift','Personal reason','Doctor appointment','Emergency','Project completed','Client request','Manager approval','Other']);
 function cleanMessage(v){const s=String(v??'').trim();return s.slice(0,1000);}
 export default async function handler(req,res){
   try{
     if(req.method!=='POST')return json(res,405,{error:'Method not allowed'});
     if(!requireSameOrigin(req,res))return;
     const emp=await requireEmployee(req,res);if(!emp)return;
-    const b=req.body||{},lat=Number(b.lat),lng=Number(b.lng),note=String(b.note||'Ending shift').trim(),message=cleanMessage(b.message);
+    const b=req.body||{},lat=Number(b.lat),lng=Number(b.lng),note=String(b.note||'End of scheduled shift').trim(),message=cleanMessage(b.message);
     if(!validCoords(lat,lng))return json(res,400,{error:'A valid GPS location is required.'});
     if(!ALLOWED.has(note))return json(res,400,{error:'Please select a valid Clock Out reason.'});
     const sh=await sql`SELECT id,clock_in,clock_in_lat,clock_in_lng FROM shifts WHERE employee_id=${emp.id} AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1`;
