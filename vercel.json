@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/auto-clockout", "schedule": "*/5 * * * *" }
+    { "path": "/api/auto-clockout", "schedule": "0 0 * * *" }
   ]
 }
