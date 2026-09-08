@@ -351,9 +351,7 @@ async function handleManager(req,res){
   const summary={total_paid_hours:0,total_payroll:0,rejected_clock_outs:0,pending_approvals:0};
   for(const x of shifts){const ci=new Date(x.clock_in),i=Math.floor((ci-start)/86400000),pm=paidMinutes(x,standardMinutes),am=actualMinutes(x.clock_in,x.clock_out),e=weekly[x.employee_id];summary.rejected_clock_outs+=Number(x.rejected_attempts||0);if(x.payment_status==='pending_approval')summary.pending_approvals++;if(i>=0&&i<7&&e){e.days[i]+=pm;e.actual_days[i]+=am;}summary.total_paid_hours+=pm/60;summary.total_payroll+=(pm/60)*Number(x.hourly_wage||0);}
   for(const e of Object.values(weekly)){e.days=e.days.map(v=>v/60);e.actual_days=e.actual_days.map(v=>v/60);e.total=e.days.reduce((a,b)=>a+b,0);e.earnings=e.days.reduce((a,b)=>a+b,0)*e.wage;}
-  // Every currently-open shift, independent of the selected date range, so a manager can always clock someone out from the dashboard even if their shift started outside the current filter.
-  const openShifts=await sql`SELECT s.id,s.employee_id,s.clock_in,e.name,e.job_title FROM shifts s JOIN employees e ON e.id=s.employee_id WHERE s.clock_out IS NULL ORDER BY s.clock_in`;
-  return json(res,200,{employees,shifts,events,summary,weekly:Object.values(weekly),openShifts,settings:{standard_shift_hours:standardMinutes/60,full_shift_threshold_minutes:await settingNumber('full_shift_threshold_minutes',465),max_shift_hours:await settingNumber('max_shift_hours',12)}});
+  return json(res,200,{employees,shifts,events,summary,weekly:Object.values(weekly),settings:{standard_shift_hours:standardMinutes/60,full_shift_threshold_minutes:await settingNumber('full_shift_threshold_minutes',465),max_shift_hours:await settingNumber('max_shift_hours',12)}});
  }catch(e){console.error(e);return json(res,500,{error:'Server error'});}
 }
 
