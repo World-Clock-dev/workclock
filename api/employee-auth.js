@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const emp = await getEmployeeSession(req);
-      return json(res, 200, { authenticated: !!emp, employee: emp ? { id: emp.id, name: emp.name, job_title: emp.job_title || 'Employee' } : null });
+      return json(res, 200, { authenticated: !!emp, employee: emp ? { id: emp.id, name: emp.name } : null });
     }
     if (!requireSameOrigin(req, res)) return;
     if (req.method === 'POST') {
@@ -12,7 +12,7 @@ export default async function handler(req, res) {
       const name = norm(b.name);
       const pin = String(b.pin || '').trim();
       if (!name || !/^\d{4}$/.test(pin)) return json(res, 400, { error: 'Enter your approved name and 4-digit PIN.' });
-      const rows = await sql`SELECT id,name,job_title,pin_hash,failed_pin_attempts,pin_locked_until FROM employees WHERE normalized_name=${name} AND active=true LIMIT 1`;
+      const rows = await sql`SELECT id,name,pin_hash,failed_pin_attempts,pin_locked_until FROM employees WHERE normalized_name=${name} AND active=true LIMIT 1`;
       if (!rows.length) return json(res, 401, { error: 'Incorrect employee name or PIN.' });
       const e = rows[0];
       if (e.pin_locked_until && new Date(e.pin_locked_until) > new Date()) return json(res, 429, { error: 'Too many incorrect PIN attempts. Try again in 10 minutes or contact your manager.' });
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       await sql`INSERT INTO employee_sessions(token_hash,employee_id,expires_at) VALUES(${hashToken(token)},${e.id},now()+interval '12 hours')`;
       setEmployeeCookie(res, token);
       await audit('employee', e.id, 'employee_login');
-      return json(res, 200, { ok: true, employee: { id: e.id, name: e.name, job_title: e.job_title || 'Employee' } });
+      return json(res, 200, { ok: true, employee: { id: e.id, name: e.name } });
     }
     if (req.method === 'DELETE') {
       const tok = getCookie(req, 'wc_employee');
