@@ -45,7 +45,8 @@ export default async function handler(req, res) {
       openShift:open[0]||null,
       summary:{days:daily,total_paid_hours:totalPaid,total_earnings:totalPaid*Number(emp.hourly_wage||0)},
       settings:{project_completed_min_paid_hours:paidMinimum},
-      ruleAlert: recentRuleAlert[0] ? { id: recentRuleAlert[0].id, message: 'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.' } : null
+      ruleAlert: recentRuleAlert[0] ? 'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.' : null,
+      ruleAlertId: recentRuleAlert[0]?.id || null
     });
   } catch (e) {
     console.error(e);
