@@ -55,6 +55,8 @@
     <section id="managerApp" class="hide managerWrap">
       <header class="managerHeader"><div class="brand"><div class="brandMark">WC</div><div><strong>WorkClock</strong><span>Manager Dashboard</span></div></div><button id="logoutBtn" class="secondary">Log Out</button></header>
 
+      <section class="card"><div class="sectionHead"><div><h2>Employees</h2><p class="muted">Add employees, set job titles and hourly wages, and manage their 4-digit PINs. Existing employee records can be updated here without losing time history.</p></div></div><div class="formGrid employeeForm"><label>Name<input id="newName" maxlength="120" placeholder="Full name"></label><label>Job Title<input id="newTitle" maxlength="80" placeholder="Painter, Assistant Painter, Office Administrator"></label><label>Employee Email (optional)<input id="newEmail" type="email" maxlength="254" placeholder="employee@example.com"></label><label>Hourly Wage ($)<input id="newWage" type="number" min="0" max="100000" step="0.01" placeholder="25.00"></label><label>4-Digit PIN<input id="newPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••"></label><button id="addEmployee" class="primary">Add / Update Employee</button></div><div id="employeeMsg" class="muted small"></div><div id="approvedList" class="pills"></div></section>
+
       <section class="stats six managerTopStats">
         <div class="stat"><span>ACTIVE EMPLOYEES</span><strong id="empCount">0</strong></div>
         <div class="stat"><span>PAID HOURS</span><strong id="mHours">0.00</strong></div>
