@@ -29,9 +29,8 @@
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
-  let employeeRuleAlertShown=false;
-  function showEmployeeLogin(){employeeRuleAlertShown=false;employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeRuleAlertShown=false;employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
+  function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
   function ensureEmployeeMap(){
     if(employeeMap || !window.L) return;
     employeeMap=L.map('employeeMap').setView([20,0],2);
@@ -55,7 +54,7 @@
     const p=empCache.employee,open=empCache.openShift;
     $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent=`$${Number(p.hourly_wage||0).toFixed(2)}/hr`;
     $('shift').classList.toggle('hide',!open);$('earlyNoteWrap').classList.toggle('hide',!open);$('in').disabled=!!open;$('out').disabled=!open;
-    if(open){const ci=new Date(open.clock_in);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());}
+    if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent='Select reason for leaving before 8 hours';}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
     $('weekTitle').textContent=`Week: ${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${end.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})}`;
     const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=['MON','TUE','WED','THU','FRI','SAT','SUN'];let total=0;
@@ -64,7 +63,6 @@
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
     $('hoursToday').textContent=today.toFixed(2);$('earnedToday').textContent='$'+(today*rate).toFixed(2);$('hoursWeek').textContent=total.toFixed(2);$('earnedWeek').textContent='$'+(total*rate).toFixed(2);
     renderEmployeeMap();
-    if(empCache.ruleAlert && !employeeRuleAlertShown){ stat(empCache.ruleAlert,'info'); employeeRuleAlertShown=true; }
   }
   async function loadEmployee(){
     if(managerMode||!employeeIdentity)return;
@@ -85,7 +83,7 @@
     $('prev').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()-7);$('weekDate').value=iso(d);loadEmployee();};
     $('next').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()+7);$('weekDate').value=iso(d);loadEmployee();};
     $('in').onclick=async()=>{try{stat('Checking GPS…');const c=await geo();const j=await api('/api/clock-in',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude})});stat(j.ruleAlert||'Clock In accepted. Your location was saved.','ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
-    $('out').onclick=async()=>{try{stat('Checking GPS and location limit…');const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:$('earlyNote').value,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?'Clock Out accepted. The manager must review this exception.':`Clock Out accepted. Distance from Clock In: ${Number(j.distance).toFixed(2)} miles.`,'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(e.payload?.ruleAlert||e.message,'bad');}};
+    $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat('You are not currently clocked in.','bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat('Please select a reason for clocking out before 8 hours.','bad');$('earlyNote').focus();return;}stat('Checking GPS and location limit…');const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?'Clock Out accepted. The manager must review this exception.':`Clock Out accepted. Distance from Clock In: ${Number(j.distance).toFixed(2)} miles.`,'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
     tick();setInterval(tick,1000);
   }
 
