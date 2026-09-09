@@ -29,8 +29,9 @@
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
-  function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
+  let employeeRuleAlertShown=false;
+  function showEmployeeLogin(){employeeRuleAlertShown=false;employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
+  function showEmployeeApp(emp){employeeRuleAlertShown=false;employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
   function ensureEmployeeMap(){
     if(employeeMap || !window.L) return;
     employeeMap=L.map('employeeMap').setView([20,0],2);
@@ -63,7 +64,7 @@
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
     $('hoursToday').textContent=today.toFixed(2);$('earnedToday').textContent='$'+(today*rate).toFixed(2);$('hoursWeek').textContent=total.toFixed(2);$('earnedWeek').textContent='$'+(total*rate).toFixed(2);
     renderEmployeeMap();
-    if(empCache.ruleAlert){ const alertKey=empCache.ruleAlertId?`workclock_rule_alert_${empCache.ruleAlertId}`:'workclock_rule_alert_legacy'; if(localStorage.getItem(alertKey)!=='shown'){ stat(empCache.ruleAlert,'info'); localStorage.setItem(alertKey,'shown'); } }
+    if(empCache.ruleAlert && !employeeRuleAlertShown){ stat(empCache.ruleAlert,'info'); employeeRuleAlertShown=true; }
   }
   async function loadEmployee(){
     if(managerMode||!employeeIdentity)return;
