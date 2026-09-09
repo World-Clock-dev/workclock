@@ -34,7 +34,7 @@ export default async function handler(req, res) {
       alloc.forEach((v,i)=>{ if (i<daily.length) { daily[i]+=v; totalPaid += v; } });
     }
     const recentRuleAlert = await sql`
-      SELECT r.created_at,r.distance_miles,r.reason,r.note
+      SELECT r.id,r.created_at,r.distance_miles,r.reason,r.note
       FROM rejected_clock_outs r JOIN shifts s ON s.id=r.shift_id
       WHERE s.employee_id=${emp.id} AND r.created_at < CURRENT_DATE AND r.created_at >= now()-interval '30 days'
       ORDER BY r.created_at DESC LIMIT 1`;
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       openShift:open[0]||null,
       summary:{days:daily,total_paid_hours:totalPaid,total_earnings:totalPaid*Number(emp.hourly_wage||0)},
       settings:{project_completed_min_paid_hours:paidMinimum},
-      ruleAlert: recentRuleAlert[0] ? 'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.' : null
+      ruleAlert: recentRuleAlert[0] ? { id: recentRuleAlert[0].id, message: 'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.' } : null
     });
   } catch (e) {
     console.error(e);
