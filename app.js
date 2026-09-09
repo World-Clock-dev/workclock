@@ -117,6 +117,16 @@
     if(payMode==='custom'&&(!Number.isFinite(paidHours)||paidHours<0||paidHours>24))return $('forceMsg').textContent='Custom paid hours must be between 0 and 24.';
     try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
   }
+  async function loadWeeklyPaidHours(){
+    if(!managerMode)return;
+    const selected=$('weeklyWeekDate').value?new Date($('weeklyWeekDate').value+'T12:00:00'):new Date(),start=ws(selected),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
+    const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
+    const q=$('search').value.trim().toLowerCase();
+    const weekly=(j.weekly||[]).filter(e=>!q||String(e.name).toLowerCase().includes(q));
+    $('weeklyRangeText').textContent=`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`;
+    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td><b>${esc(e.name)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}<td><b>${Number(e.total).toFixed(2)}</b></td><td><b>$${Number(e.earnings).toFixed(2)}</b></td></tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();}catch(e){alert(e.message);}});
+  }
   async function mgrRender(){
     if(!managerMode)return;
     try{
@@ -137,9 +147,7 @@
 
       $('rejectedRows').innerHTML=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)).map(x=>{const t=new Date(x.created_at);return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(t)}</td><td>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(x.reason)}</td><td>${esc(x.note||'—')}</td><td>${Number(x.distance_miles).toFixed(2)} mi</td><td>${loc(x.lat,x.lng,'View location')}</td></tr>`;}).join('')||'<tr><td colspan="7">No rejected clock-out attempts in this period.</td></tr>';
       $('empCount').textContent=managerPeople.length;$('mHours').textContent=Number(j.summary?.total_paid_hours||0).toFixed(2);$('payroll').textContent='$'+Number(j.summary?.total_payroll||0).toFixed(2);$('rejected').textContent=Number(j.summary?.rejected_clock_outs||0);$('liveClockIns').textContent=Number(j.summary?.live_clock_ins||0);$('pendingApprovals').textContent=Number(j.summary?.pending_approvals||0);
-      const weekly=(j.weekly||[]).filter(e=>!q||e.name.toLowerCase().includes(q));
-      $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td><b>${esc(e.name)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}<td><b>${Number(e.total).toFixed(2)}</b></td><td><b>$${Number(e.earnings).toFixed(2)}</b></td></tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
-      document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await mgrRender();}catch(e){alert(e.message);}});
+      await loadWeeklyPaidHours();
     }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;}
   }
   async function startManagerApp(){
@@ -150,6 +158,10 @@
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
     $('forceClockOutBtn').onclick=forceClockOut;
+    $('weeklyWeekDate').value=iso(new Date());
+    $('weeklyWeekDate').oninput=loadWeeklyPaidHours;
+    $('weeklyPrev').onclick=()=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()-7);$('weeklyWeekDate').value=iso(d);loadWeeklyPaidHours();};
+    $('weeklyNext').onclick=()=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+7);$('weeklyWeekDate').value=iso(d);loadWeeklyPaidHours();};
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
     $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
     ['period','mdate','search','shiftDetailsDate','shiftDetailsSearch'].forEach(id=>$(id).addEventListener('input',mgrRender));$('clearShiftDetailsFilters').onclick=()=>{$('shiftDetailsDate').value='';$('shiftDetailsSearch').value='';mgrRender();};$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
