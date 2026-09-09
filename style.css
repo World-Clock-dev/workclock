@@ -6,7 +6,42 @@ textarea{width:100%;border:1px solid #d1d5db;border-radius:10px;padding:11px 12p
 .stats.six{grid-template-columns:repeat(6,minmax(0,1fr));}
 .formGrid.four{grid-template-columns:repeat(4,minmax(0,1fr));}
 .formGrid .wide{grid-column:1/-1;}
-@media (max-width:1100px){.stats.six{grid-template-columns:repeat(3,minmax(0,1fr));}.formGrid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:640px){.stats.six,.formGrid.four{grid-template-columns:1fr;}}
+@media (max-width:1100px){.formGrid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:640px){.formGrid.four{grid-template-columns:1fr;}}
 
 .employeeRate{font-size:.9rem;font-weight:600;opacity:.85;margin-top:2px}
+
+/* Mobile manager portal optimization */
+.managerTopStats{margin:10px 0 16px;}
+.managerTopStats .stat{min-width:0;}
+@media (max-width:1100px){.stats.managerTopStats{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:800px){
+  .managerWrap{padding-bottom:20px;}
+  .managerHeader{position:sticky;top:0;z-index:20;background:var(--bg);padding:8px 0 12px;}
+  .managerHeader .secondary{padding:9px 12px;}
+  .managerTopStats{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:8px;}
+  .managerTopStats .stat{border-radius:12px;padding:11px 10px;}
+  .managerTopStats .stat span{font-size:9px;line-height:1.25;display:block;}
+  .managerTopStats .stat strong{font-size:19px;margin:3px 0 0;line-height:1.1;}
+  .sectionHead{align-items:flex-start;}
+  .sectionHead>div{min-width:0;flex:1;}
+  .sectionHead h2{font-size:17px;}
+  .weekNav{width:100%;justify-content:flex-end;flex-wrap:wrap;}
+  .weekNav input{max-width:125px;}
+  .managerWrap .formGrid.four{grid-template-columns:1fr !important;}
+  .managerWrap .employeeForm{grid-template-columns:1fr !important;}
+  .managerWrap .card{padding:14px;margin:10px 0;border-radius:14px;}
+  .managerWrap table{min-width:920px;}
+  .managerWrap .tableWrap{margin-left:-2px;margin-right:-2px;-webkit-overflow-scrolling:touch;}
+  #toggleShiftDetails,#toggleRejected{white-space:nowrap;}
+  #forceClockOutBtn{width:100%;}
+  .managerWrap .pills .pill{padding:10px;}
+}
+@media(max-width:480px){
+  .managerTopStats{gap:6px;}
+  .managerTopStats .stat{padding:9px 8px;}
+  .managerTopStats .stat span{font-size:8px;}
+  .managerTopStats .stat strong{font-size:17px;margin:2px 0 0;}
+  .managerHeader .brand strong{font-size:16px;}
+  .managerHeader .brandMark{width:38px;height:38px;}
+}
