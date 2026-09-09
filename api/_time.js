@@ -32,6 +32,7 @@ export function normalizeDayStarts(raw, fallbackStart, fallbackEnd) {
 
 export function effectiveShiftPay(shift, minimum = 8) {
   const actual = hoursBetween(shift.clock_in, shift.clock_out);
+  if (shift.manager_force_paid_hours != null && Number.isFinite(Number(shift.manager_force_paid_hours))) return Math.max(0, Number(shift.manager_force_paid_hours));
   return clockOutRule(shift.clock_out_note, actual, minimum, shift.manager_review_status).paidHours;
 }
 
@@ -47,8 +48,12 @@ export function allocatePaidHours(shift, dayStarts, minimum = 8) {
   }
   if (!totalSegment) return spans;
   const paidTotal = effectiveShiftPay(shift, minimum);
+  if (paidTotal <= totalSegment) {
+    const factor = totalSegment ? paidTotal / totalSegment : 0;
+    return spans.map(h => h * factor);
+  }
   const result = spans.slice();
-  const extra = Math.max(0, paidTotal - totalSegment);
+  const extra = paidTotal - totalSegment;
   const ci = new Date(shift.clock_in).getTime();
   let first = 0;
   for (let i = 0; i < dayStarts.length - 1; i++) {

@@ -18,6 +18,7 @@ export default async function handler(req,res){
     const employees=await sql`SELECT id,name,title,hourly_wage,active FROM employees WHERE active=true ORDER BY name`;
     const shifts=await sql`
       SELECT s.id,e.id AS employee_id,e.name,e.title,e.hourly_wage,s.clock_in,s.clock_out,s.clock_in_lat,s.clock_in_lng,s.clock_out_lat,s.clock_out_lng,s.clock_out_distance_miles,s.clock_out_note,s.clock_out_message,s.manager_review_status,s.manager_review_note,s.manager_reviewed_at,
+      (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
       (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
       FROM shifts s JOIN employees e ON e.id=s.employee_id
       WHERE s.clock_in<${end.toISOString()}::timestamptz AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
@@ -38,7 +39,9 @@ export default async function handler(req,res){
       FROM rejected_clock_outs r JOIN shifts s ON s.id=r.shift_id JOIN employees e ON e.id=s.employee_id
       WHERE r.created_at>=${start.toISOString()}::timestamptz AND r.created_at<${end.toISOString()}::timestamptz
       ORDER BY r.created_at DESC`;
-    const summary={total_paid_hours:totalPaid,total_payroll:totalPayroll,rejected_clock_outs:rejected.length};
+    const pendingCount=shifts.filter(s=>s.manager_review_status==='pending').length;
+    const liveEmployees=shifts.filter(s=>!s.clock_out).length;
+    const summary={total_paid_hours:totalPaid,total_payroll:totalPayroll,rejected_clock_outs:rejected.length,pending_approvals:pendingCount,live_clock_ins:liveEmployees};
     for(const e of Object.values(weekly)){e.total=e.days.reduce((a,b)=>a+b,0);e.earnings=e.total*e.wage;}
     return json(res,200,{employees,shifts,summary,weekly:Object.values(weekly),rejectedAttempts:rejected,settings:{project_completed_min_paid_hours:minimum}});
   }catch(e){console.error(e);return json(res,500,{error:'Server error'});}
