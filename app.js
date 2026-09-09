@@ -29,7 +29,7 @@
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
   function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2).replace(/^/, '$')+'/hr';$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
   function ensureEmployeeMap(){
     if(employeeMap || !window.L) return;
     employeeMap=L.map('employeeMap').setView([20,0],2);
@@ -51,7 +51,7 @@
   function renderEmployee(){
     if(managerMode||!employeeIdentity||!empCache)return;
     const p=empCache.employee,open=empCache.openShift;
-    $('employeeTitleDisplay').textContent=p.title||'';
+    $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent='$'+Number(p.hourly_wage||0).toFixed(2)+'/hr';
     $('shift').classList.toggle('hide',!open);$('earlyNoteWrap').classList.toggle('hide',!open);$('in').disabled=!!open;$('out').disabled=!open;
     if(open){const ci=new Date(open.clock_in);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
@@ -62,7 +62,7 @@
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
     $('hoursToday').textContent=today.toFixed(2);$('earnedToday').textContent='$'+(today*rate).toFixed(2);$('hoursWeek').textContent=total.toFixed(2);$('earnedWeek').textContent='$'+(total*rate).toFixed(2);
     renderEmployeeMap();
-    if(empCache.ruleAlert)stat(empCache.ruleAlert,'info');
+    if(empCache.ruleAlert){const key='workclock.notice.seen.'+String(empCache.ruleAlert.id);if(localStorage.getItem(key)!=='1'){stat(empCache.ruleAlert.message,'info');localStorage.setItem(key,'1');}}
   }
   async function loadEmployee(){
     if(managerMode||!employeeIdentity)return;
@@ -120,12 +120,9 @@
     try{
       const mode=$('period').value,d=$('mdate').value?new Date($('mdate').value+'T12:00:00'):new Date(),start=mode==='week'?ws(d):ds(d),daysCount=mode==='week'?7:1,bounds=dayBounds(start,daysCount),end=new Date(bounds[bounds.length-1]);
       $('range').textContent=mode==='week'?`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`:fmtDay(start);
-      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase();
-      const shiftDetailDate=$('shiftDetailDate')?.value||'';
-      let detailRows=(j.shifts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q));
-      if(shiftDetailDate){ detailRows=detailRows.filter(x=>iso(new Date(x.clock_in))===shiftDetailDate); }
+      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q));
       managerPeople=j.employees||managerPeople;populateForceShifts(j.shifts||[]);
-      $('rows').innerHTML=detailRows.map(x=>{
+      $('rows').innerHTML=rows.map(x=>{
         const actual=hours(x),paid=(()=>{if(x.manager_review_status==='approved_actual')return actual;if(x.manager_review_status==='approved_full')return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(reasonNeedsReview(x.clock_out_note))return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.clock_out_note==='Ending shift'&&actual>=7.75)return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.manager_force_paid_hours!=null&&Number.isFinite(Number(x.manager_force_paid_hours)))return Number(x.manager_force_paid_hours);return actual;})();
         const earned=paid*Number(x.hourly_wage||0),ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null;
         const review=x.manager_review_status==='pending'?`<button class="mini primary" data-review-full="${x.id}">Approve 8h</button><button class="mini secondary" data-review-actual="${x.id}">Approve Actual</button>`:esc(statusLabel(x.manager_review_status));
@@ -148,14 +145,12 @@
     $('addEmployee').onclick=async()=>{const name=$('newName').value.trim(),title=$('newTitle').value.trim(),email=$('newEmail').value.trim(),wage=Number($('newWage').value||0),pin=$('newPin').value.trim();if(!name)return $('employeeMsg').textContent='Enter an employee name.';if(!Number.isFinite(wage)||wage<0)return $('employeeMsg').textContent='Enter a valid hourly wage.';if(!/^\d{4}$/.test(pin))return $('employeeMsg').textContent='PIN must be exactly 4 digits.';try{await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});['newName','newTitle','newEmail','newWage','newPin'].forEach(id=>$(id).value='');$('employeeMsg').textContent='Employee saved and PIN set.';await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=e.message;}};
     $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
     $('changeManagerPasswordBtn').onclick=async()=>{const currentPassword=$('currentManagerPassword').value,newPassword=$('newManagerPassword').value,confirmPassword=$('confirmManagerPassword').value;if(!currentPassword||!newPassword||!confirmPassword)return $('managerPasswordMsg').textContent='Complete all password fields.';if(newPassword!==confirmPassword)return $('managerPasswordMsg').textContent='New passwords do not match.';try{await api('/api/manager-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('managerPasswordMsg').textContent='Password changed. Please sign in again.';setTimeout(()=>location.reload(),700);}catch(e){$('managerPasswordMsg').textContent=e.message;}};
-    $('shiftDetailDate').value=iso(new Date());
-    $('clearShiftDetailDate').onclick=()=>{ $('shiftDetailDate').value=''; mgrRender(); };
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
     $('forceClockOutBtn').onclick=forceClockOut;
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
     $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
-    ['period','mdate','search','shiftDetailDate'].forEach(id=>$(id).addEventListener('input',mgrRender));$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
+    ['period','mdate','search'].forEach(id=>$(id).addEventListener('input',mgrRender));$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
   }
   async function initManager(){
     const resetToken=new URLSearchParams(location.search).get('reset');

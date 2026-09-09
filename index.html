@@ -25,7 +25,7 @@
 
     <section id="employeeApp" class="hide">
       <section class="card">
-        <div class="signedIn"><div><div class="eyebrow">SIGNED IN AS</div><div id="employeeNameDisplay" class="name">—</div><div id="employeeTitleDisplay" class="employeeTitle">—</div></div><button id="employeeLogoutBtn" class="secondary">Sign Out</button></div>
+        <div class="signedIn"><div><div class="eyebrow">SIGNED IN AS</div><div id="employeeNameDisplay" class="name">—</div><div id="employeeTitleDisplay" class="employeeTitle">—</div><div id="employeeRateDisplay" class="employeeRate">$0.00/hr</div></div><button id="employeeLogoutBtn" class="secondary">Sign Out</button></div>
         <div class="clockRow"><div><div id="clock" class="clock">--:--</div><div id="dateText" class="muted"></div></div><div id="status"></div></div>
         <div class="actions"><button id="in" class="success">Clock In</button><button id="out" class="danger">Clock Out</button></div>
         <div id="earlyNoteWrap" class="noteWrap hide">
@@ -68,7 +68,7 @@
 
       <section class="card"><div class="sectionHead"><div><h2>Weekly Paid Hours & Earnings</h2><p class="muted">Paid hours and earnings for the selected week.</p></div></div><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Title</th><th>Wage</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>Total</th><th>Earnings</th></tr></thead><tbody id="weeklyRows"></tbody></table></div></section>
 
-      <section class="card"><div class="sectionHead"><div><h2>Shift Details</h2><p class="muted">Search an employee and choose a specific date to see only that employee's shifts for that day. Expand this section when needed.</p></div><button id="toggleShiftDetails" class="secondary" type="button">Minimize</button></div><div id="shiftDetailsBody"><div class="controls shiftDetailFilters"><label>Shift Date<input id="shiftDetailDate" type="date"></label><button id="clearShiftDetailDate" class="secondary" type="button">All Dates in Selected Period</button></div><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Day</th><th>Clock In</th><th>Clock Out</th><th>Actual</th><th>Paid</th><th>Earned</th><th>Reason / Message</th><th>Review</th><th>Locations</th><th>Manager Action</th></tr></thead><tbody id="rows"></tbody></table></div></div></section>
+      <section class="card"><div class="sectionHead"><div><h2>Shift Details</h2><p class="muted">Search an employee to see only that employee's shifts. Expand this section when needed.</p></div><button id="toggleShiftDetails" class="secondary" type="button">Minimize</button></div><div id="shiftDetailsBody"><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Day</th><th>Clock In</th><th>Clock Out</th><th>Actual</th><th>Paid</th><th>Earned</th><th>Reason / Message</th><th>Review</th><th>Locations</th><th>Manager Action</th></tr></thead><tbody id="rows"></tbody></table></div></div></section>
 
       <section class="card"><div class="sectionHead"><div><h2>Rejected Clock-Out Attempts</h2><p class="muted small">Collapsed by default. Attempts remain recorded even though the employee was not clocked out.</p></div><button id="toggleRejected" class="secondary" type="button">Show</button></div><div id="rejectedBody" class="hide"><div class="tableWrap"><table><thead><tr><th>Employee</th><th>Day</th><th>Time</th><th>Reason</th><th>Message</th><th>Distance</th><th>Attempted Location</th></tr></thead><tbody id="rejectedRows"></tbody></table></div></div></section>
 
