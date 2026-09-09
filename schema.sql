@@ -142,3 +142,16 @@ CREATE TABLE IF NOT EXISTS pin_reset_requests (
 CREATE INDEX IF NOT EXISTS pin_reset_requests_created_idx ON pin_reset_requests(created_at DESC);
 CREATE INDEX IF NOT EXISTS pin_reset_requests_ip_idx ON pin_reset_requests(request_ip_hash,created_at DESC);
 ALTER TABLE pin_reset_requests ADD COLUMN IF NOT EXISTS request_ip_hash TEXT;
+
+CREATE TABLE IF NOT EXISTS manager_force_clockouts (
+  id BIGSERIAL PRIMARY KEY,
+  shift_id BIGINT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+  manager_id BIGINT NOT NULL REFERENCES manager_users(id),
+  clock_out_at TIMESTAMPTZ NOT NULL,
+  pay_mode TEXT NOT NULL CHECK (pay_mode IN ('actual','eight','custom')),
+  paid_hours NUMERIC(10,2) NOT NULL CHECK (paid_hours >= 0 AND paid_hours <= 24),
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS manager_force_clockouts_shift_idx ON manager_force_clockouts(shift_id);
+CREATE INDEX IF NOT EXISTS manager_force_clockouts_created_idx ON manager_force_clockouts(created_at DESC);
