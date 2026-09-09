@@ -28,6 +28,9 @@ export default async function handler(req, res) {
       return json(res, 409, { error: 'You do not have an active Clock In.' });
     }
 
+    const elapsedHours = Math.max(0, (Date.now() - new Date(sh[0].clock_in).getTime()) / 3600000);
+    if (elapsedHours < 8 && !note) return json(res, 400, { error: 'Please select a reason for clocking out before 8 hours.' });
+
     const miles = distanceMiles(Number(sh[0].clock_in_lat), Number(sh[0].clock_in_lng), lat, lng);
     const radius = await settingNumber('clock_out_radius_miles', 3);
     if (miles > radius) {
