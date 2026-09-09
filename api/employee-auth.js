@@ -7,7 +7,7 @@ async function rateLimited(ipHash) {
 
 export default async function handler(req,res){
   try{
-    if(req.method==='GET'){const emp=await getEmployeeSession(req);return json(res,200,{authenticated:!!emp,employee:emp?{id:emp.id,name:emp.name,title:emp.title}:null});}
+    if(req.method==='GET'){const emp=await getEmployeeSession(req);return json(res,200,{authenticated:!!emp,employee:emp?{id:emp.id,name:emp.name,title:emp.title,hourly_wage:emp.hourly_wage}:null});}
     if(!requireSameOrigin(req,res))return;
     if(req.method==='POST'){
       const b=req.body||{},name=norm(b.name),pin=String(b.pin||'').trim(),ipHash=hashIp(req);
