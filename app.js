@@ -121,7 +121,7 @@
     try{
       const mode=$('period').value,d=$('mdate').value?new Date($('mdate').value+'T12:00:00'):new Date(),start=mode==='week'?ws(d):ds(d),daysCount=mode==='week'?7:1,bounds=dayBounds(start,daysCount),end=new Date(bounds[bounds.length-1]);
       $('range').textContent=mode==='week'?`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`:fmtDay(start);
-      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q));
+      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),shiftDate=$('shiftDetailsDate').value,shiftQ=$('shiftDetailsSearch').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>{const nameOk=!shiftQ||String(x.name).toLowerCase().includes(shiftQ);const dateOk=!shiftDate||iso(new Date(x.clock_in))===shiftDate;return nameOk&&dateOk;});
       managerPeople=j.employees||managerPeople;populateForceShifts(j.shifts||[]);
       $('rows').innerHTML=rows.map(x=>{
         const actual=hours(x),paid=(()=>{if(x.manager_review_status==='approved_actual')return actual;if(x.manager_review_status==='approved_full')return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(reasonNeedsReview(x.clock_out_note))return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.clock_out_note==='Ending shift'&&actual>=7.75)return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.manager_force_paid_hours!=null&&Number.isFinite(Number(x.manager_force_paid_hours)))return Number(x.manager_force_paid_hours);return actual;})();
@@ -151,7 +151,7 @@
     $('forceClockOutBtn').onclick=forceClockOut;
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
     $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
-    ['period','mdate','search'].forEach(id=>$(id).addEventListener('input',mgrRender));$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
+    ['period','mdate','search','shiftDetailsDate','shiftDetailsSearch'].forEach(id=>$(id).addEventListener('input',mgrRender));$('clearShiftDetailsFilters').onclick=()=>{$('shiftDetailsDate').value='';$('shiftDetailsSearch').value='';mgrRender();};$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
   }
   async function initManager(){
     const resetToken=new URLSearchParams(location.search).get('reset');
