@@ -59,10 +59,57 @@
     $('weekTitle').textContent=`Week: ${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${end.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})}`;
     const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=['MON','TUE','WED','THU','FRI','SAT','SUN'];let total=0;
     $('days').innerHTML=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;return `<div class="day"><div><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString([],{month:'numeric',day:'numeric'})}</div></div><div><div class="dh">${v.toFixed(2)}</div><div class="dm">$${(v*rate).toFixed(2)}</div></div></div>`;}).join('');
+    renderWeekFlags(start);
     $('weekTotal').textContent=total.toFixed(2);$('weekEarned').textContent='$'+(total*rate).toFixed(2);
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
     $('hoursToday').textContent=today.toFixed(2);$('earnedToday').textContent='$'+(today*rate).toFixed(2);$('hoursWeek').textContent=total.toFixed(2);$('earnedWeek').textContent='$'+(total*rate).toFixed(2);
     renderEmployeeMap();
+  }
+  function flagList(list,empty){
+    if(!list.length)return `<p class="muted small">${esc(empty)}</p>`;
+    return `<ul class="flagList">${list.map(s=>{
+      const bits=[],denied=Number(s.rejected_count||0);
+      if(denied)bits.push(`${denied} denied clock-out attempt${denied>1?'s':''}`);
+      if(s.clock_out_note)bits.push(`Reason: ${s.clock_out_note}`);
+      const label=statusLabel(s.manager_review_status);
+      if(label&&label!=='—')bits.push(label);
+      return `<li><b>${esc(fmtDay(new Date(s.clock_in)))}</b><span>${esc(bits.join(' · ')||'No manager notes for this day.')}</span>${s.manager_review_note?`<span class="small">Manager note: ${esc(s.manager_review_note)}</span>`:''}</li>`;
+    }).join('')}</ul>`;
+  }
+  function renderWeekFlags(weekStart){
+    const wrap=$('weekFlags'),details=$('weekFlagDetails');
+    if(!wrap||!details||!empCache)return;
+    const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
+    const week=(empCache.shifts||[]).filter(s=>{const t=new Date(s.clock_in);return t>=weekStart&&t<weekEnd;});
+    const deniedShifts=week.filter(s=>Number(s.rejected_count||0)>0);
+    const denied=deniedShifts.reduce((a,s)=>a+Number(s.rejected_count||0),0);
+    const full=week.filter(s=>s.manager_review_status==='approved_full');
+    const actualApproved=week.filter(s=>s.manager_review_status==='approved_actual');
+    const pending=week.filter(s=>s.manager_review_status==='pending');
+    const plural=n=>n===1?'day':'days';
+    wrap.innerHTML=[
+      `<button class="flagTile${denied?' warn':''}" data-flag="denied" type="button"><span>CLOCK-OUT DENIED</span><strong>${denied}</strong><small>${denied===1?'time':'times'} this week</small></button>`,
+      `<button class="flagTile${full.length?' good':''}" data-flag="full" type="button"><span>FULL DAY PAY APPROVED</span><strong>${full.length}</strong><small>${plural(full.length)}</small></button>`,
+      `<button class="flagTile${actualApproved.length?' good':''}" data-flag="actual" type="button"><span>ACTUAL HOURS APPROVED</span><strong>${actualApproved.length}</strong><small>${plural(actualApproved.length)}</small></button>`,
+      `<button class="flagTile${pending.length?' info':''}" data-flag="pending" type="button"><span>AWAITING MANAGER</span><strong>${pending.length}</strong><small>${plural(pending.length)}</small></button>`
+    ].join('');
+    const sets={
+      denied:[deniedShifts,'No clock-out attempts were denied this week.'],
+      full:[full,'No days were approved for full day pay this week.'],
+      actual:[actualApproved,'No days were approved at actual hours this week.'],
+      pending:[pending,'Nothing is waiting on your manager this week.']
+    };
+    let openFlag=null;
+    wrap.querySelectorAll('[data-flag]').forEach(b=>b.onclick=()=>{
+      const key=b.dataset.flag;
+      if(openFlag===key){openFlag=null;details.classList.add('hide');wrap.querySelectorAll('[data-flag]').forEach(x=>x.classList.remove('open'));return;}
+      openFlag=key;
+      wrap.querySelectorAll('[data-flag]').forEach(x=>x.classList.toggle('open',x===b));
+      const [list,empty]=sets[key];
+      details.innerHTML=`<div class="flagHead">${esc(b.querySelector('span').textContent)}</div>${flagList(list,empty)}`;
+      details.classList.remove('hide');
+    });
+    details.classList.add('hide');
   }
   async function loadEmployee(){
     if(managerMode||!employeeIdentity)return;
@@ -100,7 +147,15 @@
   const statusLabel=s=>({pending:'Pending manager review',approved_full:'Approved full hours',approved_actual:'Approved actual hours',not_required:'—'}[s]||'—');
   const safeMapPair=(x)=>{if(x.clock_in_lat==null)return '—';const inUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_in_lat},${x.clock_in_lng}`)}`;if(x.clock_out_lat==null)return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a>`;const outUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_out_lat},${x.clock_out_lng}`)}`;return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a> / <a target="_blank" rel="noopener noreferrer" href="${outUrl}">Out</a>`;};
   async function loadSettings(){try{const j=await api('/api/settings');const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles??3;$('projectMinSetting').value=s.project_completed_min_paid_hours??8;$('maxEmployeesSetting').value=s.max_active_employees??100;}catch(e){$('settingsMsg').textContent=e.message;}}
-  async function reviewShift(id,decision){const note=prompt('Manager note (optional):')||'';try{await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision,note})});await mgrRender();}catch(e){alert(e.message);}}
+  async function reviewShift(id,decision,info){
+    if(info&&info.name){
+      const willPay=decision==='approve_full'?info.full:info.actual;
+      const summary=[`Employee: ${info.name}`,`Day: ${info.when}`,`Clock in / out: ${info.times}`,`Actual hours worked: ${info.actual} h`,'',decision==='approve_full'?`Approve FULL DAY pay — ${willPay} h will be paid.`:`Approve ACTUAL hours — ${willPay} h will be paid.`,'','Continue?'].join('\n');
+      if(!confirm(summary))return;
+    }
+    const note=prompt('Manager note (optional):');if(note===null)return;
+    try{await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision,note})});await mgrRender();}catch(e){alert(e.message);}
+  }
   function localDateTimeValue(d=new Date()){const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,16);}
   function populateForceShifts(shifts){
     const select=$('forceShift');if(!select)return;
@@ -115,37 +170,48 @@
     if(payMode==='custom'&&(!Number.isFinite(paidHours)||paidHours<0||paidHours>24))return $('forceMsg').textContent='Custom paid hours must be between 0 and 24.';
     try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
   }
-  async function loadWeeklyPaidHours(){
+  function selectedWeekStart(){const v=$('weeklyWeekDate')?.value;return ws(v?new Date(v+'T12:00:00'):new Date());}
+  async function loadWeeklyPaidHours(payload){
     if(!managerMode)return;
-    const selected=$('weeklyWeekDate').value?new Date($('weeklyWeekDate').value+'T12:00:00'):new Date(),start=ws(selected),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
-    const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
+    const start=selectedWeekStart(),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
+    const j=payload||await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
     const q=$('search').value.trim().toLowerCase();
     const weekly=(j.weekly||[]).filter(e=>!q||String(e.name).toLowerCase().includes(q));
     $('weeklyRangeText').textContent=`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`;
-    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td><b>${esc(e.name)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}<td><b>${Number(e.total).toFixed(2)}</b></td><td><b>$${Number(e.earnings).toFixed(2)}</b></td></tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
     document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();}catch(e){alert(e.message);}});
   }
   async function mgrRender(){
     if(!managerMode)return;
     try{
-      const mode=$('period').value,d=$('mdate').value?new Date($('mdate').value+'T12:00:00'):new Date(),start=mode==='week'?ws(d):ds(d),daysCount=mode==='week'?7:1,bounds=dayBounds(start,daysCount),end=new Date(bounds[bounds.length-1]);
-      $('range').textContent=mode==='week'?`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`:fmtDay(start);
-      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),shiftDate=$('shiftDetailsDate').value,shiftQ=$('shiftDetailsSearch').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>{const nameOk=!shiftQ||String(x.name).toLowerCase().includes(shiftQ);const dateOk=!shiftDate||iso(new Date(x.clock_in))===shiftDate;return nameOk&&dateOk;});
+      const start=selectedWeekStart(),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]),weekEnd=new Date(bounds[6]);
+      $('mdate').value=iso(start);
+      $('range').textContent=`Week: ${start.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}`;
+      const dayFilter=$('shiftDetailsDate');
+      dayFilter.min=iso(start);dayFilter.max=iso(weekEnd);
+      if(dayFilter.value&&(dayFilter.value<dayFilter.min||dayFilter.value>dayFilter.max))dayFilter.value='';
+      $('shiftDetailsRangeText').textContent=`Showing shifts for the week of ${start.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}.`;
+      const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),shiftDate=dayFilter.value,shiftQ=$('shiftDetailsSearch').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>{const nameOk=!shiftQ||String(x.name).toLowerCase().includes(shiftQ);const dateOk=!shiftDate||iso(new Date(x.clock_in))===shiftDate;return nameOk&&dateOk;});
       managerPeople=j.employees||managerPeople;populateForceShifts(j.shifts||[]);
       $('rows').innerHTML=rows.map(x=>{
         const actual=hours(x),paid=(()=>{if(x.manager_review_status==='approved_actual')return actual;if(x.manager_review_status==='approved_full')return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(reasonNeedsReview(x.clock_out_note))return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.clock_out_note==='Ending shift'&&actual>=7.75)return Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));if(x.manager_force_paid_hours!=null&&Number.isFinite(Number(x.manager_force_paid_hours)))return Number(x.manager_force_paid_hours);return actual;})();
         const earned=paid*Number(x.hourly_wage||0),ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null;
-        const review=x.manager_review_status==='pending'?`<button class="mini primary" data-review-full="${x.id}">Approve 8h</button><button class="mini secondary" data-review-actual="${x.id}">Approve Actual</button>`:esc(statusLabel(x.manager_review_status));
+        const hm=t=>t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const fullPay=Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));
+        const times=co?`${hm(ci)} – ${hm(co)}`:`${hm(ci)} – still open`;
+        const meta=`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}"`;
+        const worked=`<div class="reviewFacts"><span>Actual worked</span><strong>${actual.toFixed(2)} h</strong><em>${esc(times)}</em></div>`;
+        const review=x.manager_review_status==='pending'?`<div class="reviewBox">${worked}<div class="reviewBtns"><button class="mini primary" data-review-full="${x.id}" ${meta}>Approve full ${fullPay.toFixed(2)}h</button><button class="mini secondary" data-review-actual="${x.id}" ${meta}>Approve actual ${actual.toFixed(2)}h</button></div></div>`:`<div class="reviewBox"><b>${esc(statusLabel(x.manager_review_status))}</b>${worked}</div>`;
         const action=x.clock_out?'—':`<button class="mini danger" data-force="${x.id}">Clock Out</button>`;
         return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(ci)}</td><td>${ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${co?co.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Open'}</td><td>${actual.toFixed(2)}</td><td>${paid.toFixed(2)}</td><td>$${earned.toFixed(2)}</td><td><b>${esc(x.clock_out_note||'—')}</b>${x.clock_out_message?`<div class="small">${esc(x.clock_out_message)}</div>`:''}</td><td>${review}</td><td>${safeMapPair(x)}</td><td>${action}</td></tr>`;
       }).join('')||'<tr><td colspan="11">No records.</td></tr>';
-      document.querySelectorAll('[data-review-full]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewFull,'approve_full'));
-      document.querySelectorAll('[data-review-actual]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewActual,'approve_actual'));
+      document.querySelectorAll('[data-review-full]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewFull,'approve_full',b.dataset));
+      document.querySelectorAll('[data-review-actual]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewActual,'approve_actual',b.dataset));
       document.querySelectorAll('[data-force]').forEach(b=>b.onclick=()=>{const s=(j.shifts||[]).find(x=>String(x.id)===String(b.dataset.force));if(s){$('forceShift').value=String(s.id);$('forceClockOutAt').value=localDateTimeValue(new Date());window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'});}});
 
       $('rejectedRows').innerHTML=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)).map(x=>{const t=new Date(x.created_at);return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(t)}</td><td>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(x.reason)}</td><td>${esc(x.note||'—')}</td><td>${Number(x.distance_miles).toFixed(2)} mi</td><td>${loc(x.lat,x.lng,'View location')}</td></tr>`;}).join('')||'<tr><td colspan="7">No rejected clock-out attempts in this period.</td></tr>';
       $('empCount').textContent=managerPeople.length;$('mHours').textContent=Number(j.summary?.total_paid_hours||0).toFixed(2);$('payroll').textContent='$'+Number(j.summary?.total_payroll||0).toFixed(2);$('rejected').textContent=Number(j.summary?.rejected_clock_outs||0);$('liveClockIns').textContent=Number(j.summary?.live_clock_ins||0);$('pendingApprovals').textContent=Number(j.summary?.pending_approvals||0);
-      await loadWeeklyPaidHours();
+      await loadWeeklyPaidHours(j);
     }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;}
   }
   async function startManagerApp(){
@@ -157,10 +223,12 @@
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
     $('forceClockOutBtn').onclick=forceClockOut;
     $('weeklyWeekDate').value=iso(new Date());
-    $('weeklyWeekDate').oninput=loadWeeklyPaidHours;
-    $('weeklyPrev').onclick=()=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()-7);$('weeklyWeekDate').value=iso(d);loadWeeklyPaidHours();};
-    $('weeklyNext').onclick=()=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+7);$('weeklyWeekDate').value=iso(d);loadWeeklyPaidHours();};
+    $('weeklyWeekDate').oninput=()=>mgrRender();
+    const shiftWeek=step=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+step);$('weeklyWeekDate').value=iso(d);mgrRender();};
+    $('weeklyPrev').onclick=()=>shiftWeek(-7);
+    $('weeklyNext').onclick=()=>shiftWeek(7);
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
+    $('toggleEmployees').onclick=()=>{const b=$('employeesBody');const hidden=b.classList.toggle('hide');$('toggleEmployees').textContent=hidden?'Show':'Minimize';$('toggleEmployees').setAttribute('aria-expanded',String(!hidden));};
     $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
     ['period','mdate','search','shiftDetailsDate','shiftDetailsSearch'].forEach(id=>$(id).addEventListener('input',mgrRender));$('clearShiftDetailsFilters').onclick=()=>{$('shiftDetailsDate').value='';$('shiftDetailsSearch').value='';mgrRender();};$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
   }
@@ -175,6 +243,6 @@
     $('requestManagerResetBtn').onclick=async()=>{const username=$('recoveryManagerUsername').value.trim();if(!username)return $('managerRecoveryMsg').textContent='Enter the manager username.';try{const j=await api('/api/manager-password-reset',{method:'POST',body:JSON.stringify({username})});$('managerRecoveryMsg').textContent=j.message;}catch(e){$('managerRecoveryMsg').textContent=e.message;}};
     $('completeManagerResetBtn').onclick=async()=>{const a=$('resetManagerPassword').value,b=$('resetManagerPasswordConfirm').value;if(a!==b)return $('managerResetMsg').textContent='Passwords do not match.';try{await api('/api/manager-password-reset',{method:'PATCH',body:JSON.stringify({token:resetToken,newPassword:a})});$('managerResetMsg').textContent='Password reset successfully. You can now sign in.';setTimeout(()=>location.href='/?manager=1',900);}catch(e){$('managerResetMsg').textContent=e.message;}};
   }
-  document.querySelectorAll('[data-toggle-password]').forEach(btn=>btn.addEventListener('click',()=>{const input=$(btn.dataset.togglePassword);if(!input)return;const visible=input.type==='text';input.type=visible?'password':'text';btn.textContent=visible?'Show':'Hide';}));
+  document.addEventListener('click',e=>{const btn=e.target.closest('[data-toggle-password]');if(!btn)return;const input=$(btn.dataset.togglePassword);if(!input)return;const visible=input.type==='text';input.type=visible?'password':'text';btn.textContent=visible?'Show':'Hide';btn.setAttribute('aria-label',visible?'Show password':'Hide password');});
   if(managerMode)initManager();else initEmployee();
 })();

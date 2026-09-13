@@ -45,3 +45,70 @@ textarea{width:100%;border:1px solid #d1d5db;border-radius:10px;padding:11px 12p
   .managerHeader .brand strong{font-size:16px;}
   .managerHeader .brandMark{width:38px;height:38px;}
 }
+
+/* ---- Weekly Paid Hours & Earnings: compact layout, totals beside the name ---- */
+.weeklyTable .totalCol{background:#f8fafc}
+.weeklyTable td.totalCol b{font-size:15px}
+.weeklyTable th.totalCol{color:var(--text)}
+.weeklyTable .wage{width:92px;margin:0;padding:7px 8px}
+.weeklyTable .stickyCol{position:sticky;left:0;z-index:2;background:var(--card)}
+.weeklyTable thead .stickyCol{background:var(--card)}
+.weeklyTable .stickyCol::after{content:"";position:absolute;top:0;right:0;bottom:0;width:1px;background:var(--line)}
+
+@media(max-width:800px){
+  .managerWrap .weeklyTable{min-width:760px}
+  .weeklyTable th,.weeklyTable td{padding:6px 7px;font-size:13px}
+  .weeklyTable th{font-size:10px;letter-spacing:.02em}
+  .weeklyTable td b{font-size:13px}
+  .weeklyTable td.totalCol b{font-size:14px}
+  .weeklyTable .wage{width:74px;padding:5px 6px;font-size:13px;border-radius:8px}
+  .weeklyTable .stickyCol{max-width:118px;white-space:normal;line-height:1.2}
+  #weeklyRangeText{font-size:12px;margin:2px 0 0}
+}
+
+/* ---- Approval review cell: show what was actually worked ---- */
+.reviewBox{display:grid;gap:7px;min-width:210px;white-space:normal}
+.reviewFacts{display:grid;gap:1px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:7px 9px}
+.reviewFacts span{font-size:10px;letter-spacing:.07em;color:var(--muted);font-weight:800}
+.reviewFacts strong{font-size:16px;line-height:1.1}
+.reviewFacts em{font-style:normal;font-size:11px;color:var(--muted);font-weight:700}
+.reviewBtns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---- Employee weekly summary flags ---- */
+.weekFlags{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+.flagTile{display:grid;align-content:start;gap:2px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;min-height:84px;color:var(--text)}
+.flagTile span{font-size:10px;letter-spacing:.06em;font-weight:800;color:var(--muted);line-height:1.25}
+.flagTile strong{font-size:26px;font-weight:900;line-height:1}
+.flagTile small{font-size:11px;color:var(--muted);font-weight:700}
+.flagTile.warn{border-color:#fecaca;background:#fef2f2}
+.flagTile.warn strong{color:#b91c1c}
+.flagTile.good{border-color:#bbf7d0;background:#f0fdf4}
+.flagTile.good strong{color:var(--success)}
+.flagTile.info{border-color:#fde68a;background:#fffbeb}
+.flagTile.info strong{color:#92400e}
+.flagTile.open{box-shadow:0 0 0 2px var(--primary)}
+.weekFlagDetails{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#f9fafb}
+.flagHead{font-size:11px;letter-spacing:.06em;font-weight:800;color:var(--muted);margin-bottom:8px}
+.flagList{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.flagList li{display:grid;gap:2px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.flagList li:last-child{border-bottom:0;padding-bottom:0}
+.flagList span{color:var(--muted);font-size:13px}
+
+@media(max-width:800px){
+  .weekFlags{grid-template-columns:1fr 1fr;gap:8px}
+  .flagTile{min-height:78px;padding:10px}
+  .flagTile strong{font-size:23px}
+}
+
+/* ---- Compact section headers + single-row week picker on mobile ---- */
+@media(max-width:800px){
+  .sectionHead{flex-direction:column;align-items:stretch;gap:9px}
+  .sectionHead>button{align-self:flex-end}
+  .sectionHead h2{margin:0 0 3px}
+  .sectionHead p{margin:0}
+  .weekNav{width:100%;flex-wrap:nowrap;gap:8px;justify-content:flex-start}
+  .weekNav .inlineLabel{margin:0;flex:1;display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap}
+  .weekNav input[type=date]{flex:1;width:100%;max-width:none;margin:0;padding:9px 10px}
+  .weekNav button{flex:0 0 40px;width:40px;height:40px;font-size:20px;line-height:1;display:grid;place-items:center}
+}
+.flagTile span{min-height:25px}
