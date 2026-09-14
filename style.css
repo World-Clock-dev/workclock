@@ -112,3 +112,43 @@ textarea{width:100%;border:1px solid #d1d5db;border-radius:10px;padding:11px 12p
   .weekNav button{flex:0 0 40px;width:40px;height:40px;font-size:20px;line-height:1;display:grid;place-items:center}
 }
 .flagTile span{min-height:25px}
+
+/* ---- Monday-first week picker ---- */
+.weekPicker{position:relative}
+.weekPickerBtn{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:215px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:800;font-size:14px;color:var(--text)}
+.weekPickerBtn:hover{border-color:var(--primary)}
+.weekPickerBtn svg{flex:0 0 auto;opacity:.5}
+.weekCal{position:absolute;z-index:60;top:calc(100% + 6px);right:0;width:280px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px rgba(15,23,42,.18);padding:12px}
+.weekCalHead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.weekCalHead strong{font-size:14px}
+.weekCalNav{width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;font-size:16px;line-height:1}
+.weekCalDows,.weekCalGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0}
+.weekCalDows span{text-align:center;font-size:10px;font-weight:800;color:var(--muted);padding:4px 0}
+.weekCalDay{height:32px;padding:0;border:0;background:transparent;border-radius:0;font-size:13px;font-weight:700;color:var(--text);display:grid;place-items:center}
+.weekCalDay.out{color:var(--muted);opacity:.55}
+.weekCalDay.today{text-decoration:underline;text-underline-offset:3px}
+.weekCalDay.hoverWeek{background:#eef2ff}
+.weekCalDay.inWeek,.weekCalDay.inWeek.hoverWeek{background:var(--primary);color:#fff;opacity:1}
+.weekCalGrid>.weekCalDay:nth-child(7n+1){border-radius:8px 0 0 8px}
+.weekCalGrid>.weekCalDay:nth-child(7n){border-radius:0 8px 8px 0}
+.weekCalFoot{margin-top:10px;display:flex;justify-content:flex-end}
+@media(max-width:800px){
+  .weekNav .weekPicker{flex:1;min-width:0}
+  .weekPickerBtn{width:100%;min-width:0;font-size:13px;padding:9px 10px}
+  .weekCal{width:min(280px,calc(100vw - 60px))}
+}
+.weekPickerBtn{white-space:nowrap;flex:0 0 auto}
+.weekPickerBtn>span{white-space:nowrap}
+@media(max-width:800px){.weekPickerBtn{flex:1 1 auto}}
+
+/* Week picker sizing: must out-specify the generic `.weekNav button` arrow rules */
+.weekNav .weekPicker{position:relative;display:flex;flex:0 0 auto;min-width:240px}
+.weekNav .weekPickerBtn{flex:1 1 auto;width:auto;height:auto;min-width:0;justify-content:space-between}
+.weekNav .weekPickerBtn>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:800px){
+  .weekNav .weekPicker{flex:1 1 auto;min-width:0}
+  .weekNav .weekPickerBtn{font-size:13px;padding:9px 10px}
+}
+.weekNav .weekPickerBtn{display:flex;align-items:center;gap:10px}
+.weekNav .weekPickerBtn{font-size:14px;line-height:1.2;min-height:38px}
+@media(max-width:800px){.weekNav .weekPickerBtn{font-size:13px;min-height:40px}}

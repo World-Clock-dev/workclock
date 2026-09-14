@@ -170,6 +170,48 @@
     if(payMode==='custom'&&(!Number.isFinite(paidHours)||paidHours<0||paidHours>24))return $('forceMsg').textContent='Custom paid hours must be between 0 and 24.';
     try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
   }
+  function weekLabel(start){
+    const end=new Date(start);end.setDate(end.getDate()+6);
+    const md={month:'short',day:'numeric'};
+    if(start.getFullYear()!==end.getFullYear())return `${start.toLocaleDateString(undefined,{...md,year:'numeric'})} – ${end.toLocaleDateString(undefined,{...md,year:'numeric'})}`;
+    const right=start.getMonth()===end.getMonth()?end.getDate():end.toLocaleDateString(undefined,md);
+    return `${start.toLocaleDateString(undefined,md)} – ${right}, ${end.getFullYear()}`;
+  }
+  let calMonth=null;
+  function setWeek(d,render=true){const start=ws(d);$('weeklyWeekDate').value=iso(start);$('weeklyWeekLabel').textContent=weekLabel(start);if(render)mgrRender();}
+  function buildWeekCal(){
+    const grid=$('weekCalGrid');if(!grid)return;
+    const sel=selectedWeekStart(),base=calMonth||new Date(sel.getFullYear(),sel.getMonth(),1);
+    calMonth=new Date(base.getFullYear(),base.getMonth(),1);
+    $('weekCalMonth').textContent=calMonth.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+    const first=ws(new Date(calMonth)),selKey=iso(sel),today=iso(new Date());
+    let html='';
+    for(let i=0;i<42;i++){
+      const d=new Date(first);d.setDate(first.getDate()+i);
+      const wk=iso(ws(d)),cls=['weekCalDay'];
+      if(d.getMonth()!==calMonth.getMonth())cls.push('out');
+      if(wk===selKey)cls.push('inWeek');
+      if(iso(d)===today)cls.push('today');
+      html+=`<button type="button" class="${cls.join(' ')}" data-week="${wk}" data-day="${iso(d)}">${d.getDate()}</button>`;
+    }
+    grid.innerHTML=html;
+    grid.querySelectorAll('[data-week]').forEach(b=>{
+      b.onclick=e=>{e.stopPropagation();setWeek(new Date(b.dataset.week+'T12:00:00'));closeWeekCal();};
+      b.onmouseenter=()=>grid.querySelectorAll(`[data-week="${b.dataset.week}"]`).forEach(x=>x.classList.add('hoverWeek'));
+      b.onmouseleave=()=>grid.querySelectorAll('.hoverWeek').forEach(x=>x.classList.remove('hoverWeek'));
+    });
+  }
+  function openWeekCal(){calMonth=null;buildWeekCal();$('weeklyWeekCal').classList.remove('hide');$('weeklyWeekBtn').setAttribute('aria-expanded','true');}
+  function closeWeekCal(){const c=$('weeklyWeekCal');if(!c)return;c.classList.add('hide');$('weeklyWeekBtn').setAttribute('aria-expanded','false');}
+  function initWeekCal(){
+    $('weeklyWeekBtn').onclick=e=>{e.stopPropagation();$('weeklyWeekCal').classList.contains('hide')?openWeekCal():closeWeekCal();};
+    $('weekCalPrevMonth').onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()-1);buildWeekCal();};
+    $('weekCalNextMonth').onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()+1);buildWeekCal();};
+    $('weekCalToday').onclick=e=>{e.stopPropagation();setWeek(new Date());closeWeekCal();};
+    $('weeklyWeekCal').onclick=e=>e.stopPropagation();
+    document.addEventListener('click',closeWeekCal);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWeekCal();});
+  }
   function selectedWeekStart(){const v=$('weeklyWeekDate')?.value;return ws(v?new Date(v+'T12:00:00'):new Date());}
   async function loadWeeklyPaidHours(payload){
     if(!managerMode)return;
@@ -222,9 +264,9 @@
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
     $('forceClockOutBtn').onclick=forceClockOut;
-    $('weeklyWeekDate').value=iso(new Date());
-    $('weeklyWeekDate').oninput=()=>mgrRender();
-    const shiftWeek=step=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+step);$('weeklyWeekDate').value=iso(d);mgrRender();};
+    setWeek(new Date(),false);
+    initWeekCal();
+    const shiftWeek=step=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+step);setWeek(d);};
     $('weeklyPrev').onclick=()=>shiftWeek(-7);
     $('weeklyNext').onclick=()=>shiftWeek(7);
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
