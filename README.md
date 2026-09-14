@@ -69,6 +69,9 @@ A nightly Vercel cron (`vercel.json`, 03:00 UTC) calls `/api/retention` and dele
 
 Never deleted: employees, wages, titles, PINs, manager accounts, and app settings. Open (not yet clocked-out) shifts are also never deleted, however old, so an employee still on the clock cannot be stranded.
 
+### Why retention lives in `api/settings.js`
+Vercel's Hobby plan allows at most 12 Serverless Functions per deployment, and this project uses exactly 12. Files in `api/` beginning with `_` are shared helpers and are not counted. Retention is therefore handled inside `api/settings.js` instead of a separate `api/retention.js`, and `vercel.json` rewrites `/api/retention` to `/api/settings?action=retention`. If you ever add a new endpoint, you must fold it into an existing file the same way or upgrade to the Pro plan.
+
 Managers can use **Check what would be removed** for a dry run that deletes nothing, or **Run cleanup now** to purge immediately after confirming. Each run is recorded in `retention_runs` and the audit log.
 
 ## Deployment

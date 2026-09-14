@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/retention", "destination": "/api/settings?action=retention" }
+  ],
   "crons": [
-    {
-      "path": "/api/retention",
-      "schedule": "0 3 * * *"
-    }
+    { "path": "/api/retention", "schedule": "0 3 * * *" }
   ]
 }
