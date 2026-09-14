@@ -21,6 +21,8 @@ A business-neutral employee time clock for Vercel + Neon PostgreSQL. The project
 - Project completed, Client request, and Manager approval are paid at the configured minimum by default and marked for manager review
 - Manager can approve full hours, actual hours, or custom hours per exception shift
 - Custom-hours review can also correct a wrong clock-out time, for shifts left running overnight or over a weekend
+- Shift Details shows one row per employee per week; tap a day to open every clock-in for that day
+- Employee Report: search an employee and review 1/3/6/12 months of working days, hours and earnings
 - Rolling data retention: time data older than the configured window (default 6 months) is deleted nightly
 - Manager can force Clock Out for an employee from the dashboard
 - One-open-shift-per-employee constraint and race-safe Clock Out update
@@ -61,6 +63,11 @@ Important added migration fields include employee titles, clock-out messages, ma
 If an employee clocks in on, say, Thursday and does not clock out until Monday, the shift records ~97 actual hours. Approving actual or full hours would pay all of them. The **Custom hours…** option in Shift Details lets the manager set the real paid hours and correct the clock-out timestamp in one step.
 
 Correcting the clock-out matters: paid hours are spread across the calendar days a shift covers, so 8 custom hours on an uncorrected 4-day shift would be split across all four days (~2h each). With the clock-out corrected, all 8 hours land on the day actually worked. The dialog prefills the corrected clock-out as clock-in plus the standard day, so the common case is one confirmation. The original timestamp is preserved in `shifts.manager_original_clock_out` and the change is written to the audit log.
+
+## Employee Report
+Manager Portal → Employee Report. Type a name, pick a period (1, 3, 6 or 12 months) and view summary tiles, a month-by-month table and an optional day-by-day list.
+
+This is served by `GET /api/manager?view=report&employeeId=…&start=…&end=…`, which lives in `api/manager.js` rather than its own file because of the 12-function Hobby limit. The main manager query is capped at 8 days; the report path allows up to ~14 months and returns raw shifts so the browser can bucket them by local day, keeping day boundaries correct in the viewer's timezone.
 
 ## Data retention
 WorkClock keeps a rolling window of time data, set in Manager Portal → Data Retention (default 6 months, range 1–120).
