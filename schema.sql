@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS employees (
   email TEXT,
   hourly_wage NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (hourly_wage >= 0),
   active BOOLEAN NOT NULL DEFAULT TRUE,
+  employment_status TEXT NOT NULL DEFAULT 'active' CHECK (employment_status IN ('active','vacation','terminated')),
   pin_hash TEXT,
   failed_pin_attempts INTEGER NOT NULL DEFAULT 0,
   pin_locked_until TIMESTAMPTZ,
@@ -176,3 +177,12 @@ CREATE TABLE IF NOT EXISTS retention_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS retention_runs_created_idx ON retention_runs(created_at DESC);
+
+-- Employment status: active / on vacation / terminated.
+-- `active` stays the login + headcount flag; terminated employees keep every
+-- shift, earning and audit record so their history remains fully viewable.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS employment_status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_employment_status_check;
+ALTER TABLE employees ADD CONSTRAINT employees_employment_status_check CHECK (employment_status IN ('active','vacation','terminated'));
+UPDATE employees SET employment_status='terminated' WHERE active=false AND employment_status='active';
+CREATE INDEX IF NOT EXISTS employees_status_idx ON employees(employment_status);

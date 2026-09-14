@@ -23,6 +23,8 @@ A business-neutral employee time clock for Vercel + Neon PostgreSQL. The project
 - Custom-hours review can also correct a wrong clock-out time, for shifts left running overnight or over a weekend
 - Shift Details shows one row per employee per week; tap a day to open every clock-in for that day
 - Employee Report: search an employee and review 1/3/6/12 months of working days, hours and earnings
+- Employment status per employee: Active, On vacation, or Terminated
+- Monday-first week calendars in both portals
 - Rolling data retention: time data older than the configured window (default 6 months) is deleted nightly
 - Manager can force Clock Out for an employee from the dashboard
 - One-open-shift-per-employee constraint and race-safe Clock Out update
@@ -63,6 +65,13 @@ Important added migration fields include employee titles, clock-out messages, ma
 If an employee clocks in on, say, Thursday and does not clock out until Monday, the shift records ~97 actual hours. Approving actual or full hours would pay all of them. The **Custom hours…** option in Shift Details lets the manager set the real paid hours and correct the clock-out timestamp in one step.
 
 Correcting the clock-out matters: paid hours are spread across the calendar days a shift covers, so 8 custom hours on an uncorrected 4-day shift would be split across all four days (~2h each). With the clock-out corrected, all 8 hours land on the day actually worked. The dialog prefills the corrected clock-out as clock-in plus the standard day, so the common case is one confirmation. The original timestamp is preserved in `shifts.manager_original_clock_out` and the change is written to the audit log.
+
+## Employment status
+Each employee is Active, On vacation, or Terminated (`employees.employment_status`). The existing `active` boolean stays the sign-in and headcount flag and is kept in sync: Active and On vacation can sign in and count toward `max_active_employees`; Terminated cannot sign in and frees a headcount slot.
+
+Terminated employees keep every shift, hour, earning and audit record. They stay listed in the Employees section, stay searchable in Employee Report, and still appear in Weekly Paid Hours and Shift Details for any week they actually worked. They are hidden only from weeks where they recorded nothing, so current weeks are not cluttered with former staff.
+
+Changing status is a PATCH to `/api/employees` with `{id, status}`. Terminating asks for confirmation first and ends any open sign-in session.
 
 ## Employee Report
 Manager Portal → Employee Report. Type a name, pick a period (1, 3, 6 or 12 months) and view summary tiles, a month-by-month table and an optional day-by-day list.

@@ -30,7 +30,7 @@
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
   function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;$('weekDate').value=$('weekDate').value||iso(new Date());loadEmployee();}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();}
   function ensureEmployeeMap(){
     if(employeeMap || !window.L) return;
     employeeMap=L.map('employeeMap').setView([20,0],2);
@@ -119,6 +119,12 @@
   }
   function tick(){if(managerMode)return;const d=new Date();$('clock').textContent=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('dateText').textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});if(empCache?.openShift)renderEmployee();}
 
+  function setEmpWeek(d,render=true){
+    const start=ws(d);
+    $('weekDate').value=iso(start);
+    $('empWeekLabel').textContent=weekLabel(start);
+    if(render)loadEmployee();
+  }
   async function initEmployee(){
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
@@ -126,9 +132,10 @@
     $('forgotEmployeeBtn').onclick=()=>{$('employeeRecovery').classList.toggle('hide');$('employeeRecoveryMsg').textContent='Enter your approved name and we will notify the manager. Your PIN is never emailed.';};
     $('requestPinResetBtn').onclick=async()=>{const name=$('recoveryEmployeeName').value.trim();if(!name)return $('employeeRecoveryMsg').textContent='Enter your approved employee name.';try{const j=await api('/api/employee-pin-reset',{method:'POST',body:JSON.stringify({name})});$('employeeRecoveryMsg').textContent=j.message;}catch(e){$('employeeRecoveryMsg').textContent=displayMessage(e.payload||e.message);}};
     $('employeeLogoutBtn').onclick=async()=>{try{await api('/api/employee-auth',{method:'DELETE'});}catch{}showEmployeeLogin();};
-    $('weekDate').value=iso(new Date());$('weekDate').oninput=loadEmployee;
-    $('prev').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()-7);$('weekDate').value=iso(d);loadEmployee();};
-    $('next').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()+7);$('weekDate').value=iso(d);loadEmployee();};
+    setEmpWeek(new Date(),false);
+    createWeekPicker({btn:'empWeekBtn',input:'weekDate',cal:'empWeekCal',grid:'empCalGrid',month:'empCalMonth',prev:'empCalPrevMonth',next:'empCalNextMonth',today:'empCalToday',set:d=>setEmpWeek(d)});
+    $('prev').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()-7);setEmpWeek(d);};
+    $('next').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()+7);setEmpWeek(d);};
     $('in').onclick=async()=>{try{stat('Checking GPS…');const c=await geo();const j=await api('/api/clock-in',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude})});stat(j.ruleAlert||'Clock In accepted. Your location was saved.','ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
     $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat('You are not currently clocked in.','bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat('Please select a reason for clocking out before 8 hours.','bad');$('earlyNote').focus();return;}stat('Checking GPS and location limit…');const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?'Clock Out accepted. The manager must review this exception.':`Clock Out accepted. Distance from Clock In: ${Number(j.distance).toFixed(2)} miles.`,'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
     tick();setInterval(tick,1000);
@@ -138,7 +145,21 @@
   async function loadPeople(){const j=await api('/api/employees');managerPeople=j.employees||[];renderPeople();}
   function renderPeople(){
     if(!managerMode)return;
-    $('approvedList').innerHTML=managerPeople.map(p=>`<div class="pill"><div class="personMeta"><b>${esc(p.name)}</b><span>${esc(p.title||'No title')} · $${Number(p.hourly_wage).toFixed(2)}/hr · ${p.email?esc(p.email)+' · ':''}${p.has_pin?'PIN set':'PIN needed'}</span></div><input class="inlineTitle" data-title-id="${p.id}" value="${esc(p.title||'')}" maxlength="80" placeholder="Title"><button data-save-person="${p.id}">Save</button><button data-pin="${p.id}">${p.has_pin?'Reset PIN':'Set PIN'}</button><button class="remove" data-remove="${p.id}">Remove</button></div>`).join('')||'<span class="small">No active employees yet.</span>';
+    const rank=p=>({active:0,vacation:1,terminated:2}[p.employment_status||(p.active?'active':'terminated')]??0);
+    const listed=managerPeople.slice().sort((a,b)=>rank(a)-rank(b)||String(a.name).localeCompare(String(b.name)));
+    $('approvedList').innerHTML=listed.map(p=>{
+      const st=p.employment_status||(p.active?'active':'terminated');
+      return `<div class="pill status-${st}"><div class="personMeta"><b>${esc(p.name)}</b> <span class="statusBadge ${st}">${esc(statusText(st))}</span><span>${esc(p.title||'No title')} · $${Number(p.hourly_wage).toFixed(2)}/hr · ${p.email?esc(p.email)+' · ':''}${p.has_pin?'PIN set':'PIN needed'}</span></div><input class="inlineTitle" data-title-id="${p.id}" value="${esc(p.title||'')}" maxlength="80" placeholder="Title"><select class="statusSelect" data-status-id="${p.id}"><option value="active"${st==='active'?' selected':''}>Active</option><option value="vacation"${st==='vacation'?' selected':''}>On vacation</option><option value="terminated"${st==='terminated'?' selected':''}>Terminated</option></select><button data-save-person="${p.id}">Save</button><button data-pin="${p.id}">${p.has_pin?'Reset PIN':'Set PIN'}</button></div>`;
+    }).join('')||'<span class="small">No employees yet.</span>';
+    document.querySelectorAll('[data-status-id]').forEach(sel=>sel.onchange=async()=>{
+      const id=sel.dataset.statusId,status=sel.value;
+      const who=(managerPeople.find(p=>String(p.id)===String(id))||{}).name||'this employee';
+      if(status==='terminated'&&!confirm(`Mark ${who} as terminated?\n\nThey will no longer be able to sign in, but all of their shifts, hours and earnings stay on record and remain searchable in Employee Report.`)){
+        sel.value=(managerPeople.find(p=>String(p.id)===String(id))||{}).employment_status||'active';return;
+      }
+      try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});await loadPeople();await mgrRender();}
+      catch(e){alert(e.message);await loadPeople();}
+    });
     document.querySelectorAll('[data-save-person]').forEach(b=>b.onclick=async()=>{const p=managerPeople.find(x=>String(x.id)===String(b.dataset.savePerson)),title=document.querySelector(`[data-title-id="${b.dataset.savePerson}"]`)?.value||'';if(!p)return;try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:p.id,title,wage:Number(p.hourly_wage),email:p.email||''})});await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
     document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=async()=>{const pin=prompt('Enter a new 4-digit PIN:');if(pin===null)return;if(!/^\d{4}$/.test(pin))return alert('PIN must be exactly 4 digits.');try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:b.dataset.pin,pin})});$('employeeMsg').textContent='PIN updated. The employee must sign in again.';await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
     document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Deactivate this employee? Existing time records will remain available.'))return;try{await api(`/api/employees?id=${encodeURIComponent(b.dataset.remove)}`,{method:'DELETE'});await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
@@ -215,6 +236,42 @@
     if(payMode==='custom'&&(!Number.isFinite(paidHours)||paidHours<0||paidHours>24))return $('forceMsg').textContent='Custom paid hours must be between 0 and 24.';
     try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
   }
+  function createWeekPicker(o){
+    let calMonth=null;
+    const close=()=>{const c=$(o.cal);if(!c)return;c.classList.add('hide');$(o.btn).setAttribute('aria-expanded','false');};
+    const build=()=>{
+      const grid=$(o.grid);if(!grid)return;
+      const sel=ws($(o.input).value?new Date($(o.input).value+'T12:00:00'):new Date());
+      const base=calMonth||new Date(sel.getFullYear(),sel.getMonth(),1);
+      calMonth=new Date(base.getFullYear(),base.getMonth(),1);
+      $(o.month).textContent=calMonth.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+      const first=ws(new Date(calMonth)),selKey=iso(sel),today=iso(new Date());
+      let html='';
+      for(let i=0;i<42;i++){
+        const d=new Date(first);d.setDate(first.getDate()+i);
+        const wk=iso(ws(d)),cls=['weekCalDay'];
+        if(d.getMonth()!==calMonth.getMonth())cls.push('out');
+        if(wk===selKey)cls.push('inWeek');
+        if(iso(d)===today)cls.push('today');
+        html+=`<button type="button" class="${cls.join(' ')}" data-week="${wk}" data-day="${iso(d)}">${d.getDate()}</button>`;
+      }
+      grid.innerHTML=html;
+      grid.querySelectorAll('[data-week]').forEach(b=>{
+        b.onclick=e=>{e.stopPropagation();o.set(new Date(b.dataset.week+'T12:00:00'));close();};
+        b.onmouseenter=()=>grid.querySelectorAll(`[data-week="${b.dataset.week}"]`).forEach(x=>x.classList.add('hoverWeek'));
+        b.onmouseleave=()=>grid.querySelectorAll('.hoverWeek').forEach(x=>x.classList.remove('hoverWeek'));
+      });
+    };
+    const open=()=>{calMonth=null;build();$(o.cal).classList.remove('hide');$(o.btn).setAttribute('aria-expanded','true');};
+    $(o.btn).onclick=e=>{e.stopPropagation();$(o.cal).classList.contains('hide')?open():close();};
+    $(o.prev).onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()-1);build();};
+    $(o.next).onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()+1);build();};
+    if(o.today)$(o.today).onclick=e=>{e.stopPropagation();o.set(new Date());close();};
+    $(o.cal).onclick=e=>e.stopPropagation();
+    document.addEventListener('click',close);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+    return {close};
+  }
   function weekLabel(start){
     const end=new Date(start);end.setDate(end.getDate()+6);
     const md={month:'short',day:'numeric'};
@@ -224,30 +281,6 @@
   }
   let calMonth=null;
   function setWeek(d,render=true){const start=ws(d);$('weeklyWeekDate').value=iso(start);$('weeklyWeekLabel').textContent=weekLabel(start);if(render)mgrRender();}
-  function buildWeekCal(){
-    const grid=$('weekCalGrid');if(!grid)return;
-    const sel=selectedWeekStart(),base=calMonth||new Date(sel.getFullYear(),sel.getMonth(),1);
-    calMonth=new Date(base.getFullYear(),base.getMonth(),1);
-    $('weekCalMonth').textContent=calMonth.toLocaleDateString(undefined,{month:'long',year:'numeric'});
-    const first=ws(new Date(calMonth)),selKey=iso(sel),today=iso(new Date());
-    let html='';
-    for(let i=0;i<42;i++){
-      const d=new Date(first);d.setDate(first.getDate()+i);
-      const wk=iso(ws(d)),cls=['weekCalDay'];
-      if(d.getMonth()!==calMonth.getMonth())cls.push('out');
-      if(wk===selKey)cls.push('inWeek');
-      if(iso(d)===today)cls.push('today');
-      html+=`<button type="button" class="${cls.join(' ')}" data-week="${wk}" data-day="${iso(d)}">${d.getDate()}</button>`;
-    }
-    grid.innerHTML=html;
-    grid.querySelectorAll('[data-week]').forEach(b=>{
-      b.onclick=e=>{e.stopPropagation();setWeek(new Date(b.dataset.week+'T12:00:00'));closeWeekCal();};
-      b.onmouseenter=()=>grid.querySelectorAll(`[data-week="${b.dataset.week}"]`).forEach(x=>x.classList.add('hoverWeek'));
-      b.onmouseleave=()=>grid.querySelectorAll('.hoverWeek').forEach(x=>x.classList.remove('hoverWeek'));
-    });
-  }
-  function openWeekCal(){calMonth=null;buildWeekCal();$('weeklyWeekCal').classList.remove('hide');$('weeklyWeekBtn').setAttribute('aria-expanded','true');}
-  function closeWeekCal(){const c=$('weeklyWeekCal');if(!c)return;c.classList.add('hide');$('weeklyWeekBtn').setAttribute('aria-expanded','false');}
   let shiftCalMonth=null;
   function setShiftDay(key,render=true){
     $('shiftDetailsDate').value=key||'';
@@ -293,13 +326,7 @@
     document.addEventListener('keydown',e=>{if(e.key==='Escape')closeShiftCal();});
   }
   function initWeekCal(){
-    $('weeklyWeekBtn').onclick=e=>{e.stopPropagation();$('weeklyWeekCal').classList.contains('hide')?openWeekCal():closeWeekCal();};
-    $('weekCalPrevMonth').onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()-1);buildWeekCal();};
-    $('weekCalNextMonth').onclick=e=>{e.stopPropagation();calMonth.setMonth(calMonth.getMonth()+1);buildWeekCal();};
-    $('weekCalToday').onclick=e=>{e.stopPropagation();setWeek(new Date());closeWeekCal();};
-    $('weeklyWeekCal').onclick=e=>e.stopPropagation();
-    document.addEventListener('click',closeWeekCal);
-    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWeekCal();});
+    createWeekPicker({btn:'weeklyWeekBtn',input:'weeklyWeekDate',cal:'weeklyWeekCal',grid:'weekCalGrid',month:'weekCalMonth',prev:'weekCalPrevMonth',next:'weekCalNextMonth',today:'weekCalToday',set:d=>setWeek(d)});
   }
   function selectedWeekStart(){const v=$('weeklyWeekDate')?.value;return ws(v?new Date(v+'T12:00:00'):new Date());}
   async function loadWeeklyPaidHours(payload){
@@ -307,11 +334,17 @@
     const start=selectedWeekStart(),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
     const j=payload||await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
     const q=$('search').value.trim().toLowerCase();
-    const weekly=(j.weekly||[]).filter(e=>!q||String(e.name).toLowerCase().includes(q));
+    const weekly=(j.weekly||[]).filter(e=>{
+      if(q&&!String(e.name).toLowerCase().includes(q))return false;
+      // Terminated staff stay visible for weeks they worked, and drop out of the rest.
+      if((e.employment_status||'active')==='terminated'&&Number(e.total||0)===0)return false;
+      return true;
+    });
     $('weeklyRangeText').textContent=`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`;
     $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
     document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();}catch(e){alert(e.message);}});
   }
+  const statusText=s=>({active:'Active',vacation:'On vacation',terminated:'Terminated'}[s]||'Active');
   function paidFor(x,minimum){
     const actual=hours(x),min=Number(minimum??8);
     if(x.manager_custom_paid_hours!=null&&Number.isFinite(Number(x.manager_custom_paid_hours)))return Math.max(0,Number(x.manager_custom_paid_hours));
@@ -428,7 +461,12 @@
         window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'});
       };
       const minimum=Number(j.settings?.project_completed_min_paid_hours??8);
-      const people=(j.employees||[]).filter(e=>!shiftQ||String(e.name).toLowerCase().includes(shiftQ));
+      const workedThisWeek=new Set((j.shifts||[]).map(x=>String(x.employee_id)));
+      const people=(j.employees||[]).filter(e=>{
+        if(shiftQ&&!String(e.name).toLowerCase().includes(shiftQ))return false;
+        if((e.employment_status||'active')==='terminated'&&!workedThisWeek.has(String(e.id)))return false;
+        return true;
+      });
       const dayKeys=bounds.slice(0,7).map(b=>iso(new Date(b)));
       dayKeys.forEach((k,i)=>{const th=$(['dgMon','dgTue','dgWed','dgThu','dgFri','dgSat','dgSun'][i]);
         if(th){const d=new Date(k+'T12:00:00');th.innerHTML=`${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}<span class="dgDate">${d.getMonth()+1}/${d.getDate()}</span>`;
@@ -453,7 +491,9 @@
           const flags=[list.length>1?`<span class="dgTag">${list.length}×</span>`:'',pend?'<span class="dgTag warn">review</span>':'',open?'<span class="dgTag live">open</span>':''].join('');
           return `<td class="dgCell${shiftDate===k?' dgPicked':''}"><button class="dgBtn${pend?' pend':''}" data-emp="${emp.id}" data-day="${k}" type="button"><b>${paid.toFixed(2)}</b>${flags}</button></td>`;
         }).join('');
-        return `<tr class="dgRow" data-emp="${emp.id}"><td class="stickyCol"><b>${esc(emp.name)}</b><div class="small">${esc(emp.title||'')}</div></td>${cells}<td class="totalCol"><b>${weekPaid.toFixed(2)}</b></td></tr>`
+        const est=emp.employment_status||'active';
+        const badge=est!=='active'?`<span class="statusBadge ${est}">${esc(statusText(est))}</span>`:'';
+        return `<tr class="dgRow" data-emp="${emp.id}"><td class="stickyCol"><b>${esc(emp.name)}</b>${badge}<div class="small">${esc(emp.title||'')}</div></td>${cells}<td class="totalCol"><b>${weekPaid.toFixed(2)}</b></td></tr>`
              + `<tr class="dgDetailRow hide" data-detail="${emp.id}"><td colspan="9"><div class="dgDetail"></div></td></tr>`;
       }).join('')||'<tr><td colspan="9">No employees match.</td></tr>';
 

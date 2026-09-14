@@ -230,3 +230,23 @@ button.danger:hover{border-color:#fca5a5}
   .dgDetail{position:sticky;left:0;width:calc(100vw - 56px);box-sizing:border-box}
   .dgDetailHead{font-size:13px}
 }
+
+/* The Shift Details day picker sits at the left of the controls row, so a
+   right-anchored popup ran off the left edge of a phone screen. Anchor it to
+   the left there instead, and never let any week calendar exceed the viewport. */
+.controls .weekPicker{position:relative}
+.controls .weekCal{left:0;right:auto}
+.weekCal{max-width:calc(100vw - 32px)}
+@media(max-width:800px){
+  .controls .weekPicker{flex:1 1 auto;min-width:0}
+  .controls .weekCal{left:0;right:auto;width:min(280px,calc(100vw - 44px))}
+}
+
+/* Employment status */
+.statusBadge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:999px;background:#ecfdf5;color:#047857;vertical-align:middle}
+.statusBadge.vacation{background:#fffbeb;color:#92400e}
+.statusBadge.terminated{background:#f1f5f9;color:#475569}
+.pill.status-terminated{opacity:.72}
+.pill.status-terminated .personMeta b{text-decoration:line-through}
+.statusSelect{font-size:12px;font-weight:700;padding:7px 8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
+.dgRow .statusBadge{margin-left:4px}
