@@ -144,9 +144,54 @@
     document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Deactivate this employee? Existing time records will remain available.'))return;try{await api(`/api/employees?id=${encodeURIComponent(b.dataset.remove)}`,{method:'DELETE'});await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
   }
   const loc=(a,b,label='View')=>a==null?'—':`<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${label}</a>`;
-  const statusLabel=s=>({pending:'Pending manager review',approved_full:'Approved full hours',approved_actual:'Approved actual hours',not_required:'—'}[s]||'—');
+  const statusLabel=s=>({pending:'Pending manager review',approved_full:'Approved full hours',approved_actual:'Approved actual hours',approved_custom:'Approved custom hours',not_required:'—'}[s]||'—');
   const safeMapPair=(x)=>{if(x.clock_in_lat==null)return '—';const inUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_in_lat},${x.clock_in_lng}`)}`;if(x.clock_out_lat==null)return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a>`;const outUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_out_lat},${x.clock_out_lng}`)}`;return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a> / <a target="_blank" rel="noopener noreferrer" href="${outUrl}">Out</a>`;};
-  async function loadSettings(){try{const j=await api('/api/settings');const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles??3;$('projectMinSetting').value=s.project_completed_min_paid_hours??8;$('maxEmployeesSetting').value=s.max_active_employees??100;}catch(e){$('settingsMsg').textContent=e.message;}}
+  async function loadSettings(){try{const j=await api('/api/settings');const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles??3;$('projectMinSetting').value=s.project_completed_min_paid_hours??8;$('maxEmployeesSetting').value=s.max_active_employees??100;$('retentionSetting').value=s.data_retention_months??6;}catch(e){$('settingsMsg').textContent=e.message;}}
+  function localInput(d){const t=new Date(d);if(!Number.isFinite(t.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}T${p(t.getHours())}:${p(t.getMinutes())}`;}
+  function closeCustomReview(){const m=$('customReview');if(m)m.classList.add('hide');}
+  function openCustomReview(id,info){
+    const m=$('customReview');if(!m)return;
+    const ci=new Date(info.in),co=info.out?new Date(info.out):null;
+    const actual=Number(info.actual||0),spans=co?iso(ci)!==iso(co):false;
+    // A shift left running over a weekend is the case this exists for: default the
+    // paid hours to a normal day and pull the clock-out back to match, so the hours
+    // land on the day actually worked instead of being spread across every day.
+    const standardDay=Number(info.min)>0?Number(info.min):8;
+    const suggested=info.paid?Number(info.paid):(spans?standardDay:actual);
+    const suggestedOut=new Date(ci.getTime()+suggested*3600000);
+    $('customReviewWho').textContent=`${info.name} — ${info.when}`;
+    $('customReviewActual').textContent=`${actual.toFixed(2)} h`;
+    $('customReviewTimes').textContent=info.times||'—';
+    $('customReviewSpan').classList.toggle('hide',!spans);
+    $('customHours').value=suggested.toFixed(2);
+    $('customClockOut').value=localInput(spans?suggestedOut:(co||suggestedOut));
+    $('customClockOut').max=localInput(new Date(Date.now()+5*60000));
+    $('customClockOut').min=localInput(new Date(ci.getTime()+60000));
+    $('customNote').value='';
+    $('customReviewMsg').textContent='';
+    m.dataset.shiftId=id;
+    m.dataset.originalOut=co?localInput(co):'';
+    m.classList.remove('hide');
+    $('customHours').focus();
+  }
+  async function saveCustomReview(){
+    const m=$('customReview'),id=m.dataset.shiftId;
+    const hours=Number($('customHours').value);
+    if(!Number.isFinite(hours)||hours<0||hours>24){$('customReviewMsg').textContent='Paid hours must be between 0 and 24.';return;}
+    const raw=$('customClockOut').value;
+    let clockOut=null;
+    if(raw&&raw!==m.dataset.originalOut){
+      const d=new Date(raw);
+      if(!Number.isFinite(d.getTime())){$('customReviewMsg').textContent='Enter a valid corrected clock-out.';return;}
+      clockOut=d.toISOString();
+    }
+    $('customReviewMsg').textContent='Saving…';
+    try{
+      await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision:'approve_custom',paidHours:hours,clockOut,note:$('customNote').value.trim()})});
+      closeCustomReview();
+      await mgrRender();
+    }catch(e){$('customReviewMsg').textContent=e.message;}
+  }
   async function reviewShift(id,decision,info){
     if(info&&info.name){
       const willPay=decision==='approve_full'?info.full:info.actual;
@@ -240,15 +285,23 @@
         const earned=paid*Number(x.hourly_wage||0),ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null;
         const hm=t=>t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
         const fullPay=Math.max(actual,Number(j.settings?.project_completed_min_paid_hours??8));
-        const times=co?`${hm(ci)} – ${hm(co)}`:`${hm(ci)} – still open`;
-        const meta=`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}"`;
+        const sameDay=co?iso(ci)===iso(co):true;
+        const stamp=t=>sameDay?hm(t):`${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${hm(t)}`;
+        const times=co?`${stamp(ci)} – ${stamp(co)}`:`${hm(ci)} – still open`;
+        const meta=`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}" data-in="${esc(x.clock_in)}" data-out="${esc(x.clock_out||'')}" data-paid="${x.manager_custom_paid_hours!=null?Number(x.manager_custom_paid_hours).toFixed(2):''}" data-min="${Number(j.settings?.project_completed_min_paid_hours??8)}"`;
         const worked=`<div class="reviewFacts"><span>Actual worked</span><strong>${actual.toFixed(2)} h</strong><em>${esc(times)}</em></div>`;
-        const review=x.manager_review_status==='pending'?`<div class="reviewBox">${worked}<div class="reviewBtns"><button class="mini primary" data-review-full="${x.id}" ${meta}>Approve full ${fullPay.toFixed(2)}h</button><button class="mini secondary" data-review-actual="${x.id}" ${meta}>Approve actual ${actual.toFixed(2)}h</button></div></div>`:`<div class="reviewBox"><b>${esc(statusLabel(x.manager_review_status))}</b>${worked}</div>`;
+        const spansDays=co?iso(ci)!==iso(co):false;
+        const corrected=x.manager_original_clock_out?`<div class="small muted">Clock-out corrected by manager (was ${esc(new Date(x.manager_original_clock_out).toLocaleString())})</div>`:'';
+        const customNote=x.manager_custom_paid_hours!=null?`<div class="small"><b>${Number(x.manager_custom_paid_hours).toFixed(2)} h</b> custom paid</div>`:'';
+        const decided=`<div class="reviewBox"><b>${esc(statusLabel(x.manager_review_status))}</b>${customNote}${worked}${corrected}${x.clock_out?`<div class="reviewBtns"><button class="mini secondary" data-review-custom="${x.id}" ${meta}>Adjust hours</button></div>`:''}</div>`;
+        const pending=`<div class="reviewBox">${worked}${spansDays?'<div class="spanWarn">Spans more than one day — check for a missed clock-out.</div>':''}<div class="reviewBtns"><button class="mini primary" data-review-full="${x.id}" ${meta}>Approve full ${fullPay.toFixed(2)}h</button><button class="mini secondary" data-review-actual="${x.id}" ${meta}>Approve actual ${actual.toFixed(2)}h</button><button class="mini secondary" data-review-custom="${x.id}" ${meta}>Custom hours…</button></div></div>`;
+        const review=x.manager_review_status==='pending'?pending:decided;
         const action=x.clock_out?'—':`<button class="mini danger" data-force="${x.id}">Clock Out</button>`;
         return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(ci)}</td><td>${ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${co?co.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Open'}</td><td>${actual.toFixed(2)}</td><td>${paid.toFixed(2)}</td><td>$${earned.toFixed(2)}</td><td><b>${esc(x.clock_out_note||'—')}</b>${x.clock_out_message?`<div class="small">${esc(x.clock_out_message)}</div>`:''}</td><td>${review}</td><td>${safeMapPair(x)}</td><td>${action}</td></tr>`;
       }).join('')||'<tr><td colspan="11">No records.</td></tr>';
       document.querySelectorAll('[data-review-full]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewFull,'approve_full',b.dataset));
       document.querySelectorAll('[data-review-actual]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewActual,'approve_actual',b.dataset));
+      document.querySelectorAll('[data-review-custom]').forEach(b=>b.onclick=()=>openCustomReview(b.dataset.reviewCustom,b.dataset));
       document.querySelectorAll('[data-force]').forEach(b=>b.onclick=()=>{const s=(j.shifts||[]).find(x=>String(x.id)===String(b.dataset.force));if(s){$('forceShift').value=String(s.id);$('forceClockOutAt').value=localDateTimeValue(new Date());window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'});}});
 
       $('rejectedRows').innerHTML=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)).map(x=>{const t=new Date(x.created_at);return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(t)}</td><td>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(x.reason)}</td><td>${esc(x.note||'—')}</td><td>${Number(x.distance_miles).toFixed(2)} mi</td><td>${loc(x.lat,x.lng,'View location')}</td></tr>`;}).join('')||'<tr><td colspan="7">No rejected clock-out attempts in this period.</td></tr>';
@@ -259,7 +312,7 @@
   async function startManagerApp(){
     $('managerLogin').classList.add('hide');$('managerApp').classList.remove('hide');$('mdate').value=iso(new Date());
     $('addEmployee').onclick=async()=>{const name=$('newName').value.trim(),title=$('newTitle').value.trim(),email=$('newEmail').value.trim(),wage=Number($('newWage').value||0),pin=$('newPin').value.trim();if(!name)return $('employeeMsg').textContent='Enter an employee name.';if(!Number.isFinite(wage)||wage<0)return $('employeeMsg').textContent='Enter a valid hourly wage.';if(!/^\d{4}$/.test(pin))return $('employeeMsg').textContent='PIN must be exactly 4 digits.';try{await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});['newName','newTitle','newEmail','newWage','newPin'].forEach(id=>$(id).value='');$('employeeMsg').textContent='Employee saved and PIN set.';await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}};
-    $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
+    $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value),data_retention_months:Number($('retentionSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('retentionSetting').value=s.data_retention_months;$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
     $('changeManagerPasswordBtn').onclick=async()=>{const currentPassword=$('currentManagerPassword').value,newPassword=$('newManagerPassword').value,confirmPassword=$('confirmManagerPassword').value;if(!currentPassword||!newPassword||!confirmPassword)return $('managerPasswordMsg').textContent='Complete all password fields.';if(newPassword!==confirmPassword)return $('managerPasswordMsg').textContent='New passwords do not match.';try{await api('/api/manager-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('managerPasswordMsg').textContent='Password changed. Please sign in again.';setTimeout(()=>location.reload(),700);}catch(e){$('managerPasswordMsg').textContent=e.message;}};
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
@@ -270,6 +323,29 @@
     $('weeklyPrev').onclick=()=>shiftWeek(-7);
     $('weeklyNext').onclick=()=>shiftWeek(7);
     $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
+    $('toggleRetention').onclick=()=>{const b=$('retentionBody');const hidden=b.classList.toggle('hide');$('toggleRetention').textContent=hidden?'Show':'Minimize';$('toggleRetention').setAttribute('aria-expanded',String(!hidden));};
+    $('customCancel').onclick=closeCustomReview;
+    $('customSave').onclick=saveCustomReview;
+    $('customReview').onclick=e=>{if(e.target===$('customReview'))closeCustomReview();};
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCustomReview();});
+    $('previewRetention').onclick=async()=>{
+      $('retentionMsg').textContent='Checking…';
+      try{const j=await api('/api/retention');const p=j.pending||{};
+        const oldest=p.oldest_shift?new Date(p.oldest_shift).toLocaleDateString():'none on record';
+        $('retentionMsg').textContent=`Keeping ${j.retentionMonths} months (back to ${new Date(j.cutoff).toLocaleDateString()}). Oldest shift on record: ${oldest}. A cleanup now would remove ${p.shifts} shift(s), ${p.audit_logs} audit record(s), ${p.auth_attempts} login attempt(s), and ${p.pin_reset_requests} PIN reset request(s). Nothing has been deleted.`;
+      }catch(e){$('retentionMsg').textContent=e.message;}
+    };
+    $('runRetention').onclick=async()=>{
+      let pending=null;
+      try{const j=await api('/api/retention');pending=j.pending||{};
+        if(!confirm(`Permanently delete data older than ${j.retentionMonths} months (before ${new Date(j.cutoff).toLocaleDateString()})?\n\nThis removes ${pending.shifts} shift(s) and their rejected-attempt history.\n\nThis cannot be undone.`))return;
+      }catch(e){$('retentionMsg').textContent=e.message;return;}
+      $('retentionMsg').textContent='Running cleanup…';
+      try{const j=await api('/api/retention',{method:'POST',body:JSON.stringify({})});const d=j.deleted||{};
+        $('retentionMsg').textContent=`Cleanup complete. Removed ${d.shifts} shift(s), ${d.audit_logs} audit record(s), ${d.auth_attempts} login attempt(s), ${d.pin_reset_requests} PIN reset request(s). Data before ${new Date(j.cutoff).toLocaleDateString()} is gone.`;
+        await mgrRender();
+      }catch(e){$('retentionMsg').textContent=e.message;}
+    };
     $('toggleEmployees').onclick=()=>{const b=$('employeesBody');const hidden=b.classList.toggle('hide');$('toggleEmployees').textContent=hidden?'Show':'Minimize';$('toggleEmployees').setAttribute('aria-expanded',String(!hidden));};
     $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
     ['period','mdate','search','shiftDetailsDate','shiftDetailsSearch'].forEach(id=>$(id).addEventListener('input',mgrRender));$('clearShiftDetailsFilters').onclick=()=>{$('shiftDetailsDate').value='';$('shiftDetailsSearch').value='';mgrRender();};$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);

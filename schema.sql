@@ -55,7 +55,9 @@ CREATE TABLE IF NOT EXISTS shifts (
   clock_out_distance_miles DOUBLE PRECISION,
   clock_out_note TEXT,
   clock_out_message TEXT,
-  manager_review_status TEXT NOT NULL DEFAULT 'not_required' CHECK (manager_review_status IN ('not_required','pending','approved_full','approved_actual')),
+  manager_review_status TEXT NOT NULL DEFAULT 'not_required' CHECK (manager_review_status IN ('not_required','pending','approved_full','approved_actual','approved_custom')),
+  manager_custom_paid_hours NUMERIC(10,2),
+  manager_original_clock_out TIMESTAMPTZ,
   manager_reviewed_by BIGINT REFERENCES manager_users(id),
   manager_reviewed_at TIMESTAMPTZ,
   manager_review_note TEXT,
@@ -88,7 +90,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT INTO app_settings(key, value) VALUES
   ('clock_out_radius_miles', '3'),
   ('project_completed_min_paid_hours', '8'),
-  ('max_active_employees', '100')
+  ('max_active_employees', '100'),
+  ('data_retention_months', '6')
 ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -116,8 +119,12 @@ ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_reviewed_by BIGINT;
 ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_reviewed_at TIMESTAMPTZ;
 ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_review_note TEXT;
 ALTER TABLE rejected_clock_outs ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_custom_paid_hours NUMERIC(10,2);
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_original_clock_out TIMESTAMPTZ;
 ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_manager_review_status_check;
-ALTER TABLE shifts ADD CONSTRAINT shifts_manager_review_status_check CHECK (manager_review_status IN ('not_required','pending','approved_full','approved_actual'));
+ALTER TABLE shifts ADD CONSTRAINT shifts_manager_review_status_check CHECK (manager_review_status IN ('not_required','pending','approved_full','approved_actual','approved_custom'));
+ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_manager_custom_paid_hours_check;
+ALTER TABLE shifts ADD CONSTRAINT shifts_manager_custom_paid_hours_check CHECK (manager_custom_paid_hours IS NULL OR (manager_custom_paid_hours >= 0 AND manager_custom_paid_hours <= 24));
 
 
 
@@ -155,3 +162,17 @@ CREATE TABLE IF NOT EXISTS manager_force_clockouts (
 );
 CREATE INDEX IF NOT EXISTS manager_force_clockouts_shift_idx ON manager_force_clockouts(shift_id);
 CREATE INDEX IF NOT EXISTS manager_force_clockouts_created_idx ON manager_force_clockouts(created_at DESC);
+
+-- Data retention: keep a rolling window (default 6 months) of time data.
+INSERT INTO app_settings(key, value) VALUES ('data_retention_months', '6') ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS retention_runs (
+  id BIGSERIAL PRIMARY KEY,
+  triggered_by TEXT NOT NULL CHECK (triggered_by IN ('cron','manager')),
+  manager_id BIGINT REFERENCES manager_users(id),
+  retention_months INTEGER NOT NULL,
+  cutoff TIMESTAMPTZ NOT NULL,
+  deleted JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS retention_runs_created_idx ON retention_runs(created_at DESC);
