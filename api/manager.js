@@ -24,7 +24,7 @@ async function handleReport(req,res,u){
   const start=new Date(startText),end=new Date(endText);
   if(!(end>start))return json(res,400,{error:'End must be after start.'});
   if((end-start)>MAX_REPORT_DAYS*86400000)return json(res,400,{error:'Report range is too long.'});
-  const employees=await sql`SELECT id,name,title,hourly_wage,active FROM employees WHERE id=${employeeId} LIMIT 1`;
+  const employees=await sql`SELECT id,name,title,hourly_wage,active,employment_status FROM employees WHERE id=${employeeId} LIMIT 1`;
   if(!employees.length)return json(res,404,{error:'Employee not found.'});
   const shifts=await sql`
     SELECT s.id,s.employee_id,s.clock_in,s.clock_out,s.clock_out_note,s.clock_out_message,
@@ -50,7 +50,7 @@ export default async function handler(req,res){
     if(url.searchParams.get('view')==='report')return await handleReport(req,res,url);
     let range;try{range=getRange(req);}catch(e){return json(res,400,{error:e.message});}
     const {start,end,days}=range;
-    const employees=await sql`SELECT id,name,title,hourly_wage,active FROM employees WHERE active=true ORDER BY name`;
+    const employees=await sql`SELECT id,name,title,hourly_wage,active,employment_status FROM employees ORDER BY CASE employment_status WHEN 'active' THEN 0 WHEN 'vacation' THEN 1 ELSE 2 END, name`;
     const shifts=await sql`
       SELECT s.id,e.id AS employee_id,e.name,e.title,e.hourly_wage,s.clock_in,s.clock_out,s.clock_in_lat,s.clock_in_lng,s.clock_out_lat,s.clock_out_lng,s.clock_out_distance_miles,s.clock_out_note,s.clock_out_message,s.manager_review_status,s.manager_review_note,s.manager_reviewed_at,s.manager_custom_paid_hours,s.manager_original_clock_out,
       (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
@@ -59,7 +59,7 @@ export default async function handler(req,res){
       WHERE s.clock_in<${end.toISOString()}::timestamptz AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
       ORDER BY s.clock_in DESC`;
     const minimum=await settingNumber('project_completed_min_paid_hours',8);
-    const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,wage:Number(e.hourly_wage||0),days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
+    const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,employment_status:e.employment_status,wage:Number(e.hourly_wage||0),days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
     let totalPaid=0,totalPayroll=0;
     for(const sh of shifts){
       const actual=hoursBetween(sh.clock_in,sh.clock_out), paid=effectiveShiftPay(sh,minimum),alloc=allocatePaidHours(sh,days,minimum);const e=weekly[sh.employee_id];
