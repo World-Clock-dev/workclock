@@ -12,6 +12,7 @@ export function overlapHours(a, b, start, end) {
 
 export function clockOutRule(note, actualHours, minimum = 8, reviewStatus = null) {
   const reason = String(note || 'Ending shift');
+  if (reviewStatus === 'approved_custom') return { paidHours: actualHours, needsReview: false, status: 'approved_custom' };
   if (reviewStatus === 'approved_actual') return { paidHours: actualHours, needsReview: false, status: 'approved_actual' };
   if (reviewStatus === 'approved_full') return { paidHours: Math.max(actualHours, minimum), needsReview: false, status: 'approved_full' };
   if (['Project completed', 'Client request', 'Manager approval'].includes(reason)) {
@@ -32,6 +33,8 @@ export function normalizeDayStarts(raw, fallbackStart, fallbackEnd) {
 
 export function effectiveShiftPay(shift, minimum = 8) {
   const actual = hoursBetween(shift.clock_in, shift.clock_out);
+  // A manager's custom review is the most recent explicit decision, so it outranks a force clock-out.
+  if (shift.manager_custom_paid_hours != null && Number.isFinite(Number(shift.manager_custom_paid_hours))) return Math.max(0, Number(shift.manager_custom_paid_hours));
   if (shift.manager_force_paid_hours != null && Number.isFinite(Number(shift.manager_force_paid_hours))) return Math.max(0, Number(shift.manager_force_paid_hours));
   return clockOutRule(shift.clock_out_note, actual, minimum, shift.manager_review_status).paidHours;
 }
