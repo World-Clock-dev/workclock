@@ -69,7 +69,7 @@ Correcting the clock-out matters: paid hours are spread across the calendar days
 ## Employment status
 Each employee is Active, On vacation, or Terminated (`employees.employment_status`). The existing `active` boolean stays the sign-in and headcount flag and is kept in sync: Active and On vacation can sign in and count toward `max_active_employees`; Terminated cannot sign in and frees a headcount slot.
 
-Terminated employees keep every shift, hour, earning and audit record. They stay listed in the Employees section, stay searchable in Employee Report, and still appear in Weekly Paid Hours and Shift Details for any week they actually worked. They are hidden only from weeks where they recorded nothing, so current weeks are not cluttered with former staff.
+Terminated employees keep every shift, hour, earning and audit record. The Employees section lists each status as its own labelled group (Active, On vacation, Terminated) with a count, so former staff are easy to review without mixing into the current roster. They stay listed there, stay searchable in Employee Report, and still appear in Weekly Paid Hours and Shift Details for any week they actually worked. They are hidden only from weeks where they recorded nothing, so current weeks are not cluttered with former staff.
 
 Changing status is a PATCH to `/api/employees` with `{id, status}`. Terminating asks for confirmation first and ends any open sign-in session.
 

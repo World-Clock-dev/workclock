@@ -250,3 +250,16 @@ button.danger:hover{border-color:#fca5a5}
 .pill.status-terminated .personMeta b{text-decoration:line-through}
 .statusSelect{font-size:12px;font-weight:700;padding:7px 8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text)}
 .dgRow .statusBadge{margin-left:4px}
+
+/* ---- Employees listed separately by status ---- */
+.empGroup{margin-top:16px}
+.empGroup:first-child{margin-top:0}
+.empGroupHead h3{display:flex;align-items:center;gap:8px;margin:0;font-size:14px}
+.empGroupHead p{margin:2px 0 8px}
+.empCount{font-size:11px;font-weight:800;min-width:22px;text-align:center;padding:2px 7px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.empGroup-active .empCount{background:#ecfdf5;color:#047857;border-color:#bbf7d0}
+.empGroup-vacation .empCount{background:#fffbeb;color:#92400e;border-color:#fde68a}
+.empGroup-terminated .empCount{background:#f1f5f9;color:#475569}
+.empEmpty{margin:0;padding:9px 11px;border:1px dashed var(--line);border-radius:10px}
+.empGroup+.empGroup{border-top:1px solid var(--line);padding-top:14px}
+.personMeta .statusBadge{align-self:flex-start;width:-moz-fit-content;width:fit-content}

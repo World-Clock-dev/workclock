@@ -145,12 +145,24 @@
   async function loadPeople(){const j=await api('/api/employees');managerPeople=j.employees||[];renderPeople();}
   function renderPeople(){
     if(!managerMode)return;
-    const rank=p=>({active:0,vacation:1,terminated:2}[p.employment_status||(p.active?'active':'terminated')]??0);
-    const listed=managerPeople.slice().sort((a,b)=>rank(a)-rank(b)||String(a.name).localeCompare(String(b.name)));
-    $('approvedList').innerHTML=listed.map(p=>{
-      const st=p.employment_status||(p.active?'active':'terminated');
+    const statusOf=p=>p.employment_status||(p.active?'active':'terminated');
+    const card=p=>{
+      const st=statusOf(p);
       return `<div class="pill status-${st}"><div class="personMeta"><b>${esc(p.name)}</b> <span class="statusBadge ${st}">${esc(statusText(st))}</span><span>${esc(p.title||'No title')} · $${Number(p.hourly_wage).toFixed(2)}/hr · ${p.email?esc(p.email)+' · ':''}${p.has_pin?'PIN set':'PIN needed'}</span></div><input class="inlineTitle" data-title-id="${p.id}" value="${esc(p.title||'')}" maxlength="80" placeholder="Title"><select class="statusSelect" data-status-id="${p.id}"><option value="active"${st==='active'?' selected':''}>Active</option><option value="vacation"${st==='vacation'?' selected':''}>On vacation</option><option value="terminated"${st==='terminated'?' selected':''}>Terminated</option></select><button data-save-person="${p.id}">Save</button><button data-pin="${p.id}">${p.has_pin?'Reset PIN':'Set PIN'}</button></div>`;
-    }).join('')||'<span class="small">No employees yet.</span>';
+    };
+    const byName=(a,b)=>String(a.name).localeCompare(String(b.name));
+    const groups=[
+      {key:'active',title:'Active employees',note:'Currently working and able to clock in.',empty:'No active employees.'},
+      {key:'vacation',title:'On vacation',note:'Still employed. They can still clock in if they come in.',empty:'Nobody is on vacation.'},
+      {key:'terminated',title:'Terminated employees',note:'Cannot sign in. Every shift, hour and earning stays on record.',empty:'No terminated employees.'}
+    ];
+    $('approvedList').innerHTML=groups.map(g=>{
+      const list=managerPeople.filter(p=>statusOf(p)===g.key).sort(byName);
+      return `<div class="empGroup empGroup-${g.key}">
+        <div class="empGroupHead"><h3>${esc(g.title)}<span class="empCount">${list.length}</span></h3><p class="muted small">${esc(g.note)}</p></div>
+        ${list.length?`<div class="pills">${list.map(card).join('')}</div>`:`<p class="muted small empEmpty">${esc(g.empty)}</p>`}
+      </div>`;
+    }).join('');
     document.querySelectorAll('[data-status-id]').forEach(sel=>sel.onchange=async()=>{
       const id=sel.dataset.statusId,status=sel.value;
       const who=(managerPeople.find(p=>String(p.id)===String(id))||{}).name||'this employee';
