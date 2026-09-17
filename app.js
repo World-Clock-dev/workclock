@@ -637,5 +637,14 @@
     $('completeManagerResetBtn').onclick=async()=>{const a=$('resetManagerPassword').value,b=$('resetManagerPasswordConfirm').value;if(a!==b)return $('managerResetMsg').textContent='Passwords do not match.';try{await api('/api/manager-password-reset',{method:'PATCH',body:JSON.stringify({token:resetToken,newPassword:a})});$('managerResetMsg').textContent='Password reset successfully. You can now sign in.';setTimeout(()=>location.href='/?manager=1',900);}catch(e){$('managerResetMsg').textContent=e.message;}};
   }
   document.addEventListener('click',e=>{const btn=e.target.closest('[data-toggle-password]');if(!btn)return;const input=$(btn.dataset.togglePassword);if(!input)return;const visible=input.type==='text';input.type=visible?'password':'text';btn.textContent=visible?'Show':'Hide';btn.setAttribute('aria-label',visible?'Show password':'Hide password');});
+  // Each portal carries its own icon, so a pinned tab or home-screen shortcut
+  // shows which one it opens.
+  (function setPortalIcon(){
+    const src=managerMode?'/icon-manager.png':'/icon-employee.png';
+    const fav=$('favicon'),apple=$('appleIcon');
+    if(fav)fav.href=src;
+    if(apple)apple.href=src;
+    document.title=managerMode?'WorkClock — Manager Portal':'WorkClock — Employee Portal';
+  })();
   if(managerMode)initManager();else initEmployee();
 })();
