@@ -10,6 +10,174 @@
   const dur = ms => { let s=Math.floor(Math.max(0,ms)/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);s%=60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
   const hours = x => Math.max(0, (new Date(x.clock_out || Date.now()) - new Date(x.clock_in)) / 3600000);
   const esc = s => String(s ?? '').replace(/[&<>\"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[m] || m));
+  /* ------------------------------------------------------------------
+     Employee-portal language support (English / Spanish).
+     The manager portal is always English, so `lang` is pinned to 'en'
+     whenever managerMode is true. Shared helpers (fmtDay, weekLabel,
+     statusLabel) therefore keep producing English for the manager.
+
+     IMPORTANT: clock-out reasons are stored in the database and drive
+     the payroll rules in api/_time.js, so only their DISPLAYED text is
+     translated. Their option values stay English.
+  ------------------------------------------------------------------ */
+  const STR = {
+    brandSub:['Employee Time Clock','Reloj de Asistencia'],
+    langLabel:['Español','English'],
+    langTitle:['Ver este portal en español','View this portal in English'],
+    signInTitle:['Employee Sign In','Inicio de sesión del empleado'],
+    signInHelp:['Use your approved name and private 4-digit PIN.','Use su nombre aprobado y su PIN privado de 4 dígitos.'],
+    empName:['Employee Name','Nombre del empleado'],
+    fullName:['Full name','Nombre completo'],
+    pin4:['4-Digit PIN','PIN de 4 dígitos'],
+    show:['Show','Mostrar'],
+    hide:['Hide','Ocultar'],
+    signIn:['Sign In','Iniciar sesión'],
+    forgotPin:['Forgot your PIN?','¿Olvidó su PIN?'],
+    emailReset:['Email Manager a Reset Request','Enviar solicitud al gerente'],
+    signedInAs:['SIGNED IN AS','SESIÓN INICIADA COMO'],
+    signOut:['Sign Out','Cerrar sesión'],
+    clockIn:['Clock In','Registrar entrada'],
+    clockOut:['Clock Out','Registrar salida'],
+    reasonLabel:['Clock Out Reason','Motivo de salida'],
+    reasonPick:['Select reason for leaving before 8 hours','Seleccione el motivo para salir antes de las 8 horas'],
+    rEnding:['Ending shift','Fin del turno'],
+    rPersonal:['Personal reason','Motivo personal'],
+    rDoctor:['Doctor appointment','Cita médica'],
+    rEmergency:['Emergency','Emergencia'],
+    rProject:['Project completed','Proyecto terminado'],
+    rClient:['Client request','Solicitud del cliente'],
+    rManager:['Manager approval','Aprobación del gerente'],
+    optMsg:['Optional message','Mensaje opcional'],
+    optMsgPh:['Add a short explanation (optional)','Agregue una breve explicación (opcional)'],
+    reviewNote:['Project completed, Client request, and Manager approval are sent for manager review. Personal reason is paid from actual working time.','Proyecto terminado, Solicitud del cliente y Aprobación del gerente se envían para revisión del gerente. El motivo personal se paga según el tiempo realmente trabajado.'],
+    inTime:['CLOCK IN TIME','HORA DE ENTRADA'],
+    runTime:['RUNNING TIME','TIEMPO TRANSCURRIDO'],
+    currentlyIn:['● Currently clocked in','● Entrada registrada actualmente'],
+    locations:['Clock In / Clock Out Locations','Ubicaciones de entrada y salida'],
+    hoursToday:['PAID HOURS TODAY','HORAS PAGADAS HOY'],
+    hoursWeek:['PAID HOURS THIS WEEK','HORAS PAGADAS ESTA SEMANA'],
+    weeklySummary:['Weekly Summary','Resumen semanal'],
+    currentWeek:['Current week','Semana actual'],
+    selectWeek:['Select week','Seleccionar semana'],
+    thisWeek:['This week','Esta semana'],
+    weekTotal:['WEEK TOTAL','TOTAL DE LA SEMANA'],
+    weekEarned:['WEEK EARNED','GANADO EN LA SEMANA'],
+    footer:['Your time, earnings, and location records are private to your login.','Sus registros de tiempo, ganancias y ubicación son privados de su cuenta.'],
+    fDenied:['CLOCK-OUT DENIED','SALIDAS RECHAZADAS'],
+    fFull:['FULL DAY PAY APPROVED','DÍA COMPLETO APROBADO'],
+    fActual:['ACTUAL HOURS APPROVED','HORAS REALES APROBADAS'],
+    fPending:['AWAITING MANAGER','PENDIENTE DEL GERENTE'],
+    timeOnce:['time this week','vez esta semana'],
+    timeMany:['times this week','veces esta semana'],
+    dayOne:['day','día'],
+    dayMany:['days','días'],
+    noDenied:['No clock-out attempts were denied this week.','No se rechazó ninguna salida esta semana.'],
+    noFull:['No days were approved for full day pay this week.','Ningún día fue aprobado con pago de día completo esta semana.'],
+    noActual:['No days were approved at actual hours this week.','Ningún día fue aprobado por horas reales esta semana.'],
+    noPending:['Nothing is waiting on your manager this week.','No hay nada pendiente del gerente esta semana.'],
+    attemptOne:['denied clock-out attempt','intento de salida rechazado'],
+    attemptMany:['denied clock-out attempts','intentos de salida rechazados'],
+    reasonPrefix:['Reason','Motivo'],
+    mgrNote:['Manager note','Nota del gerente'],
+    noNotes:['No manager notes for this day.','No hay notas del gerente para este día.'],
+    stPending:['Pending manager review','Pendiente de revisión del gerente'],
+    stFull:['Approved full hours','Horas completas aprobadas'],
+    stActual:['Approved actual hours','Horas reales aprobadas'],
+    stCustom:['Approved custom hours','Horas personalizadas aprobadas'],
+    weekOf:['Week','Semana'],
+    gpsChecking:['Checking GPS…','Verificando GPS…'],
+    gpsLimit:['Checking GPS and location limit…','Verificando GPS y límite de ubicación…'],
+    inOk:['Clock In accepted. Your location was saved.','Entrada aceptada. Su ubicación fue guardada.'],
+    notClockedIn:['You are not currently clocked in.','Actualmente no tiene una entrada registrada.'],
+    pickReason:['Please select a reason for clocking out before 8 hours.','Seleccione un motivo para salir antes de las 8 horas.'],
+    outReview:['Clock Out accepted. The manager must review this exception.','Salida aceptada. El gerente debe revisar esta excepción.'],
+    outOk:['Clock Out accepted. Distance from Clock In: {d} miles.','Salida aceptada. Distancia desde la entrada: {d} millas.'],
+    recoveryHelp:['Enter your approved name and we will notify the manager. Your PIN is never emailed.','Escriba su nombre aprobado y notificaremos al gerente. Su PIN nunca se envía por correo.'],
+    recoveryNeedName:['Enter your approved employee name.','Escriba su nombre de empleado aprobado.'],
+    geoUnavailable:['GPS is unavailable on this device/browser.','El GPS no está disponible en este dispositivo o navegador.'],
+    geoDenied:['Location permission denied. Please allow location access.','Permiso de ubicación denegado. Por favor, permita el acceso a su ubicación.'],
+    geoFailed:['Could not get your location.','No se pudo obtener su ubicación.'],
+    requestFailed:['Request failed','La solicitud falló'],
+    tabTitle:['WorkClock — Employee Portal','WorkClock — Portal del Empleado']
+  };
+  const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
+  const DAYNAMES = {en:['MON','TUE','WED','THU','FRI','SAT','SUN'],es:['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM']};
+
+  /* Server replies are English. Map the ones an employee can see, so a
+     rejected clock-out or a locked PIN reads in their language too. */
+  const SERVER_ES = {
+    'A valid GPS location is required.':'Se requiere una ubicación GPS válida.',
+    'Already clocked-in.':'Ya tiene una entrada registrada.',
+    'Already clocked out.':'Ya registró su salida.',
+    'You do not have an active Clock In.':'No tiene una entrada activa.',
+    'Please select a valid Clock Out reason.':'Seleccione un motivo de salida válido.',
+    'Please select a reason for clocking out before 8 hours.':'Seleccione un motivo para salir antes de las 8 horas.',
+    'Enter your approved name and 4-digit PIN.':'Escriba su nombre aprobado y su PIN de 4 dígitos.',
+    'Incorrect employee name or PIN.':'Nombre de empleado o PIN incorrecto.',
+    'Too many login attempts from this connection. Try again later.':'Demasiados intentos de inicio de sesión desde esta conexión. Inténtelo más tarde.',
+    'Too many incorrect PIN attempts. Try again in 10 minutes or contact your manager.':'Demasiados intentos de PIN incorrectos. Inténtelo en 10 minutos o comuníquese con su gerente.',
+    'Too many incorrect PIN attempts. Login locked for 10 minutes.':'Demasiados intentos de PIN incorrectos. Acceso bloqueado por 10 minutos.',
+    'Enter your approved employee name.':'Escriba su nombre de empleado aprobado.',
+    'Too many PIN reset requests from this connection. Try again later.':'Demasiadas solicitudes de restablecimiento desde esta conexión. Inténtelo más tarde.',
+    'If that employee is active, the manager has been notified. Please wait for your manager to reset your PIN.':'Si ese empleado está activo, se notificó al gerente. Espere a que su gerente restablezca su PIN.',
+    'Employee login required.':'Debe iniciar sesión.',
+    'Method not allowed':'Método no permitido',
+    'Server error':'Error del servidor',
+    'Request failed':'La solicitud falló',
+    'Cross-site request blocked.':'Solicitud entre sitios bloqueada.',
+    'Your clock-out was not recorded because you were outside the allowed location radius. Your manager has been notified.':'Su salida no se registró porque estaba fuera del radio de ubicación permitido. Se notificó a su gerente.',
+    'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.':'Aviso: un intento de salida anterior no cumplió con la regla de ubicación. Se notificó a su gerente.'
+  };
+  function serverText(msg){
+    const text=String(msg??'');
+    if(lang!=='es'||!text)return text;
+    if(SERVER_ES[text])return SERVER_ES[text];
+    let m=text.match(/^CLOCK OUT REJECTED — you are ([\d.]+) miles from Clock In\. You must be within ([\d.]+) miles\.$/);
+    if(m)return `SALIDA RECHAZADA — está a ${m[1]} millas del lugar de entrada. Debe estar dentro de ${m[2]} millas.`;
+    m=text.match(/^Clock Out message must be (\d+) characters or fewer\.$/);
+    if(m)return `El mensaje de salida debe tener ${m[1]} caracteres o menos.`;
+    return text;
+  }
+
+  let lang = 'en';
+  const t = (key,vars) => {
+    const row=STR[key];
+    let out=row?(lang==='es'?row[1]:row[0]):key;
+    if(vars)for(const k in vars)out=out.split('{'+k+'}').join(vars[k]);
+    return out;
+  };
+  const locale = () => lang==='es'?'es':[];
+
+  function applyLanguage(next){
+    lang = next==='es' ? 'es' : 'en';
+    try{localStorage.setItem('wc_lang',lang);}catch{}
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+    document.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.placeholder=t(el.dataset.i18nPh);});
+    document.querySelectorAll('[data-i18n-aria]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAria));});
+    // Reason options: translate the label, never the stored value.
+    document.querySelectorAll('#earlyNote option[data-i18n-opt]').forEach(el=>{el.textContent=t(el.dataset.i18nOpt);});
+    document.querySelectorAll('#empWeekCal .weekCalDows span').forEach((el,i)=>{el.textContent=DOWS[lang][i];});
+    const eye=document.querySelector('[data-toggle-password="employeePin"]');
+    if(eye)eye.textContent=$('employeePin')?.type==='text'?t('hide'):t('show');
+    const btn=$('langToggle');
+    if(btn){btn.textContent=t('langLabel');btn.title=t('langTitle');btn.setAttribute('aria-label',t('langTitle'));}
+    if(!managerMode)document.title=t('tabTitle');
+    if(employeeIdentity&&empCache)renderEmployee();
+    else{
+      const lbl=$('empWeekLabel');
+      if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
+    }
+    tick();
+  }
+  function initLanguage(){
+    let saved='en';
+    try{saved=localStorage.getItem('wc_lang')||'en';}catch{}
+    const btn=$('langToggle');
+    if(btn)btn.onclick=()=>applyLanguage(lang==='es'?'en':'es');
+    applyLanguage(saved);
+  }
+
   const api = async (url, opt={}) => {
     const headers = {...(opt.headers||{})};
     if (opt.body !== undefined) headers['content-type']='application/json';
@@ -18,14 +186,14 @@
     if(!r.ok){const e=new Error(j.error||'Request failed');e.status=r.status;e.payload=j;throw e;} return j;
   };
   const geo = () => new Promise((resolve,reject)=>{
-    if(!navigator.geolocation)return reject(new Error('GPS is unavailable on this device/browser.'));
-    navigator.geolocation.getCurrentPosition(p=>resolve(p.coords),e=>reject(new Error(e.code===1?'Location permission denied. Please allow location access.':'Could not get your location.')),{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+    if(!navigator.geolocation)return reject(new Error(t('geoUnavailable')));
+    navigator.geolocation.getCurrentPosition(p=>resolve(p.coords),e=>reject(new Error(e.code===1?t('geoDenied'):t('geoFailed'))),{enableHighAccuracy:true,timeout:15000,maximumAge:0});
   });
-  const displayMessage = value => { if (value && typeof value === 'object') return String(value.message || value.error || value.ruleAlert || 'Request failed'); return String(value ?? ''); };
+  const displayMessage = value => { if (value && typeof value === 'object') return serverText(String(value.message || value.error || value.ruleAlert || t('requestFailed'))); return serverText(String(value ?? '')); };
   const stat = (message,type='info') => { const el=$('status'); if(el)el.innerHTML=`<div class="status ${type}">${esc(displayMessage(message))}</div>`; };
   const dayBounds = (start,count) => { const out=[]; for(let i=0;i<=count;i++){const d=new Date(start);d.setDate(d.getDate()+i);out.push(d.toISOString());} return out; };
   const qp = arr => encodeURIComponent(arr.join(','));
-  const fmtDay = d => d.toLocaleDateString([], {weekday:'long',month:'short',day:'numeric'});
+  const fmtDay = d => d.toLocaleDateString(locale(), {weekday:'long',month:'short',day:'numeric'});
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
@@ -54,11 +222,11 @@
     const p=empCache.employee,open=empCache.openShift;
     $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent=`$${Number(p.hourly_wage||0).toFixed(2)}/hr`;
     $('shift').classList.toggle('hide',!open);$('earlyNoteWrap').classList.toggle('hide',!open);$('in').disabled=!!open;$('out').disabled=!open;
-    if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent='Select reason for leaving before 8 hours';}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
+    if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent=t('reasonPick');}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
-    $('weekTitle').textContent=`Week: ${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${end.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})}`;
-    const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=['MON','TUE','WED','THU','FRI','SAT','SUN'];let total=0;
-    $('days').innerHTML=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;return `<div class="day"><div><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString([],{month:'numeric',day:'numeric'})}</div></div><div><div class="dh">${v.toFixed(2)}</div><div class="dm">$${(v*rate).toFixed(2)}</div></div></div>`;}).join('');
+    $('weekTitle').textContent=`${t('weekOf')}: ${start.toLocaleDateString(locale(),{month:'short',day:'numeric'})} – ${end.toLocaleDateString(locale(),{month:'short',day:'numeric',year:'numeric'})}`;
+    const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=DAYNAMES[lang]||DAYNAMES.en;let total=0;
+    $('days').innerHTML=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;return `<div class="day"><div><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString(locale(),{month:'numeric',day:'numeric'})}</div></div><div><div class="dh">${v.toFixed(2)}</div><div class="dm">$${(v*rate).toFixed(2)}</div></div></div>`;}).join('');
     renderWeekFlags(start);
     $('weekTotal').textContent=total.toFixed(2);$('weekEarned').textContent='$'+(total*rate).toFixed(2);
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
@@ -69,11 +237,11 @@
     if(!list.length)return `<p class="muted small">${esc(empty)}</p>`;
     return `<ul class="flagList">${list.map(s=>{
       const bits=[],denied=Number(s.rejected_count||0);
-      if(denied)bits.push(`${denied} denied clock-out attempt${denied>1?'s':''}`);
-      if(s.clock_out_note)bits.push(`Reason: ${s.clock_out_note}`);
+      if(denied)bits.push(`${denied} ${denied>1?t('attemptMany'):t('attemptOne')}`);
+      if(s.clock_out_note)bits.push(`${t('reasonPrefix')}: ${reasonText(s.clock_out_note)}`);
       const label=statusLabel(s.manager_review_status);
       if(label&&label!=='—')bits.push(label);
-      return `<li><b>${esc(fmtDay(new Date(s.clock_in)))}</b><span>${esc(bits.join(' · ')||'No manager notes for this day.')}</span>${s.manager_review_note?`<span class="small">Manager note: ${esc(s.manager_review_note)}</span>`:''}</li>`;
+      return `<li><b>${esc(fmtDay(new Date(s.clock_in)))}</b><span>${esc(bits.join(' · ')||t('noNotes'))}</span>${s.manager_review_note?`<span class="small">${t('mgrNote')}: ${esc(s.manager_review_note)}</span>`:''}</li>`;
     }).join('')}</ul>`;
   }
   function renderWeekFlags(weekStart){
@@ -86,18 +254,18 @@
     const full=week.filter(s=>s.manager_review_status==='approved_full');
     const actualApproved=week.filter(s=>s.manager_review_status==='approved_actual');
     const pending=week.filter(s=>s.manager_review_status==='pending');
-    const plural=n=>n===1?'day':'days';
+    const plural=n=>n===1?t('dayOne'):t('dayMany');
     wrap.innerHTML=[
-      `<button class="flagTile${denied?' warn':''}" data-flag="denied" type="button"><span>CLOCK-OUT DENIED</span><strong>${denied}</strong><small>${denied===1?'time':'times'} this week</small></button>`,
-      `<button class="flagTile${full.length?' good':''}" data-flag="full" type="button"><span>FULL DAY PAY APPROVED</span><strong>${full.length}</strong><small>${plural(full.length)}</small></button>`,
-      `<button class="flagTile${actualApproved.length?' good':''}" data-flag="actual" type="button"><span>ACTUAL HOURS APPROVED</span><strong>${actualApproved.length}</strong><small>${plural(actualApproved.length)}</small></button>`,
-      `<button class="flagTile${pending.length?' info':''}" data-flag="pending" type="button"><span>AWAITING MANAGER</span><strong>${pending.length}</strong><small>${plural(pending.length)}</small></button>`
+      `<button class="flagTile${denied?' warn':''}" data-flag="denied" type="button"><span>${t('fDenied')}</span><strong>${denied}</strong><small>${denied===1?t('timeOnce'):t('timeMany')}</small></button>`,
+      `<button class="flagTile${full.length?' good':''}" data-flag="full" type="button"><span>${t('fFull')}</span><strong>${full.length}</strong><small>${plural(full.length)}</small></button>`,
+      `<button class="flagTile${actualApproved.length?' good':''}" data-flag="actual" type="button"><span>${t('fActual')}</span><strong>${actualApproved.length}</strong><small>${plural(actualApproved.length)}</small></button>`,
+      `<button class="flagTile${pending.length?' info':''}" data-flag="pending" type="button"><span>${t('fPending')}</span><strong>${pending.length}</strong><small>${plural(pending.length)}</small></button>`
     ].join('');
     const sets={
-      denied:[deniedShifts,'No clock-out attempts were denied this week.'],
-      full:[full,'No days were approved for full day pay this week.'],
-      actual:[actualApproved,'No days were approved at actual hours this week.'],
-      pending:[pending,'Nothing is waiting on your manager this week.']
+      denied:[deniedShifts,t('noDenied')],
+      full:[full,t('noFull')],
+      actual:[actualApproved,t('noActual')],
+      pending:[pending,t('noPending')]
     };
     let openFlag=null;
     wrap.querySelectorAll('[data-flag]').forEach(b=>b.onclick=()=>{
@@ -117,7 +285,7 @@
     try{empCache=await api(`/api/employee?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);employeeIdentity=empCache.employee;projectMinimum=Number(empCache.settings?.project_completed_min_paid_hours??8);renderEmployee();}
     catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}
   }
-  function tick(){if(managerMode)return;const d=new Date();$('clock').textContent=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('dateText').textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});if(empCache?.openShift)renderEmployee();}
+  function tick(){if(managerMode)return;const d=new Date();$('clock').textContent=d.toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});$('dateText').textContent=d.toLocaleDateString(locale(),{weekday:'long',month:'long',day:'numeric',year:'numeric'});if(empCache?.openShift)renderEmployee();}
 
   function setEmpWeek(d,render=true){
     const start=ws(d);
@@ -126,18 +294,19 @@
     if(render)loadEmployee();
   }
   async function initEmployee(){
+    initLanguage();
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
-    $('forgotEmployeeBtn').onclick=()=>{$('employeeRecovery').classList.toggle('hide');$('employeeRecoveryMsg').textContent='Enter your approved name and we will notify the manager. Your PIN is never emailed.';};
-    $('requestPinResetBtn').onclick=async()=>{const name=$('recoveryEmployeeName').value.trim();if(!name)return $('employeeRecoveryMsg').textContent='Enter your approved employee name.';try{const j=await api('/api/employee-pin-reset',{method:'POST',body:JSON.stringify({name})});$('employeeRecoveryMsg').textContent=j.message;}catch(e){$('employeeRecoveryMsg').textContent=displayMessage(e.payload||e.message);}};
+    $('forgotEmployeeBtn').onclick=()=>{$('employeeRecovery').classList.toggle('hide');$('employeeRecoveryMsg').textContent=t('recoveryHelp');};
+    $('requestPinResetBtn').onclick=async()=>{const name=$('recoveryEmployeeName').value.trim();if(!name)return $('employeeRecoveryMsg').textContent=t('recoveryNeedName');try{const j=await api('/api/employee-pin-reset',{method:'POST',body:JSON.stringify({name})});$('employeeRecoveryMsg').textContent=j.message;}catch(e){$('employeeRecoveryMsg').textContent=displayMessage(e.payload||e.message);}};
     $('employeeLogoutBtn').onclick=async()=>{try{await api('/api/employee-auth',{method:'DELETE'});}catch{}showEmployeeLogin();};
     setEmpWeek(new Date(),false);
     createWeekPicker({btn:'empWeekBtn',input:'weekDate',cal:'empWeekCal',grid:'empCalGrid',month:'empCalMonth',prev:'empCalPrevMonth',next:'empCalNextMonth',today:'empCalToday',set:d=>setEmpWeek(d)});
     $('prev').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()-7);setEmpWeek(d);};
     $('next').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()+7);setEmpWeek(d);};
-    $('in').onclick=async()=>{try{stat('Checking GPS…');const c=await geo();const j=await api('/api/clock-in',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude})});stat(j.ruleAlert||'Clock In accepted. Your location was saved.','ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
-    $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat('You are not currently clocked in.','bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat('Please select a reason for clocking out before 8 hours.','bad');$('earlyNote').focus();return;}stat('Checking GPS and location limit…');const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?'Clock Out accepted. The manager must review this exception.':`Clock Out accepted. Distance from Clock In: ${Number(j.distance).toFixed(2)} miles.`,'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
+    $('in').onclick=async()=>{try{stat(t('gpsChecking'));const c=await geo();const j=await api('/api/clock-in',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude})});stat(serverText(j.ruleAlert)||t('inOk'),'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
+    $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat(t('notClockedIn'),'bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat(t('pickReason'),'bad');$('earlyNote').focus();return;}stat(t('gpsLimit'));const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?t('outReview'):t('outOk',{d:Number(j.distance).toFixed(2)}),'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
     tick();setInterval(tick,1000);
   }
 
@@ -177,7 +346,10 @@
     document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Deactivate this employee? Existing time records will remain available.'))return;try{await api(`/api/employees?id=${encodeURIComponent(b.dataset.remove)}`,{method:'DELETE'});await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
   }
   const loc=(a,b,label='View')=>a==null?'—':`<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${label}</a>`;
-  const statusLabel=s=>({pending:'Pending manager review',approved_full:'Approved full hours',approved_actual:'Approved actual hours',approved_custom:'Approved custom hours',not_required:'—'}[s]||'—');
+  const statusLabel=s=>({pending:t('stPending'),approved_full:t('stFull'),approved_actual:t('stActual'),approved_custom:t('stCustom'),not_required:'—'}[s]||'—');
+  // Reasons are stored in English; show the employee their own language.
+  const REASON_KEY={'Ending shift':'rEnding','Personal reason':'rPersonal','Doctor appointment':'rDoctor','Emergency':'rEmergency','Project completed':'rProject','Client request':'rClient','Manager approval':'rManager'};
+  const reasonText=r=>REASON_KEY[String(r||'')]?t(REASON_KEY[String(r||'')]):String(r||'');
   const safeMapPair=(x)=>{if(x.clock_in_lat==null)return '—';const inUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_in_lat},${x.clock_in_lng}`)}`;if(x.clock_out_lat==null)return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a>`;const outUrl=`https://www.google.com/maps?q=${encodeURIComponent(`${x.clock_out_lat},${x.clock_out_lng}`)}`;return `<a target="_blank" rel="noopener noreferrer" href="${inUrl}">In</a> / <a target="_blank" rel="noopener noreferrer" href="${outUrl}">Out</a>`;};
   async function loadSettings(){try{const j=await api('/api/settings');const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles??3;$('projectMinSetting').value=s.project_completed_min_paid_hours??8;$('maxEmployeesSetting').value=s.max_active_employees??100;$('retentionSetting').value=s.data_retention_months??6;}catch(e){$('settingsMsg').textContent=e.message;}}
   function localInput(d){const t=new Date(d);if(!Number.isFinite(t.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}T${p(t.getHours())}:${p(t.getMinutes())}`;}
@@ -286,10 +458,10 @@
   }
   function weekLabel(start){
     const end=new Date(start);end.setDate(end.getDate()+6);
-    const md={month:'short',day:'numeric'};
-    if(start.getFullYear()!==end.getFullYear())return `${start.toLocaleDateString(undefined,{...md,year:'numeric'})} – ${end.toLocaleDateString(undefined,{...md,year:'numeric'})}`;
-    const right=start.getMonth()===end.getMonth()?end.getDate():end.toLocaleDateString(undefined,md);
-    return `${start.toLocaleDateString(undefined,md)} – ${right}, ${end.getFullYear()}`;
+    const md={month:'short',day:'numeric'};const L=locale();
+    if(start.getFullYear()!==end.getFullYear())return `${start.toLocaleDateString(L,{...md,year:'numeric'})} – ${end.toLocaleDateString(L,{...md,year:'numeric'})}`;
+    const right=start.getMonth()===end.getMonth()?end.getDate():end.toLocaleDateString(L,md);
+    return `${start.toLocaleDateString(L,md)} – ${right}, ${end.getFullYear()}`;
   }
   let calMonth=null;
   function setWeek(d,render=true){const start=ws(d);$('weeklyWeekDate').value=iso(start);$('weeklyWeekLabel').textContent=weekLabel(start);if(render)mgrRender();}
@@ -636,7 +808,7 @@
     $('requestManagerResetBtn').onclick=async()=>{const username=$('recoveryManagerUsername').value.trim();if(!username)return $('managerRecoveryMsg').textContent='Enter the manager username.';try{const j=await api('/api/manager-password-reset',{method:'POST',body:JSON.stringify({username})});$('managerRecoveryMsg').textContent=j.message;}catch(e){$('managerRecoveryMsg').textContent=e.message;}};
     $('completeManagerResetBtn').onclick=async()=>{const a=$('resetManagerPassword').value,b=$('resetManagerPasswordConfirm').value;if(a!==b)return $('managerResetMsg').textContent='Passwords do not match.';try{await api('/api/manager-password-reset',{method:'PATCH',body:JSON.stringify({token:resetToken,newPassword:a})});$('managerResetMsg').textContent='Password reset successfully. You can now sign in.';setTimeout(()=>location.href='/?manager=1',900);}catch(e){$('managerResetMsg').textContent=e.message;}};
   }
-  document.addEventListener('click',e=>{const btn=e.target.closest('[data-toggle-password]');if(!btn)return;const input=$(btn.dataset.togglePassword);if(!input)return;const visible=input.type==='text';input.type=visible?'password':'text';btn.textContent=visible?'Show':'Hide';btn.setAttribute('aria-label',visible?'Show password':'Hide password');});
+  document.addEventListener('click',e=>{const btn=e.target.closest('[data-toggle-password]');if(!btn)return;const input=$(btn.dataset.togglePassword);if(!input)return;const visible=input.type==='text';input.type=visible?'password':'text';btn.textContent=visible?t('show'):t('hide');btn.setAttribute('aria-label',visible?t('show'):t('hide'));});
   // Each portal carries its own icon, so a pinned tab or home-screen shortcut
   // shows which one it opens.
   (function setPortalIcon(){

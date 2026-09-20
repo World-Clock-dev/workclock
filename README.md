@@ -66,6 +66,16 @@ If an employee clocks in on, say, Thursday and does not clock out until Monday, 
 
 Correcting the clock-out matters: paid hours are spread across the calendar days a shift covers, so 8 custom hours on an uncorrected 4-day shift would be split across all four days (~2h each). With the clock-out corrected, all 8 hours land on the day actually worked. The dialog prefills the corrected clock-out as clock-in plus the standard day, so the common case is one confirmation. The original timestamp is preserved in `shifts.manager_original_clock_out` and the change is written to the audit log.
 
+## Employee portal language (English / Spanish)
+The employee portal has a language button in its header, available before sign-in as well as after. The choice is saved per device in `localStorage` (`wc_lang`) and covers every screen: sign-in, the clock in/out screen, the map and stats, the weekly summary and its flag tiles, dates and weekday names, and the error and confirmation messages — including the English replies the API sends, which are mapped to Spanish on the client.
+
+The manager portal is unaffected and always English: `lang` is only ever changed from `initEmployee()`, so shared helpers (`fmtDay`, `weekLabel`, `statusLabel`) keep producing English there even if Spanish is saved on the same browser.
+
+**Clock-out reasons are translated in display only.** Their `<option value>` attributes stay English (`Ending shift`, `Project completed`, `Client request`, `Manager approval`, …) because those values are written to `shifts.clock_out_note` and drive the payroll rules in `api/_time.js`. Translating the values would silently break full-day pay and the manager review flag. To add another language, extend `STR`/`DOWS`/`DAYNAMES` and `SERVER_ES` in `app.js` and leave the option values alone.
+
+## Portal icons
+`icon-manager.png` and `icon-employee.png` (192x192, transparent rounded corners) sit in the project root. `app.js` points the favicon and apple-touch-icon at the right one on load, so a pinned tab or home-screen shortcut shows which portal it opens. The page title also becomes "WorkClock — Manager Portal" or "WorkClock — Employee Portal".
+
 ## Employment status
 Each employee is Active, On vacation, or Terminated (`employees.employment_status`). The existing `active` boolean stays the sign-in and headcount flag and is kept in sync: Active and On vacation can sign in and count toward `max_active_employees`; Terminated cannot sign in and frees a headcount slot.
 

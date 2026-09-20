@@ -263,3 +263,9 @@ button.danger:hover{border-color:#fca5a5}
 .empEmpty{margin:0;padding:9px 11px;border:1px dashed var(--line);border-radius:10px}
 .empGroup+.empGroup{border-top:1px solid var(--line);padding-top:14px}
 .personMeta .statusBadge{align-self:flex-start;width:-moz-fit-content;width:fit-content}
+
+/* ---- Employee portal language toggle ---- */
+.langBtn{margin-left:auto;flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:800;color:var(--primary);white-space:nowrap}
+.langBtn:hover{border-color:var(--primary)}
+.langBtn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+@media(max-width:800px){.langBtn{padding:7px 12px;font-size:12px}}
