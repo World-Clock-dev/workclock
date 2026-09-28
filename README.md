@@ -83,8 +83,20 @@ Terminated employees keep every shift, hour, earning and audit record. The Emplo
 
 Changing status is a PATCH to `/api/employees` with `{id, status}`. Terminating asks for confirmation first and ends any open sign-in session.
 
+## How paid hours are split across days
+`allocatePaidHours` divides a shift's paid hours over the calendar days it covers, in proportion to the time worked on each. A shift running 14:00–03:00 puts 10 hours on the first day and 3 on the next; a shift straddling Sunday/Monday is therefore counted once in total, split between the two weeks.
+
+Earlier this was wrong: any hours falling outside the displayed window were added on top of the first day of that window, so a shift crossing a week boundary was paid **in full in both weeks** (a 13-hour shift billed 26 hours). It now scales by the share of the shift inside the window, so the per-week amounts always add back up to the shift's paid hours.
+
+Shift Details and Weekly Paid Hours read the same numbers: `/api/manager` attaches `day_alloc` (and `paid_hours` / `actual_hours`) to every shift, and the grid renders that array rather than recalculating. A day's cell therefore always equals the matching Weekly Paid Hours cell. Opening a day that received part of an overnight shift shows the whole shift plus how much of it counts on that day.
+
+## Correcting a clock-in time
+While a shift is still open, the day detail offers **Edit clock-in time** for an employee who started work before they clocked in. It is `POST /api/manager-shift` with `{action:'set_clock_in', shiftId, clockInAt, message}`. The new time cannot be in the future or more than 7 days ago, the shift must still be open (a closed shift uses Adjust hours instead), and the original stamp is preserved in `shifts.manager_original_clock_in` and written to the audit log.
+
 ## Employee Report
-Manager Portal → Employee Report. Type a name, pick a period (1, 3, 6 or 12 months) and view summary tiles, a month-by-month table and an optional day-by-day list.
+Manager Portal → Employee Report. Type a name, pick a period (1, 3, 6 or 12 months, or **Custom date range…** for explicit From/To dates) and view summary tiles, a month-by-month table and an optional day-by-day list.
+
+Employees get the same thing for themselves: **My Report** at the foot of the employee portal, with From/To date pickers plus 3, 6 and 12 month quick ranges. It is served by `GET /api/employee?view=report&start=…&end=…`, which lives in `api/employee.js` for the same 12-function reason. Both report paths cap the range at about 14 months.
 
 This is served by `GET /api/manager?view=report&employeeId=…&start=…&end=…`, which lives in `api/manager.js` rather than its own file because of the 12-function Hobby limit. The main manager query is capped at 8 days; the report path allows up to ~14 months and returns raw shifts so the browser can bucket them by local day, keeping day boundaries correct in the viewer's timezone.
 

@@ -269,3 +269,41 @@ button.danger:hover{border-color:#fca5a5}
 .langBtn:hover{border-color:var(--primary)}
 .langBtn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 @media(max-width:800px){.langBtn{padding:7px 12px;font-size:12px}}
+
+/* ---- Employee portal: My Report ---- */
+.erPresets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.erPresets .mini{border:1px solid var(--line);background:var(--card)}
+.erPresets .mini.on{border-color:var(--primary);background:#eef2ff;color:var(--primary)}
+.erRange{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.erRange label{margin:0;font-size:12px}
+.erRange input{margin-top:4px}
+#erStats{grid-template-columns:repeat(3,1fr);margin-top:14px}
+#empReportCard .reportH{font-size:15px;margin:16px 0 8px}
+@media(max-width:800px){
+  .erRange{grid-template-columns:1fr 1fr}
+  .erRange>button{grid-column:1/-1}
+  #erStats{grid-template-columns:1fr 1fr}
+  #empReportCard .reportTable th,#empReportCard .reportTable td{padding:6px 7px;font-size:12px}
+}
+
+/* Report summary tiles: the report builder emits <b> (not <strong>), so the
+   base .stat rules never made the value a block and label/number collided. */
+#reportStats .stat,#erStats .stat{display:grid;gap:1px;align-content:start}
+#reportStats .stat span,#erStats .stat span{display:block;font-size:9px;letter-spacing:.05em;line-height:1.3}
+#reportStats .stat b,#erStats .stat b{display:block;font-size:21px;font-weight:900;line-height:1.15;margin:3px 0 0}
+#reportStats .stat small,#erStats .stat small{display:block;color:var(--muted);font-weight:700;font-size:11px}
+@media(max-width:800px){
+  #reportStats .stat b,#erStats .stat b{font-size:19px}
+}
+
+/* .formGrid.two was never defined, so both modals fell back to the 4-column
+   default and squeezed their fields (the Quick set dropdown was cut off). */
+.formGrid.two{grid-template-columns:1fr 1fr}
+.formGrid.two .wide{grid-column:1/-1}
+@media(max-width:800px){.formGrid.two{grid-template-columns:1fr}}
+
+/* Report tiles had no column rule, so on a wide screen they stacked one per row. */
+#reportStats{grid-template-columns:repeat(4,minmax(0,1fr))}
+#erStats{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1100px){#reportStats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){#reportStats,#erStats{grid-template-columns:1fr 1fr}}

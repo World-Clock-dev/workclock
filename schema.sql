@@ -186,3 +186,7 @@ ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_employment_status_chec
 ALTER TABLE employees ADD CONSTRAINT employees_employment_status_check CHECK (employment_status IN ('active','vacation','terminated'));
 UPDATE employees SET employment_status='terminated' WHERE active=false AND employment_status='active';
 CREATE INDEX IF NOT EXISTS employees_status_idx ON employees(employment_status);
+
+-- Manager correction of a clock-in time on a shift that is still open, for an
+-- employee who forgot to clock in when they arrived. The original stamp is kept.
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS manager_original_clock_in TIMESTAMPTZ;
