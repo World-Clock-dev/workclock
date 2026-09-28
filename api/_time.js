@@ -40,28 +40,28 @@ export function effectiveShiftPay(shift, minimum = 8) {
 }
 
 export function allocatePaidHours(shift, dayStarts, minimum = 8) {
-  const actual = hoursBetween(shift.clock_in, shift.clock_out);
-  if (!actual) return Array(Math.max(0, dayStarts.length - 1)).fill(0);
+  const buckets = Math.max(0, dayStarts.length - 1);
+  // Hours of the whole shift, not just the part inside this window.
+  const fullSpan = hoursBetween(shift.clock_in, shift.clock_out);
+  if (!fullSpan) return Array(buckets).fill(0);
+
   const spans = [];
-  let totalSegment = 0;
-  for (let i = 0; i < dayStarts.length - 1; i++) {
+  let inWindow = 0;
+  for (let i = 0; i < buckets; i++) {
     const h = overlapHours(shift.clock_in, shift.clock_out, dayStarts[i], dayStarts[i + 1]);
     spans.push(h);
-    totalSegment += h;
+    inWindow += h;
   }
-  if (!totalSegment) return spans;
+  if (!inWindow) return spans; // shift does not touch this window at all
+
   const paidTotal = effectiveShiftPay(shift, minimum);
-  if (paidTotal <= totalSegment) {
-    const factor = totalSegment ? paidTotal / totalSegment : 0;
-    return spans.map(h => h * factor);
-  }
-  const result = spans.slice();
-  const extra = paidTotal - totalSegment;
-  const ci = new Date(shift.clock_in).getTime();
-  let first = 0;
-  for (let i = 0; i < dayStarts.length - 1; i++) {
-    if (ci >= dayStarts[i].getTime() && ci < dayStarts[i + 1].getTime()) { first = i; break; }
-  }
-  result[first] += extra;
-  return result;
+
+  // Pay only for the share of the shift that falls inside this window. A shift
+  // that straddles a week boundary is therefore counted once in total, split
+  // between the two weeks, instead of being paid in full in each of them.
+  // Any top-up above hours actually worked (e.g. 7h45m rounded to the 8h
+  // minimum) rides along in the same proportion.
+  const paidHere = paidTotal * (inWindow / fullSpan);
+  const factor = paidHere / inWindow;
+  return spans.map(h => h * factor);
 }

@@ -13,6 +13,31 @@ export default async function handler(req,res){
 
     if(req.method==='POST'){
       const action=String(b.action||'');
+
+      /* Correct the clock-in on a shift that is still running, for someone who
+         started work but only remembered to clock in an hour or two later.
+         Only open shifts qualify: once a shift is closed its hours are settled
+         and the custom-hours review is the right tool. */
+      if(action==='set_clock_in'){
+        const clockInAt=parseDateTime(b.clockInAt);
+        if(!clockInAt)return json(res,400,{error:'Choose a valid clock-in date and time.'});
+        if(clockInAt.getTime()>Date.now()+5*60*1000)return json(res,400,{error:'Clock-in time cannot be in the future.'});
+        if(Date.now()-clockInAt.getTime()>7*86400000)return json(res,400,{error:'Clock-in time cannot be more than 7 days ago.'});
+        const note=clean(b.message);
+        const rows=await sql`
+          UPDATE shifts
+          SET clock_in=${clockInAt.toISOString()}::timestamptz,
+              manager_original_clock_in=COALESCE(manager_original_clock_in,clock_in),
+              manager_review_note=${note||null},
+              manager_reviewed_by=${manager.id},
+              manager_reviewed_at=now()
+          WHERE id=${shiftId} AND clock_out IS NULL
+          RETURNING id,employee_id,clock_in,manager_original_clock_in`;
+        if(!rows.length)return json(res,409,{error:'That shift is already clocked out. Use Adjust hours instead.'});
+        await audit('manager',manager.id,'shift_clock_in_corrected',{shift_id:shiftId,employee_id:rows[0].employee_id,new_clock_in:clockInAt.toISOString(),original_clock_in:rows[0].manager_original_clock_in,note:note||null});
+        return json(res,200,{ok:true,shift:rows[0],runningHours:hoursBetween(rows[0].clock_in,null)});
+      }
+
       if(action!=='force_clock_out')return json(res,400,{error:'Invalid manager action.'});
       const clockOutAt=parseDateTime(b.clockOutAt);if(!clockOutAt)return json(res,400,{error:'Choose a valid clock-out date and time.'});
       if(clockOutAt.getTime()>Date.now()+5*60*1000)return json(res,400,{error:'Manager clock-out time cannot be more than 5 minutes in the future.'});

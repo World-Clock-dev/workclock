@@ -28,7 +28,7 @@ async function handleReport(req,res,u){
   if(!employees.length)return json(res,404,{error:'Employee not found.'});
   const shifts=await sql`
     SELECT s.id,s.employee_id,s.clock_in,s.clock_out,s.clock_out_note,s.clock_out_message,
-           s.manager_review_status,s.manager_review_note,s.manager_custom_paid_hours,s.manager_original_clock_out,
+           s.manager_review_status,s.manager_review_note,s.manager_custom_paid_hours,s.manager_original_clock_out,s.manager_original_clock_in,
            e.hourly_wage,
            (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
            (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
@@ -63,6 +63,11 @@ export default async function handler(req,res){
     let totalPaid=0,totalPayroll=0;
     for(const sh of shifts){
       const actual=hoursBetween(sh.clock_in,sh.clock_out), paid=effectiveShiftPay(sh,minimum),alloc=allocatePaidHours(sh,days,minimum);const e=weekly[sh.employee_id];
+      // Ship the per-day split with the shift so Shift Details can show exactly
+      // the same numbers as Weekly Paid Hours instead of recomputing them.
+      sh.day_alloc=alloc.map(v=>Number(v.toFixed(6)));
+      sh.paid_hours=Number(paid.toFixed(6));
+      sh.actual_hours=Number(actual.toFixed(6));
       if(e){alloc.forEach((v,i)=>{e.days[i]+=v;});
         const actualAlloc=Array(days.length-1).fill(0);for(let i=0;i<days.length-1;i++){const s=days[i],en=days[i+1];const a=new Date(sh.clock_in).getTime(),b=new Date(sh.clock_out||Date.now()).getTime(),os=Math.max(a,s.getTime()),oe=Math.min(b,en.getTime());actualAlloc[i]=Math.max(0,(oe-os)/3600000);e.actual_days[i]+=actualAlloc[i];}
       }

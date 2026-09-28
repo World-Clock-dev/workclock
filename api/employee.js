@@ -9,16 +9,51 @@ function parseRange(req) {
   return { start, end, days: normalizeDayStarts(u.searchParams.get('dayStarts'), start || new Date().toISOString(), end || new Date(Date.now()+86400000).toISOString()) };
 }
 
+/* The employee's own long-range report. Lives here rather than in its own
+   api/*.js because Vercel's Hobby plan caps a deployment at 12 Serverless
+   Functions and this project uses all 12. Returns raw shifts so the browser can
+   bucket them by local day, keeping day boundaries correct in their timezone. */
+const MAX_REPORT_DAYS = 430, MAX_REPORT_SHIFTS = 3000;
+
+async function handleReport(req, res, emp, u) {
+  const startText = u.searchParams.get('start'), endText = u.searchParams.get('end');
+  if (!startText || !endText || Number.isNaN(Date.parse(startText)) || Number.isNaN(Date.parse(endText)))
+    return json(res, 400, { error: 'Valid start and end are required.' });
+  const start = new Date(startText), end = new Date(endText);
+  if (!(end > start)) return json(res, 400, { error: 'The end date must be after the start date.' });
+  if ((end - start) > MAX_REPORT_DAYS * 86400000) return json(res, 400, { error: 'That date range is too long. Choose 14 months or less.' });
+  const shifts = await sql`
+    SELECT s.id,s.clock_in,s.clock_out,s.clock_out_note,s.clock_out_message,
+           s.manager_review_status,s.manager_review_note,s.manager_custom_paid_hours,
+           s.manager_original_clock_out,s.manager_original_clock_in,
+           (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
+           (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
+    FROM shifts s
+    WHERE s.employee_id=${emp.id}
+      AND s.clock_in<${end.toISOString()}::timestamptz
+      AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
+    ORDER BY s.clock_in ASC
+    LIMIT ${MAX_REPORT_SHIFTS}`;
+  const minimum = await settingNumber('project_completed_min_paid_hours', 8);
+  return json(res, 200, {
+    employee: { id: emp.id, name: emp.name, title: emp.title, hourly_wage: emp.hourly_wage },
+    shifts, truncated: shifts.length >= MAX_REPORT_SHIFTS,
+    settings: { project_completed_min_paid_hours: minimum }
+  });
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
     const emp = await requireEmployee(req, res); if (!emp) return;
+    const url = new URL(req.url, 'https://workclock.invalid');
+    if (url.searchParams.get('view') === 'report') return await handleReport(req, res, emp, url);
     let range; try { range = parseRange(req); } catch (e) { return json(res, 400, { error: e.message === 'INVALID_START' ? 'Invalid start date.' : 'Invalid end date.' }); }
     const { start, end, days } = range;
     const shifts = await sql`
       SELECT s.id,s.clock_in,s.clock_out,s.clock_in_lat,s.clock_in_lng,s.clock_out_lat,s.clock_out_lng,
              s.clock_out_distance_miles,s.clock_out_note,s.clock_out_message,s.manager_review_status,s.manager_review_note,s.manager_reviewed_at,
-             s.manager_custom_paid_hours,s.manager_original_clock_out,
+             s.manager_custom_paid_hours,s.manager_original_clock_out,s.manager_original_clock_in,
              (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
              (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
       FROM shifts s
