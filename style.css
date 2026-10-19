@@ -322,3 +322,134 @@ button.danger:hover{border-color:#fca5a5}
 .dayGrid tbody tr.dgRow:nth-child(4n+3)>td.stickyCol,
 .dayGrid tbody tr.dgRow:nth-child(4n+3)>td.totalCol{background:#eef0f3}
 .dayGrid tbody tr.dgRow>td.dgCell.dgPicked{background:#eef2ff}
+
+/* =====================================================================
+   UI polish: colours, motion and layout refinements
+   ===================================================================== */
+:root{--zebra:#eef0f3;--ease:cubic-bezier(.2,.8,.2,1)}
+
+/* ---- Weekly Paid Hours: same gray / white rows as Shift Details ---- */
+.weeklyTable tbody tr:nth-child(even)>td{background:var(--zebra)}
+.weeklyTable td.wDay{color:var(--text);font-variant-numeric:tabular-nums}
+.weeklyTable tbody tr>td,.dayGrid tbody tr.dgRow>td{transition:background-color .2s}
+.weeklyTable tbody tr:hover>td{background:#e6ebf5}
+.weeklyTable td,.dayGrid td{font-variant-numeric:tabular-nums}
+
+/* ---- Top manager tiles: colour by state, tap to jump ---- */
+.managerTopStats .stat{position:relative;overflow:hidden;transition:transform .2s var(--ease),box-shadow .2s,border-color .2s,background-color .2s}
+.managerTopStats .stat.tileLink{cursor:pointer}
+.managerTopStats .stat.tileLink:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(15,23,42,.08);border-color:#cbd5e1}
+.managerTopStats .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:transparent;transition:background-color .2s}
+.managerTopStats .stat.tileBad{background:#fef2f2;border-color:#fecaca}
+.managerTopStats .stat.tileBad::before{background:#dc2626}
+.managerTopStats .stat.tileBad strong{color:#b91c1c}
+.managerTopStats .stat.tileWarn{background:#fffbeb;border-color:#fde68a}
+.managerTopStats .stat.tileWarn::before{background:#f59e0b}
+.managerTopStats .stat.tileWarn strong{color:#92400e}
+.managerTopStats .stat.tileLive{background:#f0fdf4;border-color:#bbf7d0}
+.managerTopStats .stat.tileLive::before{background:#16a34a}
+.managerTopStats .stat.tileLive strong{color:#15803d;display:flex;align-items:center;gap:8px}
+.managerTopStats .stat.tileLive strong::after{content:"";width:9px;height:9px;border-radius:50%;background:#22c55e;animation:livePulse 1.8s infinite}
+.stat strong,.totals strong{font-variant-numeric:tabular-nums}
+
+/* A section reached from a tile glows briefly */
+.card.flash{animation:cardFlash 1.2s var(--ease)}
+@keyframes cardFlash{0%{box-shadow:0 0 0 0 rgba(37,99,235,.0)}20%{box-shadow:0 0 0 4px rgba(37,99,235,.28)}100%{box-shadow:var(--shadow)}}
+
+/* ---- Smooth sections ---- */
+.sectionOpening{animation:sectionIn .3s var(--ease) both}
+.sectionClosing{animation:sectionOut .2s ease both;pointer-events:none}
+@keyframes sectionIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes sectionOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-6px)}}
+.sectionHead>button[aria-expanded],.subHead>button[aria-expanded]{display:inline-flex;align-items:center;gap:8px}
+.sectionHead>button[aria-expanded]::after,.subHead>button[aria-expanded]::after{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .25s var(--ease);opacity:.7}
+.sectionHead>button[aria-expanded="true"]::after,.subHead>button[aria-expanded="true"]::after{transform:translateY(2px) rotate(-135deg)}
+
+/* ---- Cards rise in on load ---- */
+main>section.card,main>section>section.card,main>section>section.stats,.managerWrap>section{animation:rise .5s var(--ease) both}
+.managerWrap>section:nth-of-type(2),#employeeApp>section:nth-child(2){animation-delay:.05s}
+.managerWrap>section:nth-of-type(3),#employeeApp>section:nth-child(3){animation-delay:.1s}
+.managerWrap>section:nth-of-type(4),#employeeApp>section:nth-child(4){animation-delay:.15s}
+.managerWrap>section:nth-of-type(n+5),#employeeApp>section:nth-child(n+5){animation-delay:.2s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.card{transition:box-shadow .25s}
+
+/* ---- Buttons: hover lift and press feedback ---- */
+.primary,.success,.danger,.secondary,.mini,.weekNav>button,.weekPickerBtn,.dgBtn,.flagTile,.tabBtn{transition:transform .12s ease,box-shadow .2s,background-color .2s,border-color .2s,opacity .2s}
+.primary:not(:disabled):hover{box-shadow:0 6px 16px rgba(37,99,235,.28)}
+.success:not(:disabled):hover{box-shadow:0 6px 16px rgba(21,128,61,.28)}
+.secondary:hover{background:#e3e8f0}
+.primary:not(:disabled):active,.success:not(:disabled):active,.danger:not(:disabled):active,.secondary:active,.dgBtn:active,.flagTile:active,.weekNav>button:active,.tabBtn:active{transform:scale(.97)}
+.dgBtn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,23,42,.08)}
+:focus-visible{outline:3px solid rgba(37,99,235,.45);outline-offset:2px}
+.actions .success,.actions .danger{padding:15px;font-size:16px;border-radius:12px}
+
+/* ---- Live shift card with progress ring ---- */
+.shift{grid-template-columns:auto 1fr 1fr;align-items:center;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);animation:rise .4s var(--ease) both}
+.shift strong{font-variant-numeric:tabular-nums}
+.shiftRing{grid-row:span 2;position:relative;width:72px;height:72px}
+.shiftRing svg{width:100%;height:100%;transform:rotate(-90deg)}
+.shiftRing circle{fill:none;stroke-width:6}
+.ringTrack{stroke:#bbf7d0}
+.ringBar{stroke:#16a34a;stroke-linecap:round;transition:stroke-dashoffset .9s var(--ease);stroke-dasharray:163.36;stroke-dashoffset:163.36}
+.ringBar.done{stroke:#15803d}
+.shiftRing span{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:900;color:#15803d}
+.shiftActive{grid-column:2/-1;display:flex;align-items:center;gap:8px}
+.liveDot{width:10px;height:10px;border-radius:50%;background:#22c55e;flex:0 0 auto;animation:livePulse 1.8s infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 9px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+@media(max-width:800px){.shift{grid-template-columns:auto 1fr;gap:10px 14px}.shiftRing{grid-row:span 3;width:64px;height:64px}.shiftActive{grid-column:2}}
+
+/* ---- Map loading placeholder ---- */
+.map:not(.leaflet-container){background:linear-gradient(100deg,#eef1f5 30%,#f8fafc 50%,#eef1f5 70%);background-size:300% 100%;animation:shimmer 1.4s linear infinite}
+.map.mapFail{animation:none;background:#f3f4f6;display:grid;place-items:center}
+.map.mapFail::after{content:"Map unavailable right now";color:var(--muted);font-weight:700;font-size:13px}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+
+/* ---- Employee weekly summary: compact one line per day ---- */
+.days{grid-template-columns:1fr!important;gap:6px}
+.day{display:grid;grid-template-columns:78px 1fr 96px;align-items:center;gap:14px;padding:9px 12px;border-radius:12px;transition:background-color .2s,border-color .2s}
+.day .dLabel{display:flex;align-items:baseline;gap:6px}
+.day .dn{font-size:13px;letter-spacing:.03em}
+.day .dd{font-size:12px}
+.day .dBar{height:8px;border-radius:999px;background:#eef1f5;overflow:hidden}
+.day .dBar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#60a5fa,#2563eb);animation:barGrow .7s var(--ease) both}
+.day .dVals{text-align:right}
+.day .dh{font-size:16px;margin:0;line-height:1.15;font-variant-numeric:tabular-nums}
+.day .dm{font-size:12px;color:var(--muted)}
+.day.zero{opacity:.55}
+.day.zero .dh{color:var(--muted)}
+.day.today{border-color:var(--primary);background:#eff6ff;opacity:1}
+.day.today .dn{color:var(--primary)}
+@keyframes barGrow{from{transform:scaleX(0);transform-origin:left}to{transform:scaleX(1);transform-origin:left}}
+@media(max-width:800px){.day{grid-template-columns:64px 1fr 84px;gap:10px;padding:8px 10px}.day .dLabel{flex-direction:column;gap:0}}
+
+/* ---- Settings tabs ---- */
+.tabBar{display:flex;gap:4px;padding:4px;background:var(--bg);border-radius:12px;margin:14px 0 4px;overflow-x:auto}
+.tabBtn{flex:1 0 auto;background:transparent;color:var(--muted);font-weight:800;font-size:14px;padding:9px 14px;border-radius:9px;white-space:nowrap}
+.tabBtn:hover{color:var(--text)}
+.tabBtn.on{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(15,23,42,.1)}
+.tabPanel{animation:sectionIn .25s var(--ease) both}
+.tabPanel>p{margin:12px 0 2px}
+.card{scroll-margin-top:16px}
+@media(max-width:800px){.managerWrap .card{scroll-margin-top:76px}}
+@media(max-width:800px){.tabBtn{font-size:12px;padding:8px 10px}}
+
+/* ---- In-app pop-up messages ---- */
+#toastBox{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:400;display:grid;gap:8px;width:min(420px,calc(100vw - 32px));pointer-events:none}
+.toast{background:#111827;color:#fff;border-radius:12px;padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 14px 34px rgba(15,23,42,.28);opacity:0;transform:translateY(12px) scale(.98);transition:opacity .25s,transform .3s var(--ease);display:flex;align-items:center;gap:10px}
+.toast::before{content:"";width:8px;height:8px;border-radius:50%;background:#22c55e;flex:0 0 auto}
+.toast.bad::before{background:#f87171}
+.toast.in{opacity:1;transform:none}
+.toast.out{opacity:0;transform:translateY(8px)}
+
+/* ---- Modals ease in ---- */
+.modalBack:not(.hide){animation:fadeIn .2s ease both}
+.modalBack:not(.hide) .modalCard{animation:popIn .28s var(--ease) both}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.weekCal:not(.hide){animation:popIn .2s var(--ease) both}
+
+/* ---- Respect "reduce motion" ---- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+}

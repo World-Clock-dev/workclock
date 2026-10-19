@@ -52,7 +52,7 @@
     reviewNote:['Project completed, Client request, and Manager approval are sent for manager review. Personal reason is paid from actual working time.','Proyecto terminado, Solicitud del cliente y Aprobación del gerente se envían para revisión del gerente. El motivo personal se paga según el tiempo realmente trabajado.'],
     inTime:['CLOCK IN TIME','HORA DE ENTRADA'],
     runTime:['RUNNING TIME','TIEMPO TRANSCURRIDO'],
-    currentlyIn:['● Currently clocked in','● Entrada registrada actualmente'],
+    currentlyIn:['Currently clocked in','Entrada registrada actualmente'],
     locations:['Clock In / Clock Out Locations','Ubicaciones de entrada y salida'],
     hoursToday:['PAID HOURS TODAY','HORAS PAGADAS HOY'],
     hoursWeek:['PAID HOURS THIS WEEK','HORAS PAGADAS ESTA SEMANA'],
@@ -233,6 +233,31 @@
   });
   const displayMessage = value => { if (value && typeof value === 'object') return serverText(String(value.message || value.error || value.ruleAlert || t('requestFailed'))); return serverText(String(value ?? '')); };
   const stat = (message,type='info') => { const el=$('status'); if(el)el.innerHTML=`<div class="status ${type}">${esc(displayMessage(message))}</div>`; };
+  /* ---- UI helpers: in-app pop-up messages and count-up numbers ---- */
+  const calmMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+  const toast = (message,type='ok') => {
+    let box=document.getElementById('toastBox');
+    if(!box){box=document.createElement('div');box.id='toastBox';box.setAttribute('aria-live','polite');document.body.appendChild(box);}
+    const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=String(message||'');
+    box.appendChild(el);
+    requestAnimationFrame(()=>el.classList.add('in'));
+    setTimeout(()=>{el.classList.remove('in');el.classList.add('out');setTimeout(()=>el.remove(),350);},type==='bad'?5200:3200);
+  };
+  // Sets a number on screen; when the value changes it counts up/down to it.
+  // Re-rendering with the same value does nothing, so the 1-second tick is safe.
+  const animNum = (el,value,fmt=v=>v.toFixed(2)) => {
+    if(!el)return;
+    const target=Number(value)||0,prev=el.dataset.num===undefined?null:Number(el.dataset.num);
+    if(prev===target&&el.textContent)return;
+    el.dataset.num=String(target);
+    if(el._anim)cancelAnimationFrame(el._anim);
+    const from=prev===null?0:prev;
+    if(calmMotion()||Math.abs(target-from)<0.005){el.textContent=fmt(target);return;}
+    const t0=performance.now(),ms=650;
+    const step=now=>{const p=Math.min(1,(now-t0)/ms),e=1-Math.pow(1-p,3);el.textContent=fmt(from+(target-from)*e);if(p<1)el._anim=requestAnimationFrame(step);};
+    el._anim=requestAnimationFrame(step);
+  };
+  const money = v => '$'+v.toFixed(2);
   const dayBounds = (start,count) => { const out=[]; for(let i=0;i<=count;i++){const d=new Date(start);d.setDate(d.getDate()+i);out.push(d.toISOString());} return out; };
   const qp = arr => encodeURIComponent(arr.join(','));
   const fmtDay = d => d.toLocaleDateString(locale(), {weekday:'long',month:'short',day:'numeric'});
@@ -241,8 +266,17 @@
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
   function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
   function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();}
+  // Fills the ring on the live shift card toward a full 8-hour day.
+  function updateShiftRing(h){
+    const ring=$('shiftRingBar'),label=$('shiftRingPct');if(!ring)return;
+    const goal=projectMinimum>0?projectMinimum:8,p=Math.max(0,Math.min(1,h/goal)),C=2*Math.PI*26;
+    ring.style.strokeDasharray=`${C}`;ring.style.strokeDashoffset=`${C*(1-p)}`;
+    ring.classList.toggle('done',p>=1);
+    if(label)label.textContent=`${Math.floor(p*100)}%`;
+  }
   function ensureEmployeeMap(){
-    if(employeeMap || !window.L) return;
+    if(!employeeMap && !window.L){const m=$('employeeMap');if(m&&document.readyState==='complete')m.classList.add('mapFail');return;}
+    if(employeeMap) return;
     employeeMap=L.map('employeeMap').setView([20,0],2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(employeeMap);
   }
@@ -264,15 +298,22 @@
     const p=empCache.employee,open=empCache.openShift;
     $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent=`$${Number(p.hourly_wage||0).toFixed(2)}/hr`;
     $('shift').classList.toggle('hide',!open);$('earlyNoteWrap').classList.toggle('hide',!open);$('in').disabled=!!open;$('out').disabled=!open;
-    if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent=t('reasonPick');}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
+    if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());updateShiftRing(elapsedHours);const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent=t('reasonPick');}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
     $('weekTitle').textContent=`${t('weekOf')}: ${start.toLocaleDateString(locale(),{month:'short',day:'numeric'})} – ${end.toLocaleDateString(locale(),{month:'short',day:'numeric',year:'numeric'})}`;
     const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=DAYNAMES[lang]||DAYNAMES.en;let total=0;
-    $('days').innerHTML=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;return `<div class="day"><div><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString(locale(),{month:'numeric',day:'numeric'})}</div></div><div><div class="dh">${v.toFixed(2)}</div><div class="dm">$${(v*rate).toFixed(2)}</div></div></div>`;}).join('');
+    // Compact one-line-per-day list: today highlighted, empty days faded,
+    // and a small bar showing how close each day came to a full 8 hours.
+    const todayKey=iso(new Date()),full=Math.max(8,...a.map(Number));
+    const daysHtml=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;
+      const cls=['day'];if(v<=0.0001)cls.push('zero');if(iso(dt)===todayKey)cls.push('today');
+      const pct=Math.min(100,Math.round(v/full*100));
+      return `<div class="${cls.join(' ')}"><div class="dLabel"><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString(locale(),{month:'short',day:'numeric'})}</div></div><div class="dBar"><i style="width:${pct}%"></i></div><div class="dVals"><div class="dh">${v>0.0001?v.toFixed(2):'–'}</div><div class="dm">${v>0.0001?'$'+(v*rate).toFixed(2):''}</div></div></div>`;}).join('');
+    if($('days').dataset.html!==daysHtml){$('days').innerHTML=daysHtml;$('days').dataset.html=daysHtml;}
     renderWeekFlags(start);
-    $('weekTotal').textContent=total.toFixed(2);$('weekEarned').textContent='$'+(total*rate).toFixed(2);
+    animNum($('weekTotal'),total);animNum($('weekEarned'),total*rate,money);
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
-    $('hoursToday').textContent=today.toFixed(2);$('earnedToday').textContent='$'+(today*rate).toFixed(2);$('hoursWeek').textContent=total.toFixed(2);$('earnedWeek').textContent='$'+(total*rate).toFixed(2);
+    animNum($('hoursToday'),today);animNum($('earnedToday'),today*rate,money);animNum($('hoursWeek'),total);animNum($('earnedWeek'),total*rate,money);
     renderEmployeeMap();
   }
   function flagList(list,empty){
@@ -297,12 +338,17 @@
     const actualApproved=week.filter(s=>s.manager_review_status==='approved_actual');
     const pending=week.filter(s=>s.manager_review_status==='pending');
     const plural=n=>n===1?t('dayOne'):t('dayMany');
-    wrap.innerHTML=[
+    const flagsHtml=[
       `<button class="flagTile${denied?' warn':''}" data-flag="denied" type="button"><span>${t('fDenied')}</span><strong>${denied}</strong><small>${denied===1?t('timeOnce'):t('timeMany')}</small></button>`,
       `<button class="flagTile${full.length?' good':''}" data-flag="full" type="button"><span>${t('fFull')}</span><strong>${full.length}</strong><small>${plural(full.length)}</small></button>`,
       `<button class="flagTile${actualApproved.length?' good':''}" data-flag="actual" type="button"><span>${t('fActual')}</span><strong>${actualApproved.length}</strong><small>${plural(actualApproved.length)}</small></button>`,
       `<button class="flagTile${pending.length?' info':''}" data-flag="pending" type="button"><span>${t('fPending')}</span><strong>${pending.length}</strong><small>${plural(pending.length)}</small></button>`
     ].join('');
+    // The clock ticks every second while clocked in; only rebuild when something
+    // actually changed, so an opened flag list does not snap shut.
+    const flagsKey=iso(weekStart)+'|'+lang+'|'+flagsHtml;
+    if(wrap.dataset.key===flagsKey)return;
+    wrap.dataset.key=flagsKey;wrap.innerHTML=flagsHtml;
     const sets={
       denied:[deniedShifts,t('noDenied')],
       full:[full,t('noFull')],
@@ -476,10 +522,10 @@
         sel.value=(managerPeople.find(p=>String(p.id)===String(id))||{}).employment_status||'active';return;
       }
       try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});await loadPeople();await mgrRender();}
-      catch(e){alert(e.message);await loadPeople();}
+      catch(e){toast(e.message,'bad');await loadPeople();}
     });
     document.querySelectorAll('[data-save-person]').forEach(b=>b.onclick=async()=>{const p=managerPeople.find(x=>String(x.id)===String(b.dataset.savePerson)),title=document.querySelector(`[data-title-id="${b.dataset.savePerson}"]`)?.value||'';if(!p)return;try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:p.id,title,wage:Number(p.hourly_wage),email:p.email||''})});await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
-    document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=async()=>{const pin=prompt('Enter a new 4-digit PIN:');if(pin===null)return;if(!/^\d{4}$/.test(pin))return alert('PIN must be exactly 4 digits.');try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:b.dataset.pin,pin})});$('employeeMsg').textContent='PIN updated. The employee must sign in again.';await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
+    document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=async()=>{const pin=prompt('Enter a new 4-digit PIN:');if(pin===null)return;if(!/^\d{4}$/.test(pin))return toast('PIN must be exactly 4 digits.','bad');try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:b.dataset.pin,pin})});$('employeeMsg').textContent='PIN updated. The employee must sign in again.';toast('PIN updated. The employee must sign in again.');await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
     document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Deactivate this employee? Existing time records will remain available.'))return;try{await api(`/api/employees?id=${encodeURIComponent(b.dataset.remove)}`,{method:'DELETE'});await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
   }
   const loc=(a,b,label='View')=>a==null?'—':`<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${label}</a>`;
@@ -531,6 +577,7 @@
     try{
       await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision:'approve_custom',paidHours:hours,clockOut,note:$('customNote').value.trim()})});
       closeCustomReview();
+      toast('Paid hours saved.');
       await mgrRender();
     }catch(e){$('customReviewMsg').textContent=e.message;}
   }
@@ -576,6 +623,7 @@
     try{
       await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'set_clock_in',shiftId:id,clockInAt:d.toISOString(),message:$('clockInNote').value.trim()})});
       closeClockInEdit();
+      toast('Clock-in time corrected.');
       await mgrRender();
     }catch(e){$('clockInMsg').textContent=displayMessage(e.payload||e.message);}
   }
@@ -586,7 +634,7 @@
       if(!confirm(summary))return;
     }
     const note=prompt('Manager note (optional):');if(note===null)return;
-    try{await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision,note})});await mgrRender();}catch(e){alert(e.message);}
+    try{await api('/api/manager-shift',{method:'PATCH',body:JSON.stringify({shiftId:id,decision,note})});toast(decision==='approve_full'?'Full day approved.':'Actual hours approved.');await mgrRender();}catch(e){toast(e.message,'bad');}
   }
   function localDateTimeValue(d=new Date()){const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,16);}
   function populateForceShifts(shifts){
@@ -600,7 +648,7 @@
     if(!shiftId)return $('forceMsg').textContent='Select an open employee shift.';
     if(!clockOutAt)return $('forceMsg').textContent='Select the manager clock-out date and time.';
     if(payMode==='custom'&&(!Number.isFinite(paidHours)||paidHours<0||paidHours>24))return $('forceMsg').textContent='Custom paid hours must be between 0 and 24.';
-    try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
+    try{const j=await api('/api/manager-shift',{method:'POST',body:JSON.stringify({action:'force_clock_out',shiftId,clockOutAt:new Date(clockOutAt).toISOString(),payMode,paidHours,message})});$('forceMsg').textContent=`Clocked out. Actual: ${Number(j.actualHours).toFixed(2)}h; paid: ${Number(j.paidHours).toFixed(2)}h.`;$('forceMessage').value='';toast('Employee clocked out.');await mgrRender();}catch(e){$('forceMsg').textContent=e.message;}
   }
   function createWeekPicker(o){
     let calMonth=null;
@@ -706,9 +754,9 @@
       if((e.employment_status||'active')==='terminated'&&Number(e.total||0)===0)return false;
       return true;
     });
-    $('weeklyRangeText').textContent=`Week: ${start.toLocaleDateString()} – ${new Date(bounds[6]).toLocaleDateString()}`;
-    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>`<td>${Number(v).toFixed(2)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
-    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();}catch(e){alert(e.message);}});
+    $('weeklyRangeText').textContent=`Week of ${weekLabel(start)}`;
+    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();toast(`Wage updated for ${person?.name||'employee'}.`);}catch(e){toast(e.message,'bad');}});
   }
   const statusText=s=>({active:'Active',vacation:'On vacation',terminated:'Terminated'}[s]||'Active');
   function paidFor(x,minimum){
@@ -827,7 +875,7 @@
       const dayFilter=$('shiftDetailsDate');
       if(dayFilter.value&&(dayFilter.value<iso(start)||dayFilter.value>iso(weekEnd)))dayFilter.value='';
       $('shiftDayLabel').textContent=dayFilter.value?new Date(dayFilter.value+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):'All days this week';
-      $('shiftDetailsRangeText').textContent=`Showing shifts for the week of ${start.toLocaleDateString()} – ${weekEnd.toLocaleDateString()}.`;
+      $('shiftDetailsRangeText').textContent=`Showing shifts for the week of ${weekLabel(start)}.`;
       const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),shiftDate=dayFilter.value,shiftQ=$('shiftDetailsSearch').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>{const nameOk=!shiftQ||String(x.name).toLowerCase().includes(shiftQ);const dateOk=!shiftDate||iso(new Date(x.clock_in))===shiftDate;return nameOk&&dateOk;});
       managerPeople=j.employees||managerPeople;populateForceShifts(j.shifts||[]);fillReportEmployees();
       const focusForce=id=>{
@@ -953,14 +1001,49 @@
       document.querySelectorAll('[data-force]').forEach(b=>b.onclick=()=>focusForce(b.dataset.force));
 
       $('rejectedRows').innerHTML=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)).map(x=>{const t=new Date(x.created_at);return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(t)}</td><td>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(x.reason)}</td><td>${esc(x.note||'—')}</td><td>${Number(x.distance_miles).toFixed(2)} mi</td><td>${loc(x.lat,x.lng,'View location')}</td></tr>`;}).join('')||'<tr><td colspan="7">No rejected clock-out attempts in this period.</td></tr>';
-      $('empCount').textContent=managerPeople.length;$('mHours').textContent=Number(j.summary?.total_paid_hours||0).toFixed(2);$('payroll').textContent='$'+Number(j.summary?.total_payroll||0).toFixed(2);$('rejected').textContent=Number(j.summary?.rejected_clock_outs||0);$('liveClockIns').textContent=Number(j.summary?.live_clock_ins||0);$('pendingApprovals').textContent=Number(j.summary?.pending_approvals||0);
+      const whole=v=>String(Math.round(v)),activeCount=managerPeople.filter(p=>(p.employment_status||(p.active?'active':'terminated'))==='active').length,sm=j.summary||{};
+      animNum($('empCount'),activeCount,whole);animNum($('mHours'),Number(sm.total_paid_hours||0));animNum($('payroll'),Number(sm.total_payroll||0),money);
+      animNum($('rejected'),Number(sm.rejected_clock_outs||0),whole);animNum($('liveClockIns'),Number(sm.live_clock_ins||0),whole);animNum($('pendingApprovals'),Number(sm.pending_approvals||0),whole);
+      $('rejected').closest('.stat').classList.toggle('tileBad',Number(sm.rejected_clock_outs||0)>0);
+      $('pendingApprovals').closest('.stat').classList.toggle('tileWarn',Number(sm.pending_approvals||0)>0);
+      $('liveClockIns').closest('.stat').classList.toggle('tileLive',Number(sm.live_clock_ins||0)>0);
       await loadWeeklyPaidHours(j);
-    }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;}
+    }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;if(!mgrRender._errShown){mgrRender._errShown=1;toast('Connection error: '+e.message,'bad');setTimeout(()=>mgrRender._errShown=0,60000);}}
+  }
+  // Opens or closes a section with a short slide, keeping the button text,
+  // arrow and aria-expanded in step.
+  function setSection(btn,body,open,showText='Show',hideText='Minimize'){
+    if(!btn||!body)return;
+    btn.textContent=open?hideText:showText;btn.setAttribute('aria-expanded',String(open));
+    if(open){body.classList.remove('hide','sectionClosing');body.classList.add('sectionOpening');setTimeout(()=>body.classList.remove('sectionOpening'),320);return;}
+    if(calmMotion()||body.classList.contains('hide')){body.classList.add('hide');return;}
+    body.classList.add('sectionClosing');
+    setTimeout(()=>{if(body.classList.contains('sectionClosing')){body.classList.add('hide');body.classList.remove('sectionClosing');}},200);
+  }
+  // Settings, Data Retention and Manager Password share one card with tabs.
+  function initSettingsTabs(){
+    const tabs=[...document.querySelectorAll('[data-settings-tab]')];
+    tabs.forEach(tb=>tb.onclick=()=>{
+      tabs.forEach(x=>{const on=x===tb;x.classList.toggle('on',on);x.setAttribute('aria-selected',String(on));const panel=$(x.dataset.settingsTab);if(panel)panel.classList.toggle('hide',!on);});
+    });
+  }
+  // Tapping a top tile jumps to (and opens) the section it summarises.
+  function initTileLinks(){
+    const go=(id,btn,body)=>{const el=$(id);if(!el)return;el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{
+      if(btn&&body&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);
+      const card=$(btn||id).closest('section.card');if(card){card.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');}
+    };};
+    const weekly=()=>$('weeklyRows');
+    go('empCount','toggleEmployees','employeesBody');
+    ['mHours','payroll'].forEach(id=>{const el=$(id);el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{const c=weekly().closest('section.card');c.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});c.classList.remove('flash');void c.offsetWidth;c.classList.add('flash');};});
+    go('rejected','toggleRejected','rejectedBody');
+    go('liveClockIns','toggleShiftDetails','shiftDetailsBody');
+    go('pendingApprovals','toggleShiftDetails','shiftDetailsBody');
   }
   async function startManagerApp(){
     $('managerLogin').classList.add('hide');$('managerApp').classList.remove('hide');$('mdate').value=iso(new Date());
-    $('addEmployee').onclick=async()=>{const name=$('newName').value.trim(),title=$('newTitle').value.trim(),email=$('newEmail').value.trim(),wage=Number($('newWage').value||0),pin=$('newPin').value.trim();if(!name)return $('employeeMsg').textContent='Enter an employee name.';if(!Number.isFinite(wage)||wage<0)return $('employeeMsg').textContent='Enter a valid hourly wage.';if(!/^\d{4}$/.test(pin))return $('employeeMsg').textContent='PIN must be exactly 4 digits.';try{await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});['newName','newTitle','newEmail','newWage','newPin'].forEach(id=>$(id).value='');$('employeeMsg').textContent='Employee saved and PIN set.';await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}};
-    $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value),data_retention_months:Number($('retentionSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('retentionSetting').value=s.data_retention_months;$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
+    $('addEmployee').onclick=async()=>{const name=$('newName').value.trim(),title=$('newTitle').value.trim(),email=$('newEmail').value.trim(),wage=Number($('newWage').value||0),pin=$('newPin').value.trim();if(!name)return $('employeeMsg').textContent='Enter an employee name.';if(!Number.isFinite(wage)||wage<0)return $('employeeMsg').textContent='Enter a valid hourly wage.';if(!/^\d{4}$/.test(pin))return $('employeeMsg').textContent='PIN must be exactly 4 digits.';try{await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});['newName','newTitle','newEmail','newWage','newPin'].forEach(id=>$(id).value='');$('employeeMsg').textContent='Employee saved and PIN set.';toast('Employee saved and PIN set.');await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}};
+    $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value),data_retention_months:Number($('retentionSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('retentionSetting').value=s.data_retention_months;toast('Settings saved.');$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
     $('changeManagerPasswordBtn').onclick=async()=>{const currentPassword=$('currentManagerPassword').value,newPassword=$('newManagerPassword').value,confirmPassword=$('confirmManagerPassword').value;if(!currentPassword||!newPassword||!confirmPassword)return $('managerPasswordMsg').textContent='Complete all password fields.';if(newPassword!==confirmPassword)return $('managerPasswordMsg').textContent='New passwords do not match.';try{await api('/api/manager-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('managerPasswordMsg').textContent='Password changed. Please sign in again.';setTimeout(()=>location.reload(),700);}catch(e){$('managerPasswordMsg').textContent=e.message;}};
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
@@ -968,14 +1051,12 @@
     setWeek(new Date(),false);
     initWeekCal();
     initShiftCal();
-    const collapse=(btn,body)=>{const b=$(body);if(!b||!$(btn))return;$(btn).onclick=()=>{const hidden=b.classList.toggle('hide');$(btn).textContent=hidden?'Show':'Minimize';$(btn).setAttribute('aria-expanded',String(!hidden));};};
+const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),k=$(btn);if(!b||!k)return;k.onclick=()=>setSection(k,b,b.classList.contains('hide'),showText,hideText);};
     collapse('toggleForce','forceBody');
     collapse('toggleAddEmployee','addEmployeeBody');
     collapse('toggleSettings','settingsBody');
-    collapse('toggleManagerPassword','managerPasswordBody');
     collapse('toggleReport','reportBody');
-    collapse('toggleReportDays','reportDaysWrap');
-    $('toggleReportDays').onclick=()=>{const b=$('reportDaysWrap');const hidden=b.classList.toggle('hide');$('toggleReportDays').textContent=hidden?'Show days':'Hide days';};
+    collapse('toggleReportDays','reportDaysWrap','Show days','Hide days');
     $('runReport').onclick=runReport;
     $('reportPeriod').onchange=()=>{
       const custom=$('reportPeriod').value==='custom';
@@ -994,8 +1075,9 @@
     const shiftWeek=step=>{const d=new Date($('weeklyWeekDate').value+'T12:00:00');d.setDate(d.getDate()+step);setWeek(d);};
     $('weeklyPrev').onclick=()=>shiftWeek(-7);
     $('weeklyNext').onclick=()=>shiftWeek(7);
-    $('toggleShiftDetails').onclick=()=>{const b=$('shiftDetailsBody');const hidden=b.classList.toggle('hide');$('toggleShiftDetails').textContent=hidden?'Show':'Minimize';};
-    $('toggleRetention').onclick=()=>{const b=$('retentionBody');const hidden=b.classList.toggle('hide');$('toggleRetention').textContent=hidden?'Show':'Minimize';$('toggleRetention').setAttribute('aria-expanded',String(!hidden));};
+    collapse('toggleShiftDetails','shiftDetailsBody');
+    initSettingsTabs();
+    initTileLinks();
     $('clockInCancel').onclick=closeClockInEdit;
     $('clockInSave').onclick=saveClockInEdit;
     $('clockInAt').oninput=clockInPreview;
@@ -1031,8 +1113,8 @@
         await mgrRender();
       }catch(e){$('retentionMsg').textContent=e.message;}
     };
-    $('toggleEmployees').onclick=()=>{const b=$('employeesBody');const hidden=b.classList.toggle('hide');$('toggleEmployees').textContent=hidden?'Show':'Minimize';$('toggleEmployees').setAttribute('aria-expanded',String(!hidden));};
-    $('toggleRejected').onclick=()=>{const b=$('rejectedBody');const hidden=b.classList.toggle('hide');$('toggleRejected').textContent=hidden?'Show':'Minimize';};
+    collapse('toggleEmployees','employeesBody');
+    collapse('toggleRejected','rejectedBody');
     ['period','mdate','search','shiftDetailsDate','shiftDetailsSearch'].forEach(id=>$(id).addEventListener('input',mgrRender));$('clearShiftDetailsFilters').onclick=()=>{$('shiftDetailsDate').value='';$('shiftDetailsSearch').value='';mgrRender();};$('refresh').onclick=mgrRender;await loadPeople();await loadSettings();await mgrRender();setInterval(()=>{if(!$('managerApp').classList.contains('hide'))mgrRender();},30000);
   }
   async function initManager(){
