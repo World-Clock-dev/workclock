@@ -307,3 +307,18 @@ button.danger:hover{border-color:#fca5a5}
 #erStats{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:1100px){#reportStats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:800px){#reportStats,#erStats{grid-template-columns:1fr 1fr}}
+
+/* ---- Shift Details: slide sideways like Weekly Paid Hours, with the
+   employee name pinned on the left so it never scrolls out of view ---- */
+.dayGrid .stickyCol{position:sticky;left:0;z-index:2;background:var(--card)}
+.dayGrid thead .stickyCol{background:var(--card);z-index:3}
+.dayGrid .stickyCol::after{content:"";position:absolute;top:0;right:0;bottom:0;width:1px;background:var(--line)}
+.dayGrid .totalCol{background:#f8fafc}
+
+/* Alternating rows: every second employee gets a light gray band, the
+   others stay white. Each employee has a hidden detail row after it, so
+   employee rows sit at positions 1,3,5,7… and 4n+3 picks every other one. */
+.dayGrid tbody tr.dgRow:nth-child(4n+3)>td,
+.dayGrid tbody tr.dgRow:nth-child(4n+3)>td.stickyCol,
+.dayGrid tbody tr.dgRow:nth-child(4n+3)>td.totalCol{background:#eef0f3}
+.dayGrid tbody tr.dgRow>td.dgCell.dgPicked{background:#eef2ff}
