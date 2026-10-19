@@ -571,9 +571,6 @@ body.mgr .dgBtn:hover{border-color:var(--orange);box-shadow:0 6px 14px rgba(249,
 body.mgr .dgBtn.open{border-color:var(--orange);box-shadow:0 0 0 2px rgba(249,115,22,.28)}
 body.mgr .dgCell.dgPicked,body.mgr .dayGrid th.dgPicked,body.mgr .dayGrid tbody tr.dgRow>td.dgCell.dgPicked{background:var(--orange-l)}
 body.mgr .dayGrid th.dgPicked{color:var(--orange-d)}
-body.mgr .dgTag{background:#f4f4f5;color:var(--ink)}
-body.mgr .dgTag.warn{background:var(--orange-l);color:var(--orange-d)}
-body.mgr .dgBtn.pend{border-color:var(--orange-m);background:var(--orange-l)}
 body.mgr .dgDetailRow>td{animation:sectionIn .3s var(--ease) both}
 body.mgr .dgShift{animation:rise .35s var(--ease) both;border-left:3px solid var(--orange)}
 /* rows slide in on first load */
