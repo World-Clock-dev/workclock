@@ -3,6 +3,8 @@
   const managerMode = new URLSearchParams(location.search).get('manager') === '1';
   $('employeeSection').classList.toggle('hide', managerMode);
   $('managerSection').classList.toggle('hide', !managerMode);
+  // The manager portal has its own orange / black / white theme.
+  if(managerMode)document.body.classList.add('mgr');
 
   const ds = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const ws = d => { const x = ds(d), w = x.getDay(); x.setDate(x.getDate() + (w === 0 ? -6 : 1 - w)); return x; };
@@ -756,6 +758,7 @@
     });
     $('weeklyRangeText').textContent=`Week of ${weekLabel(start)}`;
     $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    playRowsIn($('weeklyRows'));
     document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();toast(`Wage updated for ${person?.name||'employee'}.`);}catch(e){toast(e.message,'bad');}});
   }
   const statusText=s=>({active:'Active',vacation:'On vacation',terminated:'Terminated'}[s]||'Active');
@@ -931,6 +934,7 @@
              + `<tr class="dgDetailRow hide" data-detail="${emp.id}"><td colspan="9"><div class="dgDetail"></div></td></tr>`;
       }).join('')||'<tr><td colspan="9">No employees match.</td></tr>';
 
+      playRowsIn($('rows'));
       function renderDayDetail(empId,dayKey){
         const emp=(j.employees||[]).find(e=>String(e.id)===String(empId));
         const entries=((byEmpDay[empId]||{})[dayKey]||[]).slice().sort((a,b)=>new Date(a.shift.clock_in)-new Date(b.shift.clock_in));
@@ -1008,7 +1012,32 @@
       $('pendingApprovals').closest('.stat').classList.toggle('tileWarn',Number(sm.pending_approvals||0)>0);
       $('liveClockIns').closest('.stat').classList.toggle('tileLive',Number(sm.live_clock_ins||0)>0);
       await loadWeeklyPaidHours(j);
+      markRefreshed();
     }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;if(!mgrRender._errShown){mgrRender._errShown=1;toast('Connection error: '+e.message,'bad');setTimeout(()=>mgrRender._errShown=0,60000);}}
+  }
+  // Rows slide in one after another the first time a table fills,
+  // but not on the automatic 30-second refreshes.
+  function playRowsIn(tbody){
+    if(!tbody||tbody.dataset.played||calmMotion())return;
+    tbody.dataset.played='1';tbody.classList.add('rowsIn');
+    [...tbody.children].forEach((tr,i)=>tr.style.setProperty('--i',Math.min(i,14)));
+    setTimeout(()=>tbody.classList.remove('rowsIn'),1600);
+  }
+  function markRefreshed(){
+    const u=$('mgrUpdated'),d=$('mgrLiveDot');if(!u)return;
+    u.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    if(d){d.classList.remove('ping');void d.offsetWidth;d.classList.add('ping');}
+  }
+  // Header clock, plus cards that rise into view as you scroll down.
+  function initManagerMotion(){
+    const clock=$('mgrClock');
+    const tickClock=()=>{if(clock)clock.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});};
+    tickClock();setInterval(tickClock,15000);
+    const cards=[...document.querySelectorAll('#managerApp > section.card')];
+    if(calmMotion()||!('IntersectionObserver' in window)){cards.forEach(c=>c.classList.add('inView'));return;}
+    cards.forEach(c=>c.classList.add('reveal'));
+    const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('inView');io.unobserve(e.target);}}),{threshold:.08,rootMargin:'0px 0px -30px 0px'});
+    cards.forEach(c=>io.observe(c));
   }
   // Opens or closes a section with a short slide, keeping the button text,
   // arrow and aria-expanded in step.
@@ -1078,6 +1107,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     collapse('toggleShiftDetails','shiftDetailsBody');
     initSettingsTabs();
     initTileLinks();
+    initManagerMotion();
     $('clockInCancel').onclick=closeClockInEdit;
     $('clockInSave').onclick=saveClockInEdit;
     $('clockInAt').oninput=clockInPreview;

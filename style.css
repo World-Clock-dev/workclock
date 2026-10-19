@@ -453,3 +453,152 @@ main>section.card,main>section>section.card,main>section>section.stats,.managerW
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
 }
+
+/* =====================================================================
+   MANAGER PORTAL THEME — orange, black and white
+   Everything here is scoped to body.mgr, so the employee portal keeps
+   its own look. The white / gray table rows are deliberately untouched.
+   ===================================================================== */
+body.mgr{--primary:#f97316;--orange:#f97316;--orange-d:#c2410c;--orange-l:#fff7ed;--orange-m:#fed7aa;--ink:#0b0b0c;--ink-2:#1c1c1f}
+body.mgr ::selection{background:var(--orange-m);color:var(--ink)}
+
+/* ---- Header: black bar, orange mark, live clock ---- */
+body.mgr .managerHeader{position:sticky;top:10px;z-index:30;background:var(--ink);color:#fff;border-radius:16px;padding:12px 14px 12px 12px;margin-bottom:6px;box-shadow:0 -12px 0 0 var(--bg),0 14px 34px rgba(11,11,12,.22);overflow:hidden;animation:headDrop .6s var(--ease) both}
+body.mgr .managerHeader::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,transparent,var(--orange),#fdba74,var(--orange),transparent);background-size:200% 100%;animation:headSweep 3.5s linear infinite}
+body.mgr .managerHeader .brand span{color:#a1a1aa}
+body.mgr .brandMark{background:var(--orange);color:var(--ink);box-shadow:0 0 0 0 rgba(249,115,22,.5);animation:markGlow 3s ease-in-out infinite}
+body.mgr .managerLogin .brandMark{animation:markGlow 3s ease-in-out infinite}
+body.mgr .mgrHeadRight{display:flex;align-items:center;gap:10px}
+body.mgr .mgrLive{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+body.mgr .mgrUpdated{color:#a1a1aa;font-weight:600;font-size:12px}
+body.mgr .mgrLiveDot{width:8px;height:8px;border-radius:50%;background:var(--orange);animation:orangePulse 2s infinite}
+body.mgr .mgrLiveDot.ping{animation:dotPing .7s var(--ease),orangePulse 2s .7s infinite}
+body.mgr #logoutBtn{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.28)}
+body.mgr #logoutBtn:hover{background:var(--orange);border-color:var(--orange);color:var(--ink)}
+@keyframes headDrop{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes headSweep{from{background-position:200% 0}to{background-position:0 0}}
+@keyframes markGlow{0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,.0)}50%{box-shadow:0 0 18px 2px rgba(249,115,22,.45)}}
+@keyframes orangePulse{0%{box-shadow:0 0 0 0 rgba(249,115,22,.6)}70%{box-shadow:0 0 0 8px rgba(249,115,22,0)}100%{box-shadow:0 0 0 0 rgba(249,115,22,0)}}
+@keyframes dotPing{0%{transform:scale(1)}40%{transform:scale(1.9);background:#fdba74}100%{transform:scale(1)}}
+@media(max-width:800px){
+  body.mgr .managerHeader{top:6px;padding:10px;border-radius:14px}
+  body.mgr .mgrUpdated{display:none}
+  body.mgr .mgrLive{padding:5px 10px;font-size:12px}
+  body.mgr .managerHeader .secondary{padding:8px 11px}
+}
+@media(max-width:420px){body.mgr .mgrLive{display:none}}
+
+/* ---- Top tiles ---- */
+body.mgr .managerTopStats .stat{border-color:#e7e5e4;animation:tileIn .55s var(--ease) both}
+body.mgr .managerTopStats .stat:nth-child(1){animation-delay:.08s}
+body.mgr .managerTopStats .stat:nth-child(2){animation-delay:.14s}
+body.mgr .managerTopStats .stat:nth-child(3){animation-delay:.2s}
+body.mgr .managerTopStats .stat:nth-child(4){animation-delay:.26s}
+body.mgr .managerTopStats .stat:nth-child(5){animation-delay:.32s}
+body.mgr .managerTopStats .stat:nth-child(6){animation-delay:.38s}
+/* orange underline sweeps in on hover */
+body.mgr .managerTopStats .stat::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease)}
+body.mgr .managerTopStats .stat.tileLink:hover::after{transform:scaleX(1)}
+body.mgr .managerTopStats .stat.tileLink:hover{border-color:var(--orange-m);box-shadow:0 12px 26px rgba(249,115,22,.14)}
+/* Payroll is the headline number: black tile, orange figure */
+body.mgr .managerTopStats .stat:nth-child(3){background:var(--ink);border-color:var(--ink)}
+body.mgr .managerTopStats .stat:nth-child(3) span{color:#a1a1aa}
+body.mgr .managerTopStats .stat:nth-child(3) strong{color:var(--orange)}
+/* state colours in the same palette */
+body.mgr .managerTopStats .stat.tileBad{background:var(--ink-2);border-color:var(--ink-2)}
+body.mgr .managerTopStats .stat.tileBad span{color:#d4d4d8}
+body.mgr .managerTopStats .stat.tileBad strong{color:#fff}
+body.mgr .managerTopStats .stat.tileBad::before{background:#ef4444}
+body.mgr .managerTopStats .stat.tileWarn{background:var(--orange);border-color:var(--orange)}
+body.mgr .managerTopStats .stat.tileWarn span{color:rgba(11,11,12,.7)}
+body.mgr .managerTopStats .stat.tileWarn strong{color:var(--ink)}
+body.mgr .managerTopStats .stat.tileWarn::before{background:var(--ink)}
+body.mgr .managerTopStats .stat.tileWarn::after{background:var(--ink)}
+body.mgr .managerTopStats .stat.tileWarn strong{animation:nudge 2.6s ease-in-out infinite}
+body.mgr .managerTopStats .stat.tileLive{background:#fff;border-color:#e7e5e4}
+body.mgr .managerTopStats .stat.tileLive::before{background:#16a34a}
+@keyframes tileIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes nudge{0%,88%,100%{transform:none}92%{transform:translateY(-3px)}96%{transform:translateY(1px)}}
+
+/* ---- Cards: rise into view on scroll, orange heading marker ---- */
+body.mgr #managerApp>section.card{border-color:#e7e5e4}
+body.mgr #managerApp>section.card.reveal{animation:none;opacity:0;transform:translateY(22px);transition:opacity .6s var(--ease),transform .6s var(--ease),box-shadow .25s}
+body.mgr #managerApp>section.card.reveal.inView{opacity:1;transform:none}
+body.mgr #managerApp>section.card:hover{box-shadow:0 14px 34px rgba(15,23,42,.08)}
+body.mgr #managerApp .sectionHead h2{position:relative;padding-left:14px}
+body.mgr #managerApp .sectionHead h2::before{content:"";position:absolute;left:0;top:3px;bottom:3px;width:4px;border-radius:4px;background:var(--orange);transform:scaleY(0);transform-origin:top;transition:transform .5s .2s var(--ease)}
+body.mgr #managerApp section.inView .sectionHead h2::before,body.mgr #managerApp section:not(.reveal) .sectionHead h2::before{transform:scaleY(1)}
+body.mgr .card.flash{animation:orangeFlash 1.2s var(--ease)}
+@keyframes orangeFlash{0%{box-shadow:0 0 0 0 rgba(249,115,22,0)}20%{box-shadow:0 0 0 4px rgba(249,115,22,.4)}100%{box-shadow:var(--shadow)}}
+
+/* ---- Buttons ---- */
+body.mgr .primary{background:var(--orange);color:var(--ink)}
+body.mgr .primary:not(:disabled):hover{background:#fb8a3c;box-shadow:0 8px 18px rgba(249,115,22,.32)}
+body.mgr .secondary{background:#f4f4f5;color:var(--ink)}
+body.mgr .secondary:hover{background:#e7e5e4}
+body.mgr .sectionHead>button[aria-expanded]{background:var(--ink);color:#fff;padding:9px 14px;border-radius:999px}
+body.mgr .sectionHead>button[aria-expanded]:hover{background:var(--orange);color:var(--ink)}
+body.mgr .sectionHead>button[aria-expanded="true"]{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+body.mgr .sectionHead>button[aria-expanded="true"]:hover{box-shadow:inset 0 0 0 1.5px var(--orange);color:var(--orange-d)}
+body.mgr .weekNav>button{background:var(--ink);color:#fff;border-radius:10px}
+body.mgr .weekNav>button:hover{background:var(--orange);color:var(--ink)}
+body.mgr .weekPickerBtn{background:#fff;border-color:#d6d3d1}
+body.mgr .weekPickerBtn:hover{border-color:var(--orange)}
+body.mgr .weekPickerBtn svg{color:var(--orange);opacity:1}
+body.mgr button.danger{background:#fff;border:1px solid var(--ink);color:var(--ink)}
+body.mgr button.danger:hover{background:var(--ink);color:#fff}
+body.mgr a{color:var(--orange-d)}
+
+/* ---- Inputs ---- */
+body.mgr input:focus,body.mgr select:focus,body.mgr textarea:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(249,115,22,.18)}
+body.mgr :focus-visible{outline-color:rgba(249,115,22,.55)}
+body.mgr .eyeBtn{color:var(--orange-d)}
+body.mgr .linkBtn{color:var(--orange-d)}
+
+/* ---- Week calendars ---- */
+body.mgr .weekCal{border-color:#e7e5e4}
+body.mgr .weekCalDay.hoverWeek{background:var(--orange-l)}
+body.mgr .weekCalDay.inWeek,body.mgr .weekCalDay.inWeek.hoverWeek{background:var(--ink);color:#fff}
+body.mgr .weekCalDay.today{text-decoration-color:var(--orange);text-decoration-thickness:2px}
+body.mgr .weekCalDay.thisWeek{background:var(--orange-l)}
+
+/* ---- Table headers + interactive cells (row colours unchanged) ---- */
+body.mgr .managerWrap th{color:#57534e}
+body.mgr .weeklyTable th.totalCol,body.mgr .dayGrid th.totalCol{color:var(--orange-d)}
+body.mgr .weeklyTable tbody tr:hover>td{background:var(--orange-l)}
+body.mgr .weeklyTable .wage:focus{border-color:var(--orange)}
+body.mgr .dgBtn:hover{border-color:var(--orange);box-shadow:0 6px 14px rgba(249,115,22,.16)}
+body.mgr .dgBtn.open{border-color:var(--orange);box-shadow:0 0 0 2px rgba(249,115,22,.28)}
+body.mgr .dgCell.dgPicked,body.mgr .dayGrid th.dgPicked,body.mgr .dayGrid tbody tr.dgRow>td.dgCell.dgPicked{background:var(--orange-l)}
+body.mgr .dayGrid th.dgPicked{color:var(--orange-d)}
+body.mgr .dgTag{background:#f4f4f5;color:var(--ink)}
+body.mgr .dgTag.warn{background:var(--orange-l);color:var(--orange-d)}
+body.mgr .dgBtn.pend{border-color:var(--orange-m);background:var(--orange-l)}
+body.mgr .dgDetailRow>td{animation:sectionIn .3s var(--ease) both}
+body.mgr .dgShift{animation:rise .35s var(--ease) both;border-left:3px solid var(--orange)}
+/* rows slide in on first load */
+body.mgr tbody.rowsIn>tr{animation:rowIn .45s var(--ease) both;animation-delay:calc(var(--i,0) * 45ms)}
+@keyframes rowIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+
+/* ---- Settings tabs ---- */
+body.mgr .tabBar{background:#f4f4f5}
+body.mgr .tabBtn.on{background:var(--ink);color:#fff;box-shadow:0 4px 12px rgba(11,11,12,.2)}
+body.mgr .tabBtn:not(.on):hover{color:var(--orange-d)}
+
+/* ---- Employees list ---- */
+body.mgr .empCount{background:var(--orange);color:var(--ink)}
+
+/* ---- Pop-up messages and modals ---- */
+body.mgr .toast{background:var(--ink);border-left:4px solid var(--orange)}
+body.mgr .toast::before{background:var(--orange)}
+body.mgr .toast.bad{border-left-color:#ef4444}
+body.mgr .toast.bad::before{background:#ef4444}
+body.mgr .modalCard{border-top:4px solid var(--orange)}
+
+/* ---- Manager sign-in ---- */
+body.mgr .managerLogin{border-top:4px solid var(--orange);animation:popIn .5s var(--ease) both}
+body.mgr .managerLink{color:var(--orange-d)}
+
+@media (prefers-reduced-motion: reduce){
+  body.mgr #managerApp>section.card.reveal{opacity:1;transform:none}
+}
