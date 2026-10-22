@@ -34,21 +34,34 @@ export default async function handler(req, res) {
     const miles = distanceMiles(Number(sh[0].clock_in_lat), Number(sh[0].clock_in_lng), lat, lng);
     const radius = await settingNumber('clock_out_radius_miles', 3);
     if (miles > radius) {
+      // Outside the allowed radius: the shift is STOPPED at this moment (so the
+      // running time does not keep counting) and sent to the manager as
+      // "pending" review. The manager then approves full, actual or custom hours.
+      const stopped = await sql`
+        UPDATE shifts
+        SET clock_out=now(),clock_out_lat=${lat},clock_out_lng=${lng},clock_out_distance_miles=${miles},
+            clock_out_note=${note},clock_out_message=${message || null},manager_review_status='pending'
+        WHERE id=${sh[0].id} AND employee_id=${emp.id} AND clock_out IS NULL
+        RETURNING id,clock_in,clock_out,clock_out_distance_miles,clock_out_note,clock_out_message,manager_review_status`;
+      if (!stopped.length) return json(res, 409, { error: 'Already clocked out.' });
       await sql`
         INSERT INTO rejected_clock_outs(shift_id,lat,lng,distance_miles,reason,note)
         VALUES(${sh[0].id},${lat},${lng},${miles},${`More than ${radius.toFixed(2)} miles from clock-in location`},${message || null})`;
-      await audit('employee', emp.id, 'clock_out_rejected', { shift_id: sh[0].id, distance_miles: miles, reason: note, note: message || null });
+      await audit('employee', emp.id, 'clock_out_rejected', { shift_id: sh[0].id, distance_miles: miles, reason: note, note: message || null, shift_stopped_for_review: true });
       const mapLink = `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
       await safeAdminEmail({
-        subject: `WorkClock: rejected clock-out location — ${emp.name}`,
-        text: `Employee: ${emp.name}\nReason selected: ${note}\nMessage: ${message || 'None'}\nDistance from clock-in location: ${miles.toFixed(2)} miles (allowed ${radius.toFixed(2)} miles).\nAttempted location: ${mapLink}\nThe employee was NOT clocked out.`,
-        html: `<p><strong>${htmlEscape(emp.name)}</strong> attempted to clock out outside the allowed radius.</p><p><strong>Reason:</strong> ${htmlEscape(note)}<br><strong>Message:</strong> ${htmlEscape(message || 'None')}<br><strong>Distance:</strong> ${miles.toFixed(2)} miles<br><strong>Allowed:</strong> ${radius.toFixed(2)} miles</p><p><a href="${mapLink}">View attempted location</a></p><p>The employee was <strong>not</strong> clocked out.</p>`
+        subject: `WorkClock: clock-out outside allowed area — ${emp.name} (needs review)`,
+        text: `Employee: ${emp.name}\nReason selected: ${note}\nMessage: ${message || 'None'}\nDistance from clock-in location: ${miles.toFixed(2)} miles (allowed ${radius.toFixed(2)} miles).\nAttempted location: ${mapLink}\nThe shift was stopped at the time of this attempt and is waiting for your review in Shift Details.`,
+        html: `<p><strong>${htmlEscape(emp.name)}</strong> tried to clock out outside the allowed radius.</p><p><strong>Reason:</strong> ${htmlEscape(note)}<br><strong>Message:</strong> ${htmlEscape(message || 'None')}<br><strong>Distance:</strong> ${miles.toFixed(2)} miles<br><strong>Allowed:</strong> ${radius.toFixed(2)} miles</p><p><a href="${mapLink}">View attempted location</a></p><p>The shift was <strong>stopped at the time of this attempt</strong> and is waiting for your review in Shift Details.</p>`
       });
-      return json(res, 403, {
-        error: `CLOCK OUT REJECTED — you are ${miles.toFixed(2)} miles from Clock In. You must be within ${radius.toFixed(2)} miles.`,
+      return json(res, 200, {
+        ok: true,
+        rejected: true,
+        managerReview: true,
         distance: miles,
+        shift: stopped[0],
         locationRecorded: true,
-        ruleAlert: 'Your clock-out was not recorded because you were outside the allowed location radius. Your manager has been notified.'
+        message: `CLOCK OUT OUTSIDE ALLOWED AREA — you are ${miles.toFixed(2)} miles from Clock In (allowed ${radius.toFixed(2)} miles). Your time has stopped and your manager will review this shift.`
       });
     }
 
