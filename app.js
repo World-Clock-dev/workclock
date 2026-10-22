@@ -173,6 +173,8 @@
     const text=String(msg??'');
     if(lang!=='es'||!text)return text;
     if(SERVER_ES[text])return SERVER_ES[text];
+    let o=text.match(/^CLOCK OUT OUTSIDE ALLOWED AREA — you are ([\d.]+) miles from Clock In \(allowed ([\d.]+) miles\)\. Your time has stopped and your manager will review this shift\.$/);
+    if(o)return `SALIDA FUERA DEL ÁREA PERMITIDA — está a ${o[1]} millas del lugar de entrada (permitido ${o[2]} millas). Su tiempo se detuvo y su gerente revisará este turno.`;
     let m=text.match(/^CLOCK OUT REJECTED — you are ([\d.]+) miles from Clock In\. You must be within ([\d.]+) miles\.$/);
     if(m)return `SALIDA RECHAZADA — está a ${m[1]} millas del lugar de entrada. Debe estar dentro de ${m[2]} millas.`;
     m=text.match(/^Clock Out message must be (\d+) characters or fewer\.$/);
@@ -491,7 +493,7 @@
     $('prev').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()-7);setEmpWeek(d);};
     $('next').onclick=()=>{const d=new Date($('weekDate').value+'T12:00:00');d.setDate(d.getDate()+7);setEmpWeek(d);};
     $('in').onclick=async()=>{try{stat(t('gpsChecking'));const c=await geo();const j=await api('/api/clock-in',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude})});stat(serverText(j.ruleAlert)||t('inOk'),'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
-    $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat(t('notClockedIn'),'bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat(t('pickReason'),'bad');$('earlyNote').focus();return;}stat(t('gpsLimit'));const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';stat(j.managerReview?t('outReview'):t('outOk',{d:Number(j.distance).toFixed(2)}),'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
+    $('out').onclick=async()=>{try{const open=empCache?.openShift;if(!open)return stat(t('notClockedIn'),'bad');const elapsedHours=hours(open);const reason=$('earlyNote').value;if(elapsedHours<8 && !reason){stat(t('pickReason'),'bad');$('earlyNote').focus();return;}stat(t('gpsLimit'));const c=await geo();const j=await api('/api/clock-out',{method:'POST',body:JSON.stringify({lat:c.latitude,lng:c.longitude,note:reason,message:$('clockOutMessage').value.trim()})});$('clockOutMessage').value='';if(j.rejected)stat(serverText(j.message),'bad');else stat(j.managerReview?t('outReview'):t('outOk',{d:Number(j.distance).toFixed(2)}),'ok');await loadEmployee();}catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}};
     tick();setInterval(tick,1000);
   }
 
@@ -925,7 +927,8 @@
           const paid=list.reduce((a,e)=>a+e.share,0);weekPaid+=paid;
           const open=list.some(e=>!e.shift.clock_out),pend=list.some(e=>e.shift.manager_review_status==='pending');
           const started=list.filter(e=>e.startsHere).length,carried=list.some(e=>!e.startsHere);
-          const flags=[started>1?`<span class="dgTag">${started}×</span>`:'',carried?'<span class="dgTag">carried</span>':'',pend?'<span class="dgTag warn">review</span>':'',open?'<span class="dgTag live">open</span>':''].join('');
+          const away=list.some(e=>Number(e.shift.rejected_count||0)>0);
+          const flags=[started>1?`<span class="dgTag">${started}×</span>`:'',carried?'<span class="dgTag">carried</span>':'',pend?'<span class="dgTag warn">review</span>':'',away?'<span class="dgTag warn">location</span>':'',open?'<span class="dgTag live">open</span>':''].join('');
           return `<td class="dgCell${shiftDate===k?' dgPicked':''}"><button class="dgBtn${pend?' pend':''}" data-emp="${emp.id}" data-day="${k}" type="button"><b>${paid.toFixed(2)}</b>${flags}</button></td>`;
         }).join('');
         const est=emp.employment_status||'active';
@@ -963,7 +966,8 @@
             :(x.clock_out?`<div class="reviewBtns"><button class="mini secondary" data-review-custom="${x.id}" ${meta}>Adjust hours</button></div>`:'');
           const action=x.clock_out?'':`<div class="reviewBtns"><button class="mini secondary" data-edit-in="${x.id}" ${meta}>Edit clock-in time</button><button class="mini danger" data-force="${x.id}">Force clock out</button></div>`;
           const split=Math.abs(entry.share-paid)>0.01;
-          return `<div class="dgShift"><div class="dgShiftTop"><span class="dgSeq">#${idx+1}</span><b>${esc(times)}</b>${entry.startsHere?'':'<span class="dgTag">carried over</span>'}${x.manager_review_status==='pending'?'<span class="dgTag warn">needs review</span>':''}</div>
+          return `<div class="dgShift"><div class="dgShiftTop"><span class="dgSeq">#${idx+1}</span><b>${esc(times)}</b>${entry.startsHere?'':'<span class="dgTag">carried over</span>'}${x.manager_review_status==='pending'?'<span class="dgTag warn">needs review</span>':''}${Number(x.rejected_count||0)>0?'<span class="dgTag warn">outside area</span>':''}</div>
+            ${Number(x.rejected_count||0)>0&&x.clock_out?`<div class="spanWarn">Clock-out was outside the allowed area${x.clock_out_distance_miles!=null?` (${Number(x.clock_out_distance_miles).toFixed(2)} mi from clock-in)`:''}. The shift was stopped at that moment${x.manager_review_status==='pending'?' and is waiting for your review':''}.</div>`:''}
             <div class="dgFacts"><div><span>Actual (whole shift)</span><b>${actual.toFixed(2)} h</b></div><div><span>Paid (whole shift)</span><b>${paid.toFixed(2)} h</b></div><div><span>Counted on this day</span><b>${entry.share.toFixed(2)} h</b></div><div><span>Earned this day</span><b>$${earned.toFixed(2)}</b></div></div>
             ${split?`<div class="small muted">This shift runs across midnight, so its ${paid.toFixed(2)} paid hours are split across the days it covers. ${entry.share.toFixed(2)} h fall on this day.</div>`:''}
             <div class="small"><span>Status</span> <b>${esc(statusLabel(x.manager_review_status))}</b></div>
