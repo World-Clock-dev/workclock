@@ -1,4 +1,4 @@
-import { sql, json, validCoords, distanceMiles, requireEmployee, requireSameOrigin, settingNumber, audit } from './_db.js';
+import { sql, json, validCoords, distanceMiles, requireEmployee, requireSameOrigin, settingNumber, audit, nowIso } from './_db.js';
 import { safeAdminEmail } from './_email.js';
 
 const htmlEscape = s => String(s ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -39,14 +39,14 @@ export default async function handler(req, res) {
       // "pending" review. The manager then approves full, actual or custom hours.
       const stopped = await sql`
         UPDATE shifts
-        SET clock_out=now(),clock_out_lat=${lat},clock_out_lng=${lng},clock_out_distance_miles=${miles},
+        SET clock_out=${nowIso()},clock_out_lat=${lat},clock_out_lng=${lng},clock_out_distance_miles=${miles},
             clock_out_note=${note},clock_out_message=${message || null},manager_review_status='pending'
         WHERE id=${sh[0].id} AND employee_id=${emp.id} AND clock_out IS NULL
         RETURNING id,clock_in,clock_out,clock_out_distance_miles,clock_out_note,clock_out_message,manager_review_status`;
       if (!stopped.length) return json(res, 409, { error: 'Already clocked out.' });
       await sql`
-        INSERT INTO rejected_clock_outs(shift_id,lat,lng,distance_miles,reason,note)
-        VALUES(${sh[0].id},${lat},${lng},${miles},${`More than ${radius.toFixed(2)} miles from clock-in location`},${message || null})`;
+        INSERT INTO rejected_clock_outs(shift_id,lat,lng,distance_miles,reason,note,created_at)
+        VALUES(${sh[0].id},${lat},${lng},${miles},${`More than ${radius.toFixed(2)} miles from clock-in location`},${message || null},${nowIso()})`;
       await audit('employee', emp.id, 'clock_out_rejected', { shift_id: sh[0].id, distance_miles: miles, reason: note, note: message || null, shift_stopped_for_review: true });
       const mapLink = `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
       await safeAdminEmail({
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     const needsReview = ['Project completed','Client request','Manager approval'].includes(note);
     const rows = await sql`
       UPDATE shifts
-      SET clock_out=now(),clock_out_lat=${lat},clock_out_lng=${lng},clock_out_distance_miles=${miles},clock_out_note=${note},clock_out_message=${message || null},manager_review_status=${needsReview ? 'pending' : 'not_required'}
+      SET clock_out=${nowIso()},clock_out_lat=${lat},clock_out_lng=${lng},clock_out_distance_miles=${miles},clock_out_note=${note},clock_out_message=${message || null},manager_review_status=${needsReview ? 'pending' : 'not_required'}
       WHERE id=${sh[0].id} AND employee_id=${emp.id} AND clock_out IS NULL
       RETURNING id,clock_in,clock_out,clock_out_distance_miles,clock_out_note,clock_out_message,manager_review_status`;
     if (!rows.length) return json(res, 409, { error: 'Already clocked out.' });

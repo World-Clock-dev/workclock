@@ -1,4 +1,4 @@
-import { sql, json, requireManager, getManager, requireSameOrigin, settingNumber, audit } from './_db.js';
+import { sql, json, requireManager, getManager, requireSameOrigin, settingNumber, audit, nowIso, monthsAgoIso } from './_db.js';
 import crypto from 'node:crypto';
 
 const LIMITS = {
@@ -31,6 +31,9 @@ function isRetentionRequest(req) {
 }
 
 function cronAuthorized(req) {
+  // Cloudflare Cron Trigger: the scheduled() handler in src/worker.js marks
+  // its own internal request; it never comes from the network.
+  if (req.__cloudflareCron === true) return true;
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   const header = String(req.headers.authorization || '');
@@ -51,14 +54,15 @@ async function retentionMonths() {
 // settings are never touched. Open shifts are never deleted, however old they
 // are, because removing one would strand an employee who is still clocked in.
 async function purge(cutoffIso) {
-  const shifts = await sql`DELETE FROM shifts WHERE clock_in < ${cutoffIso}::timestamptz AND clock_out IS NOT NULL RETURNING id`;
-  const audits = await sql`DELETE FROM audit_logs WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`;
-  const attempts = await sql`DELETE FROM auth_attempts WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`;
-  const pinResets = await sql`DELETE FROM pin_reset_requests WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`;
-  const runs = await sql`DELETE FROM retention_runs WHERE created_at < ${cutoffIso}::timestamptz RETURNING id`;
-  const empSessions = await sql`DELETE FROM employee_sessions WHERE expires_at < now() RETURNING token_hash`;
-  const mgrSessions = await sql`DELETE FROM manager_sessions WHERE expires_at < now() RETURNING token_hash`;
-  const resetTokens = await sql`DELETE FROM manager_reset_tokens WHERE expires_at < now() RETURNING token_hash`;
+  const shifts = await sql`DELETE FROM shifts WHERE clock_in < ${cutoffIso} AND clock_out IS NOT NULL RETURNING id`;
+  const audits = await sql`DELETE FROM audit_logs WHERE created_at < ${cutoffIso} RETURNING id`;
+  const attempts = await sql`DELETE FROM auth_attempts WHERE created_at < ${cutoffIso} RETURNING id`;
+  const pinResets = await sql`DELETE FROM pin_reset_requests WHERE created_at < ${cutoffIso} RETURNING id`;
+  const runs = await sql`DELETE FROM retention_runs WHERE created_at < ${cutoffIso} RETURNING id`;
+  const now = nowIso();
+  const empSessions = await sql`DELETE FROM employee_sessions WHERE expires_at < ${now} RETURNING token_hash`;
+  const mgrSessions = await sql`DELETE FROM manager_sessions WHERE expires_at < ${now} RETURNING token_hash`;
+  const resetTokens = await sql`DELETE FROM manager_reset_tokens WHERE expires_at < ${now} RETURNING token_hash`;
   return {
     shifts: shifts.length,
     rejected_clock_outs: 'cascade',
@@ -81,18 +85,17 @@ async function handleRetention(req, res) {
   if (!isCron && !manager) return json(res, 401, { error: 'Manager login or cron secret required.' });
 
   const months = await retentionMonths();
-  const cutoffRow = await sql`SELECT (now() - (${months} || ' months')::interval) AS cutoff`;
-  const cutoffIso = new Date(cutoffRow[0].cutoff).toISOString();
+  const cutoffIso = monthsAgoIso(months);
 
   // Vercel Cron calls with GET, so an authorized cron request always purges.
   // For a signed-in manager, GET is a dry run and POST performs the deletion.
   if (!isCron && req.method === 'GET') {
     const rows = await sql`
       SELECT
-        (SELECT count(*)::int FROM shifts WHERE clock_in < ${cutoffIso}::timestamptz AND clock_out IS NOT NULL) AS shifts,
-        (SELECT count(*)::int FROM audit_logs WHERE created_at < ${cutoffIso}::timestamptz) AS audit_logs,
-        (SELECT count(*)::int FROM auth_attempts WHERE created_at < ${cutoffIso}::timestamptz) AS auth_attempts,
-        (SELECT count(*)::int FROM pin_reset_requests WHERE created_at < ${cutoffIso}::timestamptz) AS pin_reset_requests,
+        (SELECT count(*) FROM shifts WHERE clock_in < ${cutoffIso} AND clock_out IS NOT NULL) AS shifts,
+        (SELECT count(*) FROM audit_logs WHERE created_at < ${cutoffIso}) AS audit_logs,
+        (SELECT count(*) FROM auth_attempts WHERE created_at < ${cutoffIso}) AS auth_attempts,
+        (SELECT count(*) FROM pin_reset_requests WHERE created_at < ${cutoffIso}) AS pin_reset_requests,
         (SELECT min(clock_in) FROM shifts) AS oldest_shift`;
     const last = await sql`SELECT triggered_by,retention_months,cutoff,deleted,created_at FROM retention_runs ORDER BY created_at DESC LIMIT 1`;
     return json(res, 200, { retentionMonths: months, cutoff: cutoffIso, pending: rows[0], lastRun: last[0] || null });
@@ -102,7 +105,7 @@ async function handleRetention(req, res) {
 
   const deleted = await purge(cutoffIso);
   await sql`INSERT INTO retention_runs(triggered_by,manager_id,retention_months,cutoff,deleted)
-            VALUES(${isCron ? 'cron' : 'manager'},${manager?.id ?? null},${months},${cutoffIso}::timestamptz,${JSON.stringify(deleted)}::jsonb)`;
+            VALUES(${isCron ? 'cron' : 'manager'},${manager?.id ?? null},${months},${cutoffIso},${JSON.stringify(deleted)})`;
   await audit(isCron ? 'system' : 'manager', manager?.id ?? null, 'retention_purge', { retention_months: months, cutoff: cutoffIso, deleted });
 
   return json(res, 200, { ok: true, retentionMonths: months, cutoff: cutoffIso, deleted });
@@ -123,7 +126,7 @@ export default async function handler(req, res) {
       const n = Number(b[key]);
       if (!Number.isFinite(n) || n < min || n > max) return json(res, 400, { error: `Invalid ${key}.` });
       const value = (key === 'max_active_employees' || key === 'data_retention_months') ? String(Math.round(n)) : String(n);
-      await sql`INSERT INTO app_settings(key,value,updated_at) VALUES(${key},${value},now()) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=now()`;
+      await sql`INSERT INTO app_settings(key,value,updated_at) VALUES(${key},${value},${nowIso()}) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`;
       await audit('manager', manager.id, 'setting_updated', { key, value });
     }
     return json(res, 200, { settings: await readSettings() });

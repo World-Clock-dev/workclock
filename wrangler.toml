@@ -1,0 +1,30 @@
+# WorkClock on Cloudflare Workers + D1.
+# The public address will be https://workclock-w5qy0n.<your-account>.workers.dev
+# (a random Cloudflare address; no custom domain or company subdomain is attached).
+name = "workclock-w5qy0n"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static front end (index.html, app.js, style.css, icons) from the project root.
+# .assetsignore keeps server code, SQL, scripts and config from being served.
+[assets]
+directory = "."
+binding = "ASSETS"
+
+# Cloudflare D1 database. Create it once with:
+#   npx wrangler d1 create workclock
+# and paste the database_id it prints below.
+[[d1_databases]]
+binding = "DB"
+database_name = "workclock"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Nightly data-retention job, 03:00 UTC (same as the Vercel cron).
+[triggers]
+crons = ["0 3 * * *"]
+
+# Secrets are NOT stored here. Set them with `npx wrangler secret put NAME`:
+#   SESSION_SECRET  (copy the exact value from Vercel so session hashes match)
+#   CRON_SECRET     (optional on Cloudflare; the Cron Trigger does not need it)
+#   RESEND_API_KEY, EMAIL_FROM, ADMIN_EMAIL, APP_URL

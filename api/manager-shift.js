@@ -1,4 +1,4 @@
-import { sql, json, requireManager, requireSameOrigin, audit } from './_db.js';
+import { sql, json, requireManager, requireSameOrigin, audit, nowIso, round2 } from './_db.js';
 import { hoursBetween } from './_time.js';
 
 function id(v){const n=Number(v);return Number.isInteger(n)&&n>0?n:null;}
@@ -26,11 +26,11 @@ export default async function handler(req,res){
         const note=clean(b.message);
         const rows=await sql`
           UPDATE shifts
-          SET clock_in=${clockInAt.toISOString()}::timestamptz,
+          SET clock_in=${clockInAt.toISOString()},
               manager_original_clock_in=COALESCE(manager_original_clock_in,clock_in),
               manager_review_note=${note||null},
               manager_reviewed_by=${manager.id},
-              manager_reviewed_at=now()
+              manager_reviewed_at=${nowIso()}
           WHERE id=${shiftId} AND clock_out IS NULL
           RETURNING id,employee_id,clock_in,manager_original_clock_in`;
         if(!rows.length)return json(res,409,{error:'That shift is already clocked out. Use Adjust hours instead.'});
@@ -47,19 +47,19 @@ export default async function handler(req,res){
       const note=clean(b.message)||'Manager closed this shift from the Manager Portal.';
       const rows=await sql`
         UPDATE shifts
-        SET clock_out=${clockOutAt.toISOString()}::timestamptz,
+        SET clock_out=${clockOutAt.toISOString()},
             clock_out_note='Manager force clock out',
             clock_out_message=${note},
             manager_review_status='not_required',
             manager_reviewed_by=${manager.id},
-            manager_reviewed_at=now(),
+            manager_reviewed_at=${nowIso()},
             manager_review_note=${`Manager force clock-out; payroll mode: ${payMode}${payMode==='custom'?` (${customPaid} hours)`:''}`}
         WHERE id=${shiftId} AND clock_out IS NULL
         RETURNING id,employee_id,clock_in,clock_out,clock_out_note,clock_out_message`;
       if(!rows.length)return json(res,409,{error:'This shift is already clocked out.'});
       const actual=hoursBetween(rows[0].clock_in,rows[0].clock_out);
       const paid=payMode==='eight'?8:payMode==='custom'?customPaid:actual;
-      await sql`INSERT INTO manager_force_clockouts(shift_id,manager_id,clock_out_at,pay_mode,paid_hours,note) VALUES(${shiftId},${manager.id},${clockOutAt.toISOString()}::timestamptz,${payMode},${paid},${note})`;
+      await sql`INSERT INTO manager_force_clockouts(shift_id,manager_id,clock_out_at,pay_mode,paid_hours,note) VALUES(${shiftId},${manager.id},${clockOutAt.toISOString()},${payMode},${round2(paid)},${note})`;
       await audit('manager',manager.id,'manager_forced_clock_out',{shift_id:shiftId,employee_id:rows[0].employee_id,clock_out_at:clockOutAt.toISOString(),pay_mode:payMode,paid_hours:paid,note});
       return json(res,200,{ok:true,shift:rows[0],actualHours:actual,paidHours:paid});
     }
@@ -85,12 +85,12 @@ export default async function handler(req,res){
       const rows=await sql`
         UPDATE shifts SET
           manager_review_status='approved_custom',
-          manager_custom_paid_hours=${paidHours},
-          clock_out=COALESCE(${corrected}::timestamptz,clock_out),
-          manager_original_clock_out=CASE WHEN ${corrected}::timestamptz IS NOT NULL AND manager_original_clock_out IS NULL THEN clock_out ELSE manager_original_clock_out END,
+          manager_custom_paid_hours=${round2(paidHours)},
+          clock_out=COALESCE(${corrected},clock_out),
+          manager_original_clock_out=CASE WHEN ${corrected} IS NOT NULL AND manager_original_clock_out IS NULL THEN clock_out ELSE manager_original_clock_out END,
           manager_review_note=${note||null},
           manager_reviewed_by=${manager.id},
-          manager_reviewed_at=now()
+          manager_reviewed_at=${nowIso()}
         WHERE id=${shiftId} AND clock_out IS NOT NULL
         RETURNING id,employee_id,clock_in,clock_out,clock_out_note,manager_review_status,manager_custom_paid_hours,manager_original_clock_out`;
       if(!rows.length)return json(res,404,{error:'Completed shift not found.'});
@@ -98,7 +98,7 @@ export default async function handler(req,res){
       return json(res,200,{ok:true,shift:rows[0],paidHours});
     }
 
-    const rows=await sql`UPDATE shifts SET manager_review_status=${decision==='approve_full'?'approved_full':'approved_actual'},manager_custom_paid_hours=NULL,manager_review_note=${note||null},manager_reviewed_by=${manager.id},manager_reviewed_at=now() WHERE id=${shiftId} AND clock_out IS NOT NULL RETURNING id,employee_id,clock_in,clock_out,clock_out_note,manager_review_status`;
+    const rows=await sql`UPDATE shifts SET manager_review_status=${decision==='approve_full'?'approved_full':'approved_actual'},manager_custom_paid_hours=NULL,manager_review_note=${note||null},manager_reviewed_by=${manager.id},manager_reviewed_at=${nowIso()} WHERE id=${shiftId} AND clock_out IS NOT NULL RETURNING id,employee_id,clock_in,clock_out,clock_out_note,manager_review_status`;
     if(!rows.length)return json(res,404,{error:'Completed shift not found.'});
     await audit('manager',manager.id,'shift_pay_reviewed',{shift_id:shiftId,employee_id:rows[0].employee_id,decision,note:note||null});
     return json(res,200,{ok:true,shift:rows[0]});

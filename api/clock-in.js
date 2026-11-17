@@ -1,4 +1,4 @@
-import { sql, json, validCoords, requireEmployee, requireSameOrigin, audit } from './_db.js';
+import { sql, json, validCoords, requireEmployee, requireSameOrigin, audit, nowIso, isoIn, todayStartIso, DAY } from './_db.js';
 
 export default async function handler(req, res) {
   try {
@@ -8,12 +8,12 @@ export default async function handler(req, res) {
     const b = req.body || {}, lat = Number(b.lat), lng = Number(b.lng);
     if (!validCoords(lat, lng)) return json(res, 400, { error: 'A valid GPS location is required.' });
     try {
-      const sh = await sql`INSERT INTO shifts(employee_id,clock_in_lat,clock_in_lng) VALUES(${emp.id},${lat},${lng}) RETURNING id,clock_in`;
+      const sh = await sql`INSERT INTO shifts(employee_id,clock_in,clock_in_lat,clock_in_lng) VALUES(${emp.id},${nowIso()},${lat},${lng}) RETURNING id,clock_in`;
       await audit('employee', emp.id, 'clock_in', { shift_id: sh[0].id });
       const prior = await sql`
         SELECT r.id,r.created_at,r.distance_miles,r.lat,r.lng,r.reason,r.note
         FROM rejected_clock_outs r JOIN shifts s ON s.id=r.shift_id
-        WHERE s.employee_id=${emp.id} AND r.created_at < CURRENT_DATE AND r.created_at >= now()-interval '30 days'
+        WHERE s.employee_id=${emp.id} AND r.created_at < ${todayStartIso()} AND r.created_at >= ${isoIn(-30 * DAY)}
         ORDER BY r.created_at DESC LIMIT 1`;
       return json(res, 200, {
         ok: true,

@@ -1,4 +1,4 @@
-import { sql, json, requireEmployee, settingNumber } from './_db.js';
+import { sql, json, requireEmployee, settingNumber, toIso, isoIn, todayStartIso, DAY } from './_db.js';
 import { allocatePaidHours, normalizeDayStarts } from './_time.js';
 
 function parseRange(req) {
@@ -27,11 +27,11 @@ async function handleReport(req, res, emp, u) {
            s.manager_review_status,s.manager_review_note,s.manager_custom_paid_hours,
            s.manager_original_clock_out,s.manager_original_clock_in,
            (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
-           (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
+           (SELECT count(*) FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
     FROM shifts s
     WHERE s.employee_id=${emp.id}
-      AND s.clock_in<${end.toISOString()}::timestamptz
-      AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
+      AND s.clock_in<${end.toISOString()}
+      AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()})
     ORDER BY s.clock_in ASC
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum = await settingNumber('project_completed_min_paid_hours', 8);
@@ -49,17 +49,18 @@ export default async function handler(req, res) {
     const url = new URL(req.url, 'https://workclock.invalid');
     if (url.searchParams.get('view') === 'report') return await handleReport(req, res, emp, url);
     let range; try { range = parseRange(req); } catch (e) { return json(res, 400, { error: e.message === 'INVALID_START' ? 'Invalid start date.' : 'Invalid end date.' }); }
-    const { start, end, days } = range;
+    const { days } = range;
+    const start = toIso(range.start), end = toIso(range.end);
     const shifts = await sql`
       SELECT s.id,s.clock_in,s.clock_out,s.clock_in_lat,s.clock_in_lng,s.clock_out_lat,s.clock_out_lng,
              s.clock_out_distance_miles,s.clock_out_note,s.clock_out_message,s.manager_review_status,s.manager_review_note,s.manager_reviewed_at,
              s.manager_custom_paid_hours,s.manager_original_clock_out,s.manager_original_clock_in,
              (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
-             (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
+             (SELECT count(*) FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
       FROM shifts s
       WHERE s.employee_id=${emp.id}
-        AND (${start}::timestamptz IS NULL OR s.clock_in<${end}::timestamptz)
-        AND (${end}::timestamptz IS NULL OR s.clock_out IS NULL OR s.clock_out>${start}::timestamptz)
+        AND (${start} IS NULL OR s.clock_in<${end})
+        AND (${end} IS NULL OR s.clock_out IS NULL OR s.clock_out>${start})
       ORDER BY s.clock_in`;
     const paidMinimum = await settingNumber('project_completed_min_paid_hours', 8);
     const open = await sql`SELECT id,clock_in,clock_in_lat,clock_in_lng FROM shifts WHERE employee_id=${emp.id} AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1`;
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
     const recentRuleAlert = await sql`
       SELECT r.id,r.created_at,r.distance_miles,r.reason,r.note
       FROM rejected_clock_outs r JOIN shifts s ON s.id=r.shift_id
-      WHERE s.employee_id=${emp.id} AND r.created_at < CURRENT_DATE AND r.created_at >= now()-interval '30 days'
+      WHERE s.employee_id=${emp.id} AND r.created_at < ${todayStartIso()} AND r.created_at >= ${isoIn(-30 * DAY)}
       ORDER BY r.created_at DESC LIMIT 1`;
     return json(res, 200, {
       authorized:true,

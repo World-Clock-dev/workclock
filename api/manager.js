@@ -31,11 +31,11 @@ async function handleReport(req,res,u){
            s.manager_review_status,s.manager_review_note,s.manager_custom_paid_hours,s.manager_original_clock_out,s.manager_original_clock_in,
            e.hourly_wage,
            (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
-           (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
+           (SELECT count(*) FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
     FROM shifts s JOIN employees e ON e.id=s.employee_id
     WHERE s.employee_id=${employeeId}
-      AND s.clock_in<${end.toISOString()}::timestamptz
-      AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
+      AND s.clock_in<${end.toISOString()}
+      AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()})
     ORDER BY s.clock_in ASC
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum=await settingNumber('project_completed_min_paid_hours',8);
@@ -54,9 +54,9 @@ export default async function handler(req,res){
     const shifts=await sql`
       SELECT s.id,e.id AS employee_id,e.name,e.title,e.hourly_wage,s.clock_in,s.clock_out,s.clock_in_lat,s.clock_in_lng,s.clock_out_lat,s.clock_out_lng,s.clock_out_distance_miles,s.clock_out_note,s.clock_out_message,s.manager_review_status,s.manager_review_note,s.manager_reviewed_at,s.manager_custom_paid_hours,s.manager_original_clock_out,
       (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours,
-      (SELECT count(*)::int FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
+      (SELECT count(*) FROM rejected_clock_outs r WHERE r.shift_id=s.id) AS rejected_count
       FROM shifts s JOIN employees e ON e.id=s.employee_id
-      WHERE s.clock_in<${end.toISOString()}::timestamptz AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()}::timestamptz)
+      WHERE s.clock_in<${end.toISOString()} AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()})
       ORDER BY s.clock_in DESC`;
     const minimum=await settingNumber('project_completed_min_paid_hours',8);
     const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,employment_status:e.employment_status,wage:Number(e.hourly_wage||0),days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
@@ -77,7 +77,7 @@ export default async function handler(req,res){
     const rejected=await sql`
       SELECT r.id,r.shift_id,r.created_at,r.lat,r.lng,r.distance_miles,r.reason,r.note,e.id AS employee_id,e.name,e.title
       FROM rejected_clock_outs r JOIN shifts s ON s.id=r.shift_id JOIN employees e ON e.id=s.employee_id
-      WHERE r.created_at>=${start.toISOString()}::timestamptz AND r.created_at<${end.toISOString()}::timestamptz
+      WHERE r.created_at>=${start.toISOString()} AND r.created_at<${end.toISOString()}
       ORDER BY r.created_at DESC`;
     const pendingCount=shifts.filter(s=>s.manager_review_status==='pending').length;
     const liveEmployees=shifts.filter(s=>!s.clock_out).length;

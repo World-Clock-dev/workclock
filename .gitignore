@@ -5,3 +5,7 @@ node_modules/
 .vercel/
 .DS_Store
 npm-debug.log*
+.wrangler/
+.dev.vars*
+!.dev.vars.example
+migration/

@@ -1,12 +1,23 @@
 {
   "name": "workclock",
-  "version": "3.1.0",
+  "version": "4.0.0-cloudflare",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20"
   },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:schema:local": "wrangler d1 execute workclock --local --file=schema.d1.sql",
+    "db:schema:remote": "wrangler d1 execute workclock --remote --file=schema.d1.sql",
+    "test": "node --test test/"
+  },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.1"
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@neondatabase/serverless": "^1.0.1",
+    "wrangler": "^4.0.0"
   }
 }

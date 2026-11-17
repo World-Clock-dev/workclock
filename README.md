@@ -1,5 +1,7 @@
 # WorkClock — Employee Time & Attendance
 
+> **Branch `cloudflare-d1`:** this version runs on Cloudflare Workers + D1 instead of Vercel + Neon. See [CLOUDFLARE.md](CLOUDFLARE.md) for what changed, the test results, deployment and the data move. The rest of this README describes the app's behaviour, which is unchanged.
+
 A business-neutral employee time clock for Vercel + Neon PostgreSQL. The project uses ordinary Vercel serverless functions and a client-side map; no paid Vercel add-on or separate backend service is required.
 
 ## Included

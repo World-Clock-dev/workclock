@@ -1,0 +1,17 @@
+# Never serve server code, data or config as static files.
+.git
+.wrangler
+node_modules
+api
+src
+scripts
+test
+*.sql
+*.md
+*.toml
+*.json
+*.mjs
+.env*
+.dev.vars*
+.assetsignore
+.gitignore

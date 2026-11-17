@@ -1,4 +1,4 @@
-import { sql, norm, json, requireManager, requireSameOrigin, audit } from './_db.js';
+import { sql, norm, json, requireManager, requireSameOrigin, audit, nowIso, hashSecret, round2 } from './_db.js';
 
 function validEmail(value) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
@@ -31,13 +31,13 @@ export default async function handler(req, res) {
       if (wage===null) return json(res,400,{error:'Enter a valid hourly wage.'});
       if (!pin) return json(res,400,{error:'Enter a 4-digit employee PIN.'});
       const max=Number((await sql`SELECT value FROM app_settings WHERE key='max_active_employees' LIMIT 1`)[0]?.value||100);
-      const count=await sql`SELECT count(*)::int AS n FROM employees WHERE active=true`;
+      const count=await sql`SELECT count(*) AS n FROM employees WHERE active=1`;
       const existing=await sql`SELECT id FROM employees WHERE normalized_name=${norm(name)} LIMIT 1`;
       if (count[0].n>=max&&!existing.length)return json(res,400,{error:`Maximum ${max} active employees.`});
       const rows=await sql`
         INSERT INTO employees(name,normalized_name,title,email,hourly_wage,active,employment_status,pin_hash,failed_pin_attempts,pin_locked_until,updated_at)
-        VALUES(${name},${norm(name)},${title},${email},${wage},true,'active',crypt(${pin},gen_salt('bf')),0,null,now())
-        ON CONFLICT(normalized_name) DO UPDATE SET name=excluded.name,title=excluded.title,email=excluded.email,hourly_wage=excluded.hourly_wage,active=true,employment_status='active',pin_hash=excluded.pin_hash,failed_pin_attempts=0,pin_locked_until=null,updated_at=now()
+        VALUES(${name},${norm(name)},${title},${email},${round2(wage)},1,'active',${await hashSecret(pin)},0,null,${nowIso()})
+        ON CONFLICT(normalized_name) DO UPDATE SET name=excluded.name,title=excluded.title,email=excluded.email,hourly_wage=excluded.hourly_wage,active=1,employment_status='active',pin_hash=excluded.pin_hash,failed_pin_attempts=0,pin_locked_until=null,updated_at=excluded.updated_at
         RETURNING id,name,title,email,hourly_wage,active,employment_status,true AS has_pin`;
       await sql`DELETE FROM employee_sessions WHERE employee_id=${rows[0].id}`;
       await audit('manager',manager.id,existing.length?'employee_reactivated_or_updated':'employee_created',{employee_id:rows[0].id,title});
@@ -52,10 +52,10 @@ export default async function handler(req, res) {
         const canLogIn=status!=='terminated';
         if(status==='active'){
           const max=Number((await sql`SELECT value FROM app_settings WHERE key='max_active_employees' LIMIT 1`)[0]?.value||100);
-          const count=await sql`SELECT count(*)::int AS n FROM employees WHERE active=true AND id<>${id}`;
+          const count=await sql`SELECT count(*) AS n FROM employees WHERE active=1 AND id<>${id}`;
           if(count[0].n>=max)return json(res,400,{error:`Maximum ${max} active employees.`});
         }
-        const rows=await sql`UPDATE employees SET employment_status=${status},active=${canLogIn},updated_at=now() WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
+        const rows=await sql`UPDATE employees SET employment_status=${status},active=${canLogIn},updated_at=${nowIso()} WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
         if(!rows.length)return json(res,404,{error:'Employee not found.'});
         if(!canLogIn)await sql`DELETE FROM employee_sessions WHERE employee_id=${id}`;
         await audit('manager',manager.id,'employee_status_changed',{employee_id:id,status});
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       }
       if (b.pin!==undefined) {
         const pin=validPin(b.pin); if(!pin)return json(res,400,{error:'PIN must be exactly 4 digits.'});
-        const rows=await sql`UPDATE employees SET pin_hash=crypt(${pin},gen_salt('bf')),failed_pin_attempts=0,pin_locked_until=null,updated_at=now() WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,true AS has_pin`;
+        const rows=await sql`UPDATE employees SET pin_hash=${await hashSecret(pin)},failed_pin_attempts=0,pin_locked_until=null,updated_at=${nowIso()} WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,true AS has_pin`;
         if(!rows.length)return json(res,404,{error:'Employee not found.'});
         await sql`DELETE FROM employee_sessions WHERE employee_id=${id}`;
         await audit('manager',manager.id,'employee_pin_reset',{employee_id:id});
@@ -73,14 +73,14 @@ export default async function handler(req, res) {
       const title=validTitle(b.title); if(title===undefined)return json(res,400,{error:'Employee title must be 80 characters or fewer.'});
       const email=validEmail(b.email); if(email===undefined)return json(res,400,{error:'Invalid employee email.'});
       const titleProvided=b.title!==undefined, emailProvided=b.email!==undefined;
-      const rows=await sql`UPDATE employees SET hourly_wage=${wage},title=CASE WHEN ${titleProvided} THEN ${title} ELSE title END,email=CASE WHEN ${emailProvided} THEN ${email} ELSE email END,updated_at=now() WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
+      const rows=await sql`UPDATE employees SET hourly_wage=${round2(wage)},title=CASE WHEN ${titleProvided} THEN ${title} ELSE title END,email=CASE WHEN ${emailProvided} THEN ${email} ELSE email END,updated_at=${nowIso()} WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
       if(!rows.length)return json(res,404,{error:'Employee not found.'});
       await audit('manager',manager.id,'employee_updated',{employee_id:id,wage,title,email});
       return json(res,200,{employee:rows[0]});
     }
     if (req.method === 'DELETE') {
       const id=validId(new URL(req.url,'https://workclock.invalid').searchParams.get('id')); if(!id)return json(res,400,{error:'Employee id required.'});
-      const rows=await sql`UPDATE employees SET active=false,employment_status='terminated',updated_at=now() WHERE id=${id} AND active=true RETURNING id,name`;
+      const rows=await sql`UPDATE employees SET active=0,employment_status='terminated',updated_at=${nowIso()} WHERE id=${id} AND active=1 RETURNING id,name`;
       if(!rows.length)return json(res,404,{error:'Employee not found.'});
       await sql`DELETE FROM employee_sessions WHERE employee_id=${id}`;
       await audit('manager',manager.id,'employee_deactivated',{employee_id:id});
