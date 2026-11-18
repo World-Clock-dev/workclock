@@ -499,38 +499,54 @@
 
   let managerPeople=[];
   async function loadPeople(){const j=await api('/api/employees');managerPeople=j.employees||[];renderPeople();}
+  // Employees: searchable list by status; one panel edits or adds a person.
+  let empTab='active';
+  const statusOfP=p=>p.employment_status||(p.active?'active':'terminated');
+  const initials=n=>String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
   function renderPeople(){
-    if(!managerMode)return;
-    const statusOf=p=>p.employment_status||(p.active?'active':'terminated');
-    const card=p=>{
-      const st=statusOf(p);
-      return `<div class="pill status-${st}"><div class="personMeta"><b>${esc(p.name)}</b> <span class="statusBadge ${st}">${esc(statusText(st))}</span><span>${esc(p.title||'No title')} · $${Number(p.hourly_wage).toFixed(2)}/hr · ${p.email?esc(p.email)+' · ':''}${p.has_pin?'PIN set':'PIN needed'}</span></div><input class="inlineTitle" data-title-id="${p.id}" value="${esc(p.title||'')}" maxlength="80" placeholder="Title"><select class="statusSelect" data-status-id="${p.id}"><option value="active"${st==='active'?' selected':''}>Active</option><option value="vacation"${st==='vacation'?' selected':''}>On vacation</option><option value="terminated"${st==='terminated'?' selected':''}>Terminated</option></select><button data-save-person="${p.id}">Save</button><button data-pin="${p.id}">${p.has_pin?'Reset PIN':'Set PIN'}</button></div>`;
-    };
-    const byName=(a,b)=>String(a.name).localeCompare(String(b.name));
-    const groups=[
-      {key:'active',title:'Active employees',note:'Currently working and able to clock in.',empty:'No active employees.'},
-      {key:'vacation',title:'On vacation',note:'Still employed. They can still clock in if they come in.',empty:'Nobody is on vacation.'},
-      {key:'terminated',title:'Terminated employees',note:'Cannot sign in. Every shift, hour and earning stays on record.',empty:'No terminated employees.'}
-    ];
-    $('approvedList').innerHTML=groups.map(g=>{
-      const list=managerPeople.filter(p=>statusOf(p)===g.key).sort(byName);
-      return `<div class="empGroup empGroup-${g.key}">
-        <div class="empGroupHead"><h3>${esc(g.title)}<span class="empCount">${list.length}</span></h3><p class="muted small">${esc(g.note)}</p></div>
-        ${list.length?`<div class="pills">${list.map(card).join('')}</div>`:`<p class="muted small empEmpty">${esc(g.empty)}</p>`}
-      </div>`;
-    }).join('');
-    document.querySelectorAll('[data-status-id]').forEach(sel=>sel.onchange=async()=>{
-      const id=sel.dataset.statusId,status=sel.value;
-      const who=(managerPeople.find(p=>String(p.id)===String(id))||{}).name||'this employee';
-      if(status==='terminated'&&!confirm(`Mark ${who} as terminated?\n\nThey will no longer be able to sign in, but all of their shifts, hours and earnings stay on record and remain searchable in Employee Report.`)){
-        sel.value=(managerPeople.find(p=>String(p.id)===String(id))||{}).employment_status||'active';return;
+    if(!managerMode||!$('empList'))return;
+    const counts={active:0,vacation:0,terminated:0};managerPeople.forEach(p=>counts[statusOfP(p)]++);
+    $('empCountActive').textContent=counts.active;$('empCountVacation').textContent=counts.vacation;$('empCountTerminated').textContent=counts.terminated;
+    document.querySelectorAll('[data-emp-tab]').forEach(b=>b.classList.toggle('on',b.dataset.empTab===empTab));
+    const q=($('empSearch').value||'').trim().toLowerCase();
+    const list=managerPeople.filter(p=>statusOfP(p)===empTab).filter(p=>!q||[p.name,p.title,p.email].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    const notes={active:'Working and able to clock in.',vacation:'Still employed — they can clock in if they come in.',terminated:'Cannot sign in. Every shift, hour and earning stays on record and in Reports.'};
+    $('empList').innerHTML=`<p class="muted small empNote">${notes[empTab]}</p>`+(list.map(p=>{const st=statusOfP(p);return `<button class="empRow status-${st}" data-emp-open="${p.id}" type="button"><span class="avatar">${esc(initials(p.name))}</span><span class="empMain"><b>${esc(p.name)}</b><span>${esc(p.title||'No title')}${p.email?' · '+esc(p.email):''}</span></span><span class="empWage">$${Number(p.hourly_wage).toFixed(2)}<small>/h</small></span><span class="statusBadge ${st}">${esc(statusText(st))}</span><span class="pinState ${p.has_pin?'ok':'need'}">${p.has_pin?'PIN set':'PIN needed'}</span><svg aria-hidden="true" class="chev" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`;}).join('')||`<div class="dashEmpty">${q?'No employees match your search.':'Nobody in this group.'}</div>`);
+    document.querySelectorAll('[data-emp-open]').forEach(b=>b.onclick=()=>openEmpPanel(managerPeople.find(p=>String(p.id)===String(b.dataset.empOpen))));
+  }
+  function openEmpPanel(p){
+    const isNew=!p;$('empPanel').dataset.id=p?p.id:'';
+    $('empPanelTitle').textContent=isNew?'Add employee':'Edit employee';
+    $('empPanelSub').textContent=isNew?'They sign in with their full name and this 4-digit PIN.':`Changes apply straight away. Changing the PIN signs ${p.name} out.`;
+    $('epName').value=p?p.name:'';$('epName').disabled=!isNew;
+    $('epTitle').value=p?.title||'';$('epEmail').value=p?.email||'';$('epWage').value=p?Number(p.hourly_wage).toFixed(2):'';
+    $('epStatusWrap').classList.toggle('hide',isNew);$('epStatus').value=p?statusOfP(p):'active';
+    $('epPin').value='';$('epPin').placeholder=isNew?'Required':'Blank = keep current PIN';$('epPinLabel').textContent=isNew?'4-digit PIN':'New 4-digit PIN';
+    $('empPanelMsg').textContent='';$('empPanelSave').textContent=isNew?'Add employee':'Save changes';
+    $('empPanel').classList.remove('hide');(isNew?$('epName'):$('epTitle')).focus();
+  }
+  function closeEmpPanel(){$('empPanel').classList.add('hide');}
+  async function saveEmpPanel(){
+    const id=$('empPanel').dataset.id,isNew=!id,msg=$('empPanelMsg');
+    const name=$('epName').value.trim().replace(/\s+/g,' '),title=$('epTitle').value.trim(),email=$('epEmail').value.trim(),wage=Number($('epWage').value),pin=$('epPin').value.trim(),status=$('epStatus').value;
+    if(isNew&&!name)return msg.textContent='Enter the employee’s full name.';
+    if($('epWage').value===''||!Number.isFinite(wage)||wage<0)return msg.textContent='Enter a valid hourly wage.';
+    if((isNew||pin)&&!/^\d{4}$/.test(pin))return msg.textContent='The PIN must be exactly 4 digits.';
+    msg.textContent='Saving…';
+    try{
+      if(isNew){await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});toast(`${name} added.`);}
+      else{
+        const p=managerPeople.find(x=>String(x.id)===String(id));
+        await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),wage,title,email})});
+        if(p&&status!==statusOfP(p)){
+          if(status==='terminated'&&!confirm(`Mark ${p.name} as terminated?\n\nThey will no longer be able to sign in, but all of their shifts, hours and earnings stay on record and remain searchable in Reports.`)){msg.textContent='Other changes saved; status not changed.';await loadPeople();return;}
+          await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});
+        }
+        if(pin)await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),pin})});
+        toast(pin?'Saved. The new PIN is active; they must sign in again.':'Employee saved.');
       }
-      try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});await loadPeople();await mgrRender();}
-      catch(e){toast(e.message,'bad');await loadPeople();}
-    });
-    document.querySelectorAll('[data-save-person]').forEach(b=>b.onclick=async()=>{const p=managerPeople.find(x=>String(x.id)===String(b.dataset.savePerson)),title=document.querySelector(`[data-title-id="${b.dataset.savePerson}"]`)?.value||'';if(!p)return;try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:p.id,title,wage:Number(p.hourly_wage),email:p.email||''})});await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
-    document.querySelectorAll('[data-pin]').forEach(b=>b.onclick=async()=>{const pin=prompt('Enter a new 4-digit PIN:');if(pin===null)return;if(!/^\d{4}$/.test(pin))return toast('PIN must be exactly 4 digits.','bad');try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:b.dataset.pin,pin})});$('employeeMsg').textContent='PIN updated. The employee must sign in again.';toast('PIN updated. The employee must sign in again.');await loadPeople();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
-    document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Deactivate this employee? Existing time records will remain available.'))return;try{await api(`/api/employees?id=${encodeURIComponent(b.dataset.remove)}`,{method:'DELETE'});await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}});
+      closeEmpPanel();await loadPeople();await mgrRender();
+    }catch(e){msg.textContent=displayMessage(e.payload||e.message);}
   }
   const loc=(a,b,label='View')=>a==null?'—':`<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${label}</a>`;
   const statusLabel=s=>({pending:t('stPending'),approved_full:t('stFull'),approved_actual:t('stActual'),approved_custom:t('stCustom'),not_required:'—'}[s]||'—');
@@ -747,21 +763,43 @@
     createWeekPicker({btn:'weeklyWeekBtn',input:'weeklyWeekDate',cal:'weeklyWeekCal',grid:'weekCalGrid',month:'weekCalMonth',prev:'weekCalPrevMonth',next:'weekCalNextMonth',today:'weekCalToday',set:d=>setWeek(d)});
   }
   function selectedWeekStart(){const v=$('weeklyWeekDate')?.value;return ws(v?new Date(v+'T12:00:00'):new Date());}
+  // Payroll: totals bar, Mon–Sun table with a total row, cards on phones, CSV.
+  let payWeekly=[],payBounds=[];
   async function loadWeeklyPaidHours(payload){
     if(!managerMode)return;
     const start=selectedWeekStart(),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
-    const j=payload||await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
-    const q=$('search').value.trim().toLowerCase();
-    const weekly=(j.weekly||[]).filter(e=>{
-      if(q&&!String(e.name).toLowerCase().includes(q))return false;
-      // Terminated staff stay visible for weeks they worked, and drop out of the rest.
-      if((e.employment_status||'active')==='terminated'&&Number(e.total||0)===0)return false;
-      return true;
-    });
+    const j=payload||mgrLastData||await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);
+    // Terminated staff stay visible for weeks they worked, and drop out of the rest.
+    const all=(j.weekly||[]).filter(e=>!((e.employment_status||'active')==='terminated'&&Number(e.total||0)===0));
+    payWeekly=all;payBounds=bounds;
+    const q=($('paySearch')?.value||'').trim().toLowerCase();
+    const shown=all.filter(e=>!q||String(e.name).toLowerCase().includes(q)||String(e.title||'').toLowerCase().includes(q));
     $('weeklyRangeText').textContent=`Week of ${weekLabel(start)}`;
-    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    const days=bounds.slice(0,7).map(b=>new Date(b)),names=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const h2=v=>Number(v||0).toFixed(2),cell=v=>Number(v||0)>0.004?h2(v):'<span class="zero">–</span>';
+    const totHours=all.reduce((a,e)=>a+Number(e.total||0),0),totPay=all.reduce((a,e)=>a+Number(e.earnings||0),0);
+    const paidPeople=all.filter(e=>Number(e.total||0)>0.004).length;
+    const kpi=(l,v,sub,cls='')=>`<div class="kpi ${cls}"><span>${l}</span><b>${v}</b>${sub?`<small>${sub}</small>`:''}</div>`;
+    $('payKpis').innerHTML=kpi('Paid hours',h2(totHours),'this week')+kpi('Payroll',money(totPay),'this week','dark')+kpi('People paid',String(paidPeople),`of ${all.length} listed`)+kpi('Average rate',totHours>0?money(totPay/totHours)+'/h':'—','paid hours × wage');
+    $('payHeadRow').innerHTML=`<th class="stickyCol">Employee</th>${days.map((d,i)=>`<th class="num">${names[i]}<span class="dgDate">${d.getMonth()+1}/${d.getDate()}</span></th>`).join('')}<th class="num totalCol">Total h</th><th class="num totalCol">Earnings</th>`;
+    const sub=e=>[e.title,`$${Number(e.wage||0).toFixed(2)}/h`].filter(Boolean).map(esc).join(' · ');
+    const badge=e=>(e.employment_status&&e.employment_status!=='active')?` <span class="statusBadge ${e.employment_status}">${esc(statusText(e.employment_status))}</span>`:'';
+    $('weeklyRows').innerHTML=shown.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b>${badge(e)}<div class="small">${sub(e)}</div></td>${(e.days||[]).slice(0,7).map(v=>`<td class="num">${cell(v)}</td>`).join('')}<td class="num totalCol"><b>${h2(e.total)}</b></td><td class="num totalCol"><b>${money(Number(e.earnings||0))}</b></td></tr>`).join('')||'<tr><td colspan="10" class="muted">No employees match.</td></tr>';
+    const colTot=i=>shown.reduce((a,e)=>a+Number((e.days||[])[i]||0),0);
+    $('payFoot').innerHTML=shown.length?`<tr><td class="stickyCol"><b>${q?'Total (shown)':'Total'}</b></td>${[0,1,2,3,4,5,6].map(i=>`<td class="num"><b>${cell(colTot(i))}</b></td>`).join('')}<td class="num totalCol"><b>${h2(shown.reduce((a,e)=>a+Number(e.total||0),0))}</b></td><td class="num totalCol"><b>${money(shown.reduce((a,e)=>a+Number(e.earnings||0),0))}</b></td></tr>`:'';
+    $('payCards').innerHTML=shown.map(e=>`<div class="payCardItem"><div class="pcHead"><div><b>${esc(e.name)}</b>${badge(e)}<span class="small">${sub(e)}</span></div><div class="pcTot"><b>${h2(e.total)} h</b><span>${money(Number(e.earnings||0))}</span></div></div><div class="pcDays">${days.map((d,i)=>{const v=Number((e.days||[])[i]||0);return `<div class="pcDay${v>0.004?'':' off'}"><span>${names[i]} ${d.getDate()}</span><b>${v>0.004?h2(v):'–'}</b></div>`;}).join('')}</div></div>`).join('')||'<div class="dashEmpty">No employees match.</div>';
     playRowsIn($('weeklyRows'));
-    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();toast(`Wage updated for ${person?.name||'employee'}.`);}catch(e){toast(e.message,'bad');}});
+  }
+  function downloadPayrollCsv(){
+    const names=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],days=payBounds.slice(0,7).map(b=>new Date(b));
+    const q=v=>{const t=String(v??'');return /[",\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
+    const head=['Employee','Title','Status','Hourly wage',...days.map((d,i)=>`${names[i]} ${iso(d)}`),'Total paid hours','Earnings'];
+    const rows=payWeekly.map(e=>[e.name,e.title||'',statusText(e.employment_status||'active'),Number(e.wage||0).toFixed(2),...[0,1,2,3,4,5,6].map(i=>Number((e.days||[])[i]||0).toFixed(2)),Number(e.total||0).toFixed(2),Number(e.earnings||0).toFixed(2)]);
+    const tot=['Total','','','',...[0,1,2,3,4,5,6].map(i=>payWeekly.reduce((a,e)=>a+Number((e.days||[])[i]||0),0).toFixed(2)),payWeekly.reduce((a,e)=>a+Number(e.total||0),0).toFixed(2),payWeekly.reduce((a,e)=>a+Number(e.earnings||0),0).toFixed(2)];
+    const csv=[head,...rows,tot].map(r=>r.map(q).join(',')).join('\r\n');
+    const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download=`workclock-payroll-week-${iso(days[0]||new Date())}.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('Payroll CSV downloaded.');
   }
   const statusText=s=>({active:'Active',vacation:'On vacation',terminated:'Terminated'}[s]||'Active');
   function paidFor(x,minimum){
@@ -905,6 +943,8 @@
     document.title=`${pg.title} — WorkClock Manager`;
     // A calendar left open on the previous page must not cover the new one.
     document.querySelectorAll('.weekCal:not(.hide)').forEach(c=>c.classList.add('hide'));
+    // Same for any dialog or day sheet left open.
+    closeDaySheet();closeForceDialog();closeEmpPanel();closeCustomReview();closeClockInEdit();
     document.querySelectorAll('.weekPickerBtn[aria-expanded="true"]').forEach(x=>x.setAttribute('aria-expanded','false'));
     setMgrNav(false);
     window.scrollTo({top:0,behavior:'auto'});
@@ -934,6 +974,22 @@
     const times=co?`${stamp(ci)} – ${stamp(co)}`:`${hm(ci)} – still open`;
     return {actual,fullPay,times,attrs:`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}" data-in="${esc(x.clock_in)}" data-out="${esc(x.clock_out||'')}" data-paid="${x.manager_custom_paid_hours!=null?Number(x.manager_custom_paid_hours).toFixed(2):''}" data-min="${minimum}"`};
   }
+  let mgrLastData=null,daySheetState=null;
+  const pinIcon='<svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>';
+  function mapPins(x){
+    const link=(a,b,l)=>`<a class="mapPin" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${pinIcon}${l}</a>`;
+    return (x.clock_in_lat!=null?link(x.clock_in_lat,x.clock_in_lng,'Clock-in spot'):'')+(x.clock_out_lat!=null?link(x.clock_out_lat,x.clock_out_lng,'Clock-out spot'):'');
+  }
+  function openForceDialog(id){
+    closeDaySheet();
+    const sel=$('forceShift');if(id&&[...sel.options].some(o=>o.value===String(id)))sel.value=String(id);
+    $('forceClockOutAt').value=localDateTimeValue(new Date());$('forcePayMode').value='actual';$('forceCustomWrap').classList.add('hide');$('forceMessage').value='';$('forceMsg').textContent='';
+    $('forceDialog').classList.remove('hide');sel.focus();
+  }
+  function closeForceDialog(){$('forceDialog').classList.add('hide');}
+  function closeDaySheet(){const d=$('daySheet');if(d)d.classList.add('hide');daySheetState=null;}
+  // On phones, tables become stacked cards; each cell carries its column name.
+  function labelTable(tbody){const tbl=tbody&&tbody.closest('table');if(!tbl)return;const heads=[...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());tbody.querySelectorAll('tr').forEach(tr=>[...tr.children].forEach((td,i)=>{if(heads[i])td.setAttribute('data-label',heads[i]);}));}
   function updateNavBadges(sm){
     const set=(id,n,cls)=>{const b=$(id);if(!b)return;b.textContent=n>99?'99+':String(n);b.classList.toggle('hide',!n);if(cls)b.classList.toggle(cls,n>0);};
     set('badgeApprovals',Number(sm.pending_approvals||0));
@@ -944,7 +1000,8 @@
     const hm=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
     const empty=t=>`<div class="dashEmpty">${t}</div>`;
     const live=shifts.filter(x=>!x.clock_out).sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
-    $('dashLive').innerHTML=live.map(x=>`<div class="dashRow"><div><b><span class="liveDot"></span>${esc(x.name)}</b><span class="small">${esc(x.title||'')} · since ${esc(fmtDay(new Date(x.clock_in)))} ${hm(x.clock_in)}</span></div><span class="dashVal">${Number(x.actual_hours??hours(x)).toFixed(2)} h</span></div>`).join('')||empty('Nobody is clocked in right now.');
+    $('dashLive').innerHTML=live.map(x=>`<div class="dashRow"><div><b><span class="liveDot"></span>${esc(x.name)}</b><span class="small">${esc(x.title||'')} · since ${esc(fmtDay(new Date(x.clock_in)))} ${hm(x.clock_in)}</span></div><span class="dashVal">${Number(x.actual_hours??hours(x)).toFixed(2)} h<button class="mini secondary dashForce" data-dash-force="${x.id}" type="button">Clock out…</button></span></div>`).join('')||empty('Nobody is clocked in right now.');
+    document.querySelectorAll('[data-dash-force]').forEach(b=>b.onclick=()=>openForceDialog(b.dataset.dashForce));
     const pend=shifts.filter(x=>x.manager_review_status==='pending').sort((a,b)=>new Date(b.clock_in)-new Date(a.clock_in));
     $('dashPending').innerHTML=pend.slice(0,5).map(x=>`<div class="dashRow"><div><b>${esc(x.name)}</b><span class="small">${esc(fmtDay(new Date(x.clock_in)))} · ${esc(x.clock_out_note||'')}</span></div><span class="dashVal">${Number(x.actual_hours??hours(x)).toFixed(2)} h</span></div>`).join('')+(pend.length>5?`<a class="dashMore" href="#/approvals">+ ${pend.length-5} more</a>`:'')||empty('Nothing to approve this week.');
     const rej=j.rejectedAttempts||[];
@@ -956,6 +1013,7 @@
   function renderApprovals(j,minimum,start){
     const pend=(j.shifts||[]).filter(x=>x.manager_review_status==='pending').sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
     $('approvalsRangeText').textContent=`Shifts waiting for your decision in the week of ${weekLabel(start)}.`;
+    {const away=pend.filter(x=>Number(x.rejected_count||0)>0).length;$('approvalsSummary').innerHTML=pend.length?`<b>${pend.length}</b> waiting for your decision${away?` · <b>${away}</b> clocked out outside the area`:''}`:'';}
     $('approvalsList').innerHTML=pend.map(x=>{
       const m=shiftMeta(x,minimum),away=Number(x.rejected_count||0)>0;
       return `<div class="apprItem"><div><div class="apprWho"><b>${esc(x.name)}</b> <span class="small">${esc(x.title||'')}</span></div>
@@ -977,16 +1035,10 @@
       $('shiftDayLabel').textContent=dayFilter.value?new Date(dayFilter.value+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):'All days this week';
       $('shiftDetailsRangeText').textContent=`Showing shifts for the week of ${weekLabel(start)}.`;
       const j=await api(`/api/manager?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`),q=$('search').value.trim().toLowerCase(),shiftDate=dayFilter.value,shiftQ=$('shiftDetailsSearch').value.trim().toLowerCase(),rows=(j.shifts||[]).filter(x=>{const nameOk=!shiftQ||String(x.name).toLowerCase().includes(shiftQ);const dateOk=!shiftDate||iso(new Date(x.clock_in))===shiftDate;return nameOk&&dateOk;});
-      managerPeople=j.employees||managerPeople;populateForceShifts(j.shifts||[]);fillReportEmployees();
-      const focusForce=id=>{
-        const sh=(j.shifts||[]).find(x=>String(x.id)===String(id));if(!sh)return;
-        const body=$('forceBody');
-        if(body&&body.classList.contains('hide')){body.classList.remove('hide');$('toggleForce').textContent='Minimize';$('toggleForce').setAttribute('aria-expanded','true');}
-        if(mgrPageName()!=='shifts')goMgrPage('shifts');
-        $('forceShift').value=String(sh.id);
-        $('forceClockOutAt').value=localDateTimeValue(new Date());
-        setTimeout(()=>window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'}),80);
-      };
+      // The week data carries fewer fields than /api/employees (no email or PIN state),
+      // so merge it in rather than replacing the full records.
+      if(j.employees){const full=new Map((managerPeople||[]).map(p=>[String(p.id),p]));managerPeople=j.employees.map(e=>Object.assign({},full.get(String(e.id))||{},e));}populateForceShifts(j.shifts||[]);fillReportEmployees();
+      const focusForce=id=>openForceDialog(id);
       const minimum=Number(j.settings?.project_completed_min_paid_hours??8);
       const workedThisWeek=new Set((j.shifts||[]).map(x=>String(x.employee_id)));
       const people=(j.employees||[]).filter(e=>{
@@ -1037,43 +1089,31 @@
       function renderDayDetail(empId,dayKey){
         const emp=(j.employees||[]).find(e=>String(e.id)===String(empId));
         const entries=((byEmpDay[empId]||{})[dayKey]||[]).slice().sort((a,b)=>new Date(a.shift.clock_in)-new Date(b.shift.clock_in));
-        const list=entries.map(e=>e.shift);
-        const head=`<div class="dgDetailHead"><b>${esc(emp?emp.name:'')}</b> — ${esc(fmtDay(new Date(dayKey+'T12:00:00')))}<button class="mini secondary dgClose" type="button">Close</button></div>`;
-        if(!entries.length)return head+'<p class="muted small">No hours recorded for this day.</p>';
-        const cards=entries.map((entry,idx)=>{
-          const x=entry.shift;
-          const actual=Number(x.actual_hours??hours(x)),paid=Number(x.paid_hours??paidFor(x,minimum));
-          const earned=entry.share*Number(x.hourly_wage||0);
-          const ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null;
-          const hm=t=>t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-          const fullPay=Math.max(actual,minimum);
-          const sameDay=co?iso(ci)===iso(co):true;
-          const stamp=t=>sameDay?hm(t):`${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${hm(t)}`;
-          const times=co?`${stamp(ci)} – ${stamp(co)}`:`${hm(ci)} – still open`;
-          const meta=`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}" data-in="${esc(x.clock_in)}" data-out="${esc(x.clock_out||'')}" data-paid="${x.manager_custom_paid_hours!=null?Number(x.manager_custom_paid_hours).toFixed(2):''}" data-min="${minimum}"`;
-          const spansDays=co?iso(ci)!==iso(co):false;
-          const corrected=[
-            x.manager_original_clock_out?`<div class="small muted">Clock-out corrected by manager (was ${esc(new Date(x.manager_original_clock_out).toLocaleString())})</div>`:'',
-            x.manager_original_clock_in?`<div class="small muted">Clock-in corrected by manager (was ${esc(new Date(x.manager_original_clock_in).toLocaleString())})</div>`:''
-          ].join('');
-          const customNote=x.manager_custom_paid_hours!=null?`<div class="small"><b>${Number(x.manager_custom_paid_hours).toFixed(2)} h</b> custom paid</div>`:'';
-          const btns=x.manager_review_status==='pending'
-            ?`<div class="reviewBtns"><button class="mini primary" data-review-full="${x.id}" ${meta}>Approve full ${fullPay.toFixed(2)}h</button><button class="mini secondary" data-review-actual="${x.id}" ${meta}>Approve actual ${actual.toFixed(2)}h</button><button class="mini secondary" data-review-custom="${x.id}" ${meta}>Custom hours…</button></div>`
-            :(x.clock_out?`<div class="reviewBtns"><button class="mini secondary" data-review-custom="${x.id}" ${meta}>Adjust hours</button></div>`:'');
-          const action=x.clock_out?'':`<div class="reviewBtns"><button class="mini secondary" data-edit-in="${x.id}" ${meta}>Edit clock-in time</button><button class="mini danger" data-force="${x.id}">Force clock out</button></div>`;
-          const split=Math.abs(entry.share-paid)>0.01;
-          return `<div class="dgShift"><div class="dgShiftTop"><span class="dgSeq">#${idx+1}</span><b>${esc(times)}</b>${entry.startsHere?'':'<span class="dgTag">carried over</span>'}${x.manager_review_status==='pending'?'<span class="dgTag warn">needs review</span>':''}${Number(x.rejected_count||0)>0?'<span class="dgTag warn">outside area</span>':''}</div>
-            ${Number(x.rejected_count||0)>0&&x.clock_out?`<div class="spanWarn">Clock-out was outside the allowed area${x.clock_out_distance_miles!=null?` (${Number(x.clock_out_distance_miles).toFixed(2)} mi from clock-in)`:''}. The shift was stopped at that moment${x.manager_review_status==='pending'?' and is waiting for your review':''}.</div>`:''}
-            <div class="dgFacts"><div><span>Actual (whole shift)</span><b>${actual.toFixed(2)} h</b></div><div><span>Paid (whole shift)</span><b>${paid.toFixed(2)} h</b></div><div><span>Counted on this day</span><b>${entry.share.toFixed(2)} h</b></div><div><span>Earned this day</span><b>$${earned.toFixed(2)}</b></div></div>
-            ${split?`<div class="small muted">This shift runs across midnight, so its ${paid.toFixed(2)} paid hours are split across the days it covers. ${entry.share.toFixed(2)} h fall on this day.</div>`:''}
-            <div class="small"><span>Status</span> <b>${esc(statusLabel(x.manager_review_status))}</b></div>
-            <div class="small"><b>${esc(x.clock_out_note||'—')}</b>${x.clock_out_message?` — ${esc(x.clock_out_message)}`:''}</div>
-            ${customNote}${corrected}${spansDays?'<div class="spanWarn">Spans more than one day — check for a missed clock-out.</div>':''}
-            <div class="small">${safeMapPair(x)}</div>${btns}${action}</div>`;
-        }).join('');
         const dayPaid=entries.reduce((a,e)=>a+e.share,0);
-        const started=entries.filter(e=>e.startsHere).length;
-        return head+`<div class="dgDayTotals"><span>${started} clock-in${started===1?'':'s'}${entries.length>started?' (+1 carried over)':''}</span><span>Counted on this day <b>${dayPaid.toFixed(2)} h</b></span></div>`+cards;
+        const head=`<div class="dgDetailHead"><div><b>${esc(emp?emp.name:'')}</b><span>${esc(fmtDay(new Date(dayKey+'T12:00:00')))}</span></div><div class="dgHeadRight"><span class="dgDayTotal">${dayPaid.toFixed(2)} h on this day</span><button class="mini secondary dgClose" type="button">Close</button></div></div>`;
+        if(!entries.length)return head+'<p class="muted small">No hours recorded for this day.</p>';
+        const rows=entries.map(entry=>{
+          const x=entry.shift,m=shiftMeta(x,minimum);
+          const paid=Number(x.paid_hours??paidFor(x,minimum)),earned=entry.share*Number(x.hourly_wage||0);
+          const ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null,spans=co?iso(ci)!==iso(co):false,away=Number(x.rejected_count||0)>0;
+          const st=x.manager_review_status;
+          const badges=[!x.clock_out?'<span class="dgTag live">open</span>':'',st==='pending'?'<span class="dgTag warn">needs review</span>':'',st&&st.startsWith('approved')?`<span class="dgTag ok">${esc(statusLabel(st))}</span>`:'',away?'<span class="dgTag warn">outside area</span>':'',entry.startsHere?'':'<span class="dgTag">carried over</span>',x.manager_custom_paid_hours!=null?`<span class="dgTag">custom ${Number(x.manager_custom_paid_hours).toFixed(2)} h</span>`:''].join('');
+          const notes=[
+            away&&x.clock_out?`<div class="spanWarn">Clocked out ${x.clock_out_distance_miles!=null?Number(x.clock_out_distance_miles).toFixed(2)+' mi':'too far'} from the clock-in spot, so the shift was stopped then${st==='pending'?' and is waiting for your review':''}.</div>`:'',
+            spans?'<div class="spanWarn">Runs past midnight into another day — check for a missed clock-out.</div>':'',
+            Math.abs(entry.share-paid)>0.01?`<div class="small muted">Part of a ${paid.toFixed(2)} h shift that crosses midnight; ${entry.share.toFixed(2)} h count on this day.</div>`:'',
+            x.manager_original_clock_out?`<div class="small muted">Clock-out corrected (was ${esc(new Date(x.manager_original_clock_out).toLocaleString())})</div>`:'',
+            x.manager_original_clock_in?`<div class="small muted">Clock-in corrected (was ${esc(new Date(x.manager_original_clock_in).toLocaleString())})</div>`:'',
+            x.manager_review_note?`<div class="small muted">Manager note: ${esc(x.manager_review_note)}</div>`:''
+          ].join('');
+          const btns=st==='pending'
+            ?`<button class="mini primary" data-review-full="${x.id}" ${m.attrs}>Approve full ${m.fullPay.toFixed(2)}h</button><button class="mini secondary" data-review-actual="${x.id}" ${m.attrs}>Approve actual ${m.actual.toFixed(2)}h</button><button class="mini secondary" data-review-custom="${x.id}" ${m.attrs}>Custom hours…</button>`
+            :(x.clock_out?`<button class="mini secondary" data-review-custom="${x.id}" ${m.attrs}>Adjust hours</button>`:`<button class="mini secondary" data-edit-in="${x.id}" ${m.attrs}>Edit clock-in time</button><button class="mini danger" data-force="${x.id}">Force clock out</button>`);
+          return `<div class="shiftRow"><div class="shiftMain"><div class="shiftTimes"><b>${esc(m.times)}</b>${badges}</div><div class="shiftReason"><b>${esc(x.clock_out_note||(x.clock_out?'—':'Still clocked in'))}</b>${x.clock_out_message?` — ${esc(x.clock_out_message)}`:''}</div>${notes}</div>
+            <div class="shiftNums"><div><span>Worked</span><b>${m.actual.toFixed(2)} h</b></div><div><span>Paid</span><b>${paid.toFixed(2)} h</b></div><div><span>This day</span><b>${entry.share.toFixed(2)} h</b></div><div><span>Earned</span><b>$${earned.toFixed(2)}</b></div></div>
+            <div class="shiftActs"><span class="mapPins">${mapPins(x)}</span><span class="reviewBtns">${btns}</span></div></div>`;
+        }).join('');
+        return head+rows;
       }
       function wireDetailButtons(){
         document.querySelectorAll('[data-review-full]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.reviewFull,'approve_full',b.dataset));
@@ -1081,7 +1121,7 @@
         document.querySelectorAll('[data-review-custom]').forEach(b=>b.onclick=()=>openCustomReview(b.dataset.reviewCustom,b.dataset));
         document.querySelectorAll('[data-force]').forEach(b=>b.onclick=()=>focusForce(b.dataset.force));
         document.querySelectorAll('[data-edit-in]').forEach(b=>b.onclick=()=>openClockInEdit(b.dataset.editIn,b.dataset));
-        document.querySelectorAll('.dgClose').forEach(b=>b.onclick=()=>{const r=b.closest('.dgDetailRow');r.classList.add('hide');document.querySelectorAll('.dgBtn.open').forEach(x=>x.classList.remove('open'));});
+        document.querySelectorAll('.dgClose').forEach(b=>b.onclick=()=>{const r=b.closest('.dgDetailRow');if(!r){closeDaySheet();return;}r.classList.add('hide');document.querySelectorAll('.dgBtn.open').forEach(x=>x.classList.remove('open'));});
       }
       function openDay(empId,dayKey){
         const row=document.querySelector(`[data-detail="${empId}"]`);if(!row)return;
@@ -1097,6 +1137,19 @@
         wireDetailButtons();
       }
       document.querySelectorAll('.dgBtn').forEach(b=>b.onclick=()=>openDay(b.dataset.emp,b.dataset.day));
+      // Phones: a day-by-day list instead of the week grid; a day opens in a sheet.
+      $('shiftList').innerHTML=dayKeys.map(k=>{
+        const items=people.map(emp=>({emp,list:((byEmpDay[emp.id]||{})[k]||[])})).filter(o=>o.list.length);
+        if(shiftDate&&shiftDate!==k)return '';
+        if(!items.length)return '';
+        const tot=items.reduce((a,o)=>a+o.list.reduce((b,e)=>b+e.share,0),0);
+        return `<div class="slDay"><div class="slDayHead"><b>${esc(fmtDay(new Date(k+'T12:00:00')))}</b><span>${tot.toFixed(2)} h</span></div>${items.map(o=>{
+          const paid=o.list.reduce((b,e)=>b+e.share,0),open=o.list.some(e=>!e.shift.clock_out),pend=o.list.some(e=>e.shift.manager_review_status==='pending'),away=o.list.some(e=>Number(e.shift.rejected_count||0)>0),n=o.list.filter(e=>e.startsHere).length;
+          return `<button class="slRow${pend?' pend':''}" data-sl-emp="${o.emp.id}" data-sl-day="${k}" type="button"><span class="slWho"><b>${esc(o.emp.name)}</b><span>${esc(o.emp.title||'')}${n>1?` · ${n} clock-ins`:''}</span></span><span class="slTags">${open?'<span class="dgTag live">open</span>':''}${pend?'<span class="dgTag warn">review</span>':''}${away?'<span class="dgTag warn">location</span>':''}</span><b class="slHours">${paid.toFixed(2)} h</b></button>`;}).join('')}</div>`;
+      }).join('')||'<div class="dashEmpty">No hours recorded for this selection.</div>';
+      const openDaySheet=(empId,dayKey)=>{daySheetState={empId,dayKey};$('daySheetBody').innerHTML=renderDayDetail(empId,dayKey);$('daySheet').classList.remove('hide');wireDetailButtons();};
+      document.querySelectorAll('[data-sl-emp]').forEach(b=>b.onclick=()=>openDaySheet(b.dataset.slEmp,b.dataset.slDay));
+      if(daySheetState&&!$('daySheet').classList.contains('hide'))openDaySheet(daySheetState.empId,daySheetState.dayKey);
       // A day picked in the calendar opens that day for the first employee who worked it.
       if(shiftDate){
         const first=people.find(e=>((byEmpDay[e.id]||{})[shiftDate]||[]).length);
@@ -1104,6 +1157,11 @@
       }
       document.querySelectorAll('[data-force]').forEach(b=>b.onclick=()=>focusForce(b.dataset.force));
 
+      mgrLastData=j;
+      {const rej=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q));
+       const far=rej.reduce((a,x)=>Math.max(a,Number(x.distance_miles||0)),0);
+       $('alertsSummary').innerHTML=rej.length?`<b>${rej.length}</b> clock-out${rej.length===1?'':'s'} outside the allowed area this week · farthest <b>${far.toFixed(2)} mi</b>`:'No clock-outs outside the allowed area this week.';
+       $('alertCards').innerHTML=rej.map(x=>{const t=new Date(x.created_at);return `<div class="alertCard"><div class="acTop"><div><b>${esc(x.name)}</b><span class="small">${esc(x.title||'')}</span></div><span class="acDist">${Number(x.distance_miles).toFixed(2)} mi</span></div><div class="acMeta"><span>${esc(fmtDay(t))} · ${t.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span><span>${esc(x.reason)}</span></div>${x.note?`<div class="acNote">“${esc(x.note)}”</div>`:''}<div class="acActs">${loc(x.lat,x.lng,'Open the clock-out spot in Maps')}</div></div>`;}).join('');}
       $('rejectedRows').innerHTML=(j.rejectedAttempts||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)).map(x=>{const t=new Date(x.created_at);return `<tr><td><b>${esc(x.name)}</b><div class="small">${esc(x.title||'')}</div></td><td>${fmtDay(t)}</td><td>${t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(x.reason)}</td><td>${esc(x.note||'—')}</td><td>${Number(x.distance_miles).toFixed(2)} mi</td><td>${loc(x.lat,x.lng,'View location')}</td></tr>`;}).join('')||'<tr><td colspan="7">No rejected clock-out attempts in this period.</td></tr>';
       const whole=v=>String(Math.round(v)),activeCount=managerPeople.filter(p=>(p.employment_status||(p.active?'active':'terminated'))==='active').length,sm=j.summary||{};
       animNum($('empCount'),activeCount,whole);animNum($('mHours'),Number(sm.total_paid_hours||0));animNum($('payroll'),Number(sm.total_payroll||0),money);
@@ -1170,7 +1228,24 @@
     $('changeManagerPasswordBtn').onclick=async()=>{const currentPassword=$('currentManagerPassword').value,newPassword=$('newManagerPassword').value,confirmPassword=$('confirmManagerPassword').value;if(!currentPassword||!newPassword||!confirmPassword)return $('managerPasswordMsg').textContent='Complete all password fields.';if(newPassword!==confirmPassword)return $('managerPasswordMsg').textContent='New passwords do not match.';try{await api('/api/manager-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('managerPasswordMsg').textContent='Password changed. Please sign in again.';setTimeout(()=>location.reload(),700);}catch(e){$('managerPasswordMsg').textContent=e.message;}};
     $('logoutBtn').onclick=async()=>{try{await api('/api/manager-auth',{method:'DELETE'});}catch{}location.href='/?manager=1';};
     $('forcePayMode').onchange=()=> $('forceCustomWrap').classList.toggle('hide',$('forcePayMode').value!=='custom');
-    $('forceClockOutBtn').onclick=forceClockOut;
+    $('forceClockOutBtn').onclick=async()=>{await forceClockOut();if(/^Clocked out/.test($('forceMsg').textContent))setTimeout(closeForceDialog,900);};
+    $('forceCancel').onclick=closeForceDialog;
+    {const btns=$('forceDialog').querySelector('.modalBtns');if(btns&&$('forceClockOutBtn').parentElement!==btns){$('forceClockOutBtn').textContent='Force clock out';btns.appendChild($('forceClockOutBtn'));}}
+    $('forceDialog').onclick=e=>{if(e.target===$('forceDialog'))closeForceDialog();};
+    $('daySheet').onclick=e=>{if(e.target===$('daySheet'))closeDaySheet();};
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeForceDialog();closeDaySheet();closeEmpPanel();}});
+    $('paySearch').oninput=()=>loadWeeklyPaidHours();
+    $('payCsvBtn').onclick=downloadPayrollCsv;
+    $('empSearch').oninput=renderPeople;
+    document.querySelectorAll('[data-emp-tab]').forEach(b=>b.onclick=()=>{empTab=b.dataset.empTab;renderPeople();});
+    $('addEmpBtn').onclick=()=>openEmpPanel(null);
+    $('empPanelCancel').onclick=closeEmpPanel;$('empPanelSave').onclick=saveEmpPanel;
+    $('empPanel').onclick=e=>{if(e.target===$('empPanel'))closeEmpPanel();};
+    $('epPin').oninput=()=>{$('epPin').value=$('epPin').value.replace(/\D/g,'').slice(0,4);};
+    document.querySelectorAll('#reportChips [data-range]').forEach(c=>c.onclick=()=>{document.querySelectorAll('#reportChips .chip').forEach(x=>x.classList.toggle('on',x===c));$('reportPeriod').value=c.dataset.range;$('reportPeriod').dispatchEvent(new Event('change'));});
+    $('reportSearch').addEventListener('keydown',e=>{if(e.key==='Enter')runReport();});
+    $('saveRetention').onclick=async()=>{$('saveSettings').click();setTimeout(()=>{$('retentionMsg').textContent=$('settingsMsg').textContent;},700);};
+    ['reportMonths','reportDays','rejectedRows'].forEach(id=>{const tb=$(id);if(tb)new MutationObserver(()=>labelTable(tb)).observe(tb,{childList:true});});
     setWeek(new Date(),false);
     initWeekCal();
     initShiftCal();

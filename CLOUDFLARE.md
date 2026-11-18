@@ -78,6 +78,27 @@ now, waiting for approval, latest alerts, hours by day) and Approvals (approve f
 actual or custom from one list) are new, and they use the same `/api/manager` data
 and the same review dialogs. The employee portal is unchanged.
 
+### Page layouts
+
+- **Payroll:** totals bar, Mon–Sun table with a total row, search and Download CSV.
+  On phones each employee is a card with seven day chips. Wages are edited on Employees.
+- **Shifts:** compact day details (times, badges, worked / paid / this day / earned,
+  map pins, actions). Force clock-out is a dialog, opened from an open shift or from
+  "Clocked in now" on the Dashboard. On phones there's a day-by-day list, and a day
+  opens in a sheet.
+- **Employees:** search, Active / On vacation / Terminated tabs, and one panel to edit
+  or add a person (title, wage, email, status, PIN).
+- **Location Alerts:** cards with a summary line. **Approvals** has a summary line.
+- **Reports:** quick ranges (1, 3, 6, 12 months, custom); days shown by default; on
+  phones the tables become stacked cards.
+- **Settings:** one row per setting, each with its own explanation and unit;
+  Data Retention has its own Save button.
+- Switching pages closes any open calendar, dialog or day sheet.
+
+Fixed along the way: the dashboard refresh used to replace the employee records with
+a version that had no email or PIN state, so saving an employee could clear their
+email. The records are now merged instead.
+
 ## Data move (done 18 Nov 2026)
 
 All data was copied from Neon on 18 Nov 2026. `scripts/neon-export-query.sql`, run

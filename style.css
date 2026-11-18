@@ -730,3 +730,207 @@ body.mgr .weekNav .weekCal .weekCalDay.thisWeek{background:var(--orange-l)}
 body.mgr .weekNav .weekCal .weekCalDay.hoverWeek{background:var(--orange-l)}
 body.mgr .weekNav .weekCal .weekCalDay.inWeek,body.mgr .weekNav .weekCal .weekCalDay.inWeek.hoverWeek{background:var(--ink);color:#fff;opacity:1}
 .weekNav .weekCal .weekCalFoot button{width:auto;height:auto;font-size:13px;line-height:1.2;padding:7px 12px;border-radius:9px;background:#eef2f7;color:var(--text);flex:none;display:inline-block}
+
+/* =====================================================================
+   Presentable pages (Cloudflare version): shared pieces
+   ===================================================================== */
+/* The page title in the top bar already names the section. */
+#managerApp .sectionHead.pageDup{display:none}
+#managerApp[data-page] > .card{padding:22px 24px}
+.summaryLine{font-size:14px;color:var(--muted);margin:0 0 12px}
+.summaryLine b{color:var(--text)}
+.toolRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.searchBox{flex:1 1 220px;max-width:360px;position:relative}
+.searchBox input{margin:0;padding-left:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center}
+.toolBtn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;margin-left:auto}
+.toolBtn svg{width:16px;height:16px}
+.kpiRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff}
+.kpi span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:var(--muted)}
+.kpi b{display:block;font-size:24px;margin:4px 0 2px;letter-spacing:-.02em}
+.kpi small{color:var(--muted);font-size:12px}
+.kpi.dark{background:var(--ink);border-color:var(--ink)}
+.kpi.dark span,.kpi.dark small{color:#a1a1aa}
+.kpi.dark b{color:var(--orange)}
+.num{text-align:right!important;font-variant-numeric:tabular-nums}
+.zero{color:#cbd5e1}
+
+/* Payroll */
+.payTable{min-width:860px}
+.payTable th.num .dgDate{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:none}
+.payTable td .small{margin-top:2px}
+.payTable tfoot td{border-top:2px solid var(--ink);border-bottom:0;background:#fafafa;padding-top:12px;padding-bottom:12px}
+.payTable .totalCol{background:#fafafa}
+.payCards{display:none}
+.payCardItem{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff}
+.pcHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.pcHead b{font-size:15px}
+.pcHead .small{display:block;margin-top:2px}
+.pcTot{text-align:right;white-space:nowrap}
+.pcTot b{display:block;font-size:17px}
+.pcTot span{color:var(--orange-d);font-weight:800;font-size:13px}
+.pcDays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
+.pcDay{border-radius:9px;background:var(--orange-l);padding:6px 2px;text-align:center}
+.pcDay span{display:block;font-size:10px;color:var(--muted);font-weight:800}
+.pcDay b{display:block;font-size:12px}
+.pcDay.off{background:#f4f4f5}
+.pcDay.off b{color:#cbd5e1}
+
+/* Shifts: compact day details */
+.dgDetailHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.dgDetailHead>div:first-child b{font-size:16px;margin-right:8px}
+.dgDetailHead>div:first-child span{color:var(--muted);font-size:13px}
+.dgHeadRight{display:flex;align-items:center;gap:10px}
+.dgDayTotal{font-weight:800;font-size:13px;background:var(--orange-l);color:var(--orange-d);border-radius:999px;padding:5px 10px}
+.shiftRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 18px;border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:12px;padding:12px 14px;background:#fff;margin-top:8px}
+.shiftTimes{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.shiftTimes b{font-size:15px;margin-right:4px}
+.shiftReason{font-size:13px;color:var(--muted);margin-top:4px}
+.shiftReason b{color:var(--text)}
+.shiftRow .spanWarn{margin-top:8px;font-size:12px}
+.shiftNums{display:grid;grid-template-columns:repeat(4,auto);gap:4px 16px;align-self:start;text-align:right}
+.shiftNums span{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.shiftNums b{font-size:14px;font-variant-numeric:tabular-nums}
+.shiftActs{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:10px}
+.shiftActs .reviewBtns{display:flex;gap:6px;flex-wrap:wrap;margin:0}
+.mapPins{display:flex;gap:12px;flex-wrap:wrap}
+.mapPin{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:800;text-decoration:none}
+.mapPin svg{width:14px;height:14px}
+.dgTag.ok{background:#dcfce7;color:#166534}
+.shiftList{display:none}
+.slDay{margin-top:14px}
+.slDayHead{display:flex;justify-content:space-between;align-items:baseline;padding:0 2px 6px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.slDayHead span{font-weight:800;color:var(--orange-d)}
+.slRow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-top:6px}
+.slRow.pend{border-color:var(--orange-m);background:var(--orange-l)}
+.slWho{flex:1;min-width:0}
+.slWho b{display:block}
+.slWho span{display:block;font-size:12px;color:var(--muted)}
+.slTags{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.slHours{white-space:nowrap}
+.daySheetCard{max-width:760px;width:min(760px,calc(100vw - 24px));max-height:calc(100vh - 40px);overflow:auto}
+#forceDialog .modalCard{max-width:640px}
+#forceDialog #forceBody .formGrid{grid-template-columns:1fr 1fr}
+#forceDialog #forceBody .formGrid .wide,#forceDialog #forceBody .formGrid>button{grid-column:1/-1}
+#forceDialog .modalBtns{margin-top:8px}
+.dashForce{margin-left:10px;padding:5px 9px!important}
+
+/* Employees */
+.empTools .segTabs{display:flex;background:#f4f4f5;border-radius:11px;padding:3px;gap:2px}
+.segTab{background:transparent;border-radius:9px;padding:8px 12px;font-weight:800;font-size:13px;color:var(--muted);white-space:nowrap}
+.segTab span{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:999px;background:#e4e4e7;color:var(--text);font-size:11px;margin-left:4px;padding:0 6px}
+.segTab.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.segTab.on span{background:var(--orange);color:var(--ink)}
+.empNote{margin:0 0 8px}
+.empList{display:flex;flex-direction:column;gap:8px}
+.empRow{display:grid;grid-template-columns:42px minmax(0,1fr) auto auto auto 18px;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;transition:border-color .15s,box-shadow .15s}
+.empRow:hover{border-color:var(--orange-m);box-shadow:0 6px 18px rgba(249,115,22,.10)}
+.avatar{width:42px;height:42px;border-radius:12px;background:var(--ink);color:var(--orange);display:grid;place-items:center;font-weight:900;font-size:14px}
+.status-terminated .avatar{background:#e4e4e7;color:#71717a}
+.status-vacation .avatar{background:var(--orange-l);color:var(--orange-d)}
+.empMain b{display:block;font-size:15px}
+.empMain span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empWage{font-weight:900;font-size:15px;font-variant-numeric:tabular-nums}
+.empWage small{color:var(--muted);font-weight:700}
+.pinState{font-size:12px;font-weight:800;color:#166534}
+.pinState.need{color:#b45309}
+.chev{width:18px;height:18px;color:#a1a1aa}
+.empPanelCard{max-width:620px}
+.empForm{grid-template-columns:1fr 1fr}
+.empForm label{margin:8px 0}
+.empForm input:disabled{background:#f4f4f5;color:var(--muted)}
+
+/* Location alerts */
+#rejectedBody .tableWrap{display:none}
+.alertCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.alertCard{border:1px solid var(--line);border-left:4px solid #ef4444;border-radius:14px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:8px}
+.acTop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.acTop b{display:block;font-size:15px}
+.acDist{font-weight:900;color:#b91c1c;white-space:nowrap}
+.acMeta{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
+.acNote{font-size:13px;background:#fafafa;border-radius:9px;padding:8px 10px}
+.acActs a{font-weight:800;font-size:13px;text-decoration:none}
+
+/* Reports */
+.reportControls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.reportControls label{margin:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.reportControls label input{margin:0;min-width:240px}
+.reportControls .rangeChips{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:2px}
+.chip{background:#f4f4f5;border-radius:999px;padding:9px 14px;font-weight:800;font-size:13px;color:var(--text)}
+.chip.on{background:var(--ink);color:#fff}
+.reportControls #runReport{margin-left:auto}
+#reportStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+
+/* Settings */
+.setList{display:flex;flex-direction:column}
+.setRow{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.setText b{display:block;font-size:15px}
+.setText span{display:block;font-size:13px;color:var(--muted);margin-top:3px;max-width:62ch}
+.setInput{display:flex;align-items:center;gap:10px}
+.setInput input{margin:0}
+.setInput em{font-style:normal;color:var(--muted);font-weight:700;font-size:13px;min-width:52px}
+.setInput .passwordField{flex:1}
+.setFoot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;flex-wrap:wrap}
+.btnRow{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- Tablet ---------- */
+@media (max-width:1100px){
+  .kpiRow,#reportStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .empRow{grid-template-columns:42px minmax(0,1fr) auto 18px}
+  .empRow .statusBadge,.empRow .pinState{display:none}
+}
+/* ---------- Phone ---------- */
+@media (max-width:760px){
+  #managerApp[data-page] > .card{padding:14px}
+  .payTableWrap{display:none}
+  .payCards{display:flex;flex-direction:column;gap:10px}
+  #shiftDetailsBody .tableWrap{display:none}
+  .shiftList{display:block}
+  .shiftRow{grid-template-columns:1fr}
+  .shiftNums{grid-template-columns:repeat(4,1fr);text-align:left}
+  .toolBtn{margin-left:0;flex:1;justify-content:center}
+  .searchBox{max-width:none;flex-basis:100%}
+  .empTools .segTabs{width:100%;overflow-x:auto}
+  .segTab{flex:1}
+  .empRow{grid-template-columns:38px minmax(0,1fr) auto;gap:10px;padding:10px 12px}
+  .empRow .chev{display:none}
+  .avatar{width:38px;height:38px}
+  .empForm{grid-template-columns:1fr}
+  .setRow{grid-template-columns:1fr;gap:10px}
+  .setFoot{flex-direction:column-reverse;align-items:stretch}
+  .setFoot .btnRow{flex-direction:column}
+  .reportControls label{width:100%}
+  .reportControls label input{min-width:0;width:100%}
+  .reportControls #runReport{margin-left:0;width:100%}
+  .dgDetailHead{flex-direction:column;align-items:flex-start}
+  .dashForce{display:block;margin:6px 0 0 auto}
+  #forceDialog #forceBody .formGrid{grid-template-columns:1fr}
+  /* tables become stacked cards: each cell shows its column name */
+  .reportTable{min-width:0!important}
+  .reportTable thead{display:none}
+  .reportTable tr{display:block;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:8px;background:#fff}
+  .reportTable td{display:flex;justify-content:space-between;gap:12px;border:0;padding:4px 0;white-space:normal}
+  .reportTable td::before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:800}
+  .reportTable td:first-child{font-weight:900}
+  .reportTable td:first-child::before{content:none}
+}
+@media (max-width:420px){.kpi b{font-size:20px}.pcDay b{font-size:11px}}
+#forceDialog #forceBody .formGrid{align-items:start}
+#forceDialog #forceBody .formGrid label{margin:6px 0}
+#forceDialog .modalBtns{display:flex;justify-content:flex-end;gap:8px}
+/* Shifts filters: one tidy row on computers, stacked on phones */
+#managerApp [data-page~="shifts"] .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+#managerApp [data-page~="shifts"] .controls label{display:flex;align-items:center;gap:8px;margin:0;font-size:0}
+#managerApp [data-page~="shifts"] .controls label input{font-size:15px;min-width:260px;margin:0}
+@media (max-width:760px){
+  #managerApp [data-page~="shifts"] .controls{display:grid;grid-template-columns:1fr auto;gap:8px}
+  #managerApp [data-page~="shifts"] .controls .weekPicker{grid-column:1/-1;min-width:0}
+  #managerApp [data-page~="shifts"] .controls label input{min-width:0;width:100%}
+  #managerApp [data-page~="shifts"] .controls #clearShiftDetailsFilters{padding:10px 14px}
+  #shiftDetailsBody>p.muted{display:none}
+  .empTools .segTabs{display:grid;grid-template-columns:repeat(3,1fr);overflow:visible}
+  .segTab{padding:8px 4px;font-size:12px;white-space:normal;line-height:1.2}
+  .segTab span{margin:2px 0 0;display:inline-grid}
+  .sectionHead.subHead{display:flex;flex-direction:row;align-items:center;justify-content:space-between}
+  .sectionHead.subHead .reportH{margin:0;text-align:left}
+}
