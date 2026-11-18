@@ -64,6 +64,20 @@ every answer was compared:
 - Account `workers.dev` name changed to a random `wc7ptpfk` so the address carries no company name.
   No custom domain or route is attached.
 
+## Manager portal pages (Cloudflare version only)
+
+The manager portal is an app with a menu: a sidebar on computers and a burger
+drawer on phones and tablets (under 1024px). Each section is its own page with its
+own link (`/?manager=1#/payroll` and so on):
+Dashboard, Payroll, Shifts, Approvals, Location Alerts, Employees, Reports, Settings.
+The Approvals and Location Alerts menu items show live counts.
+
+The existing sections and their code are unchanged. Each one is tagged with
+`data-page`, and CSS shows only the current page's sections. Dashboard (clocked in
+now, waiting for approval, latest alerts, hours by day) and Approvals (approve full,
+actual or custom from one list) are new, and they use the same `/api/manager` data
+and the same review dialogs. The employee portal is unchanged.
+
 ## Data move (done 18 Nov 2026)
 
 All data was copied from Neon on 18 Nov 2026. `scripts/neon-export-query.sql`, run

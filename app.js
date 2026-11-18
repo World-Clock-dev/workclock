@@ -871,6 +871,98 @@
     $('reportMsg').textContent=`${emp.name}${emp.title?' — '+emp.title:''}: ${start.toLocaleDateString()} to ${end.toLocaleDateString()}.`
       +(j.truncated?' Showing the most recent records only; narrow the period for a complete view.':'');
   }
+  /* ---- Manager app shell: one page per section, sidebar / burger menu ----
+     Pages are switched with #/name in the address, so links, the back button
+     and a refresh all land on the same page. Every section keeps the code it
+     had before; this only decides which sections are on screen. */
+  const MGR_PAGES={
+    dashboard:{title:'Dashboard',sub:'The selected week at a glance',week:true},
+    payroll:{title:'Payroll',sub:'Paid hours and earnings for the week',week:true},
+    shifts:{title:'Shifts',sub:'Every clock-in, reviews and corrections',week:true},
+    approvals:{title:'Approvals',sub:'Shifts waiting for your decision',week:true},
+    alerts:{title:'Location Alerts',sub:'Clock-outs outside the allowed area',week:true},
+    employees:{title:'Employees',sub:'Team, wages, titles and PINs',week:false},
+    reports:{title:'Reports',sub:'Hours and earnings over any period',week:false},
+    settings:{title:'Settings',sub:'Rules, data retention and your password',week:false}
+  };
+  // Sections that start collapsed are opened when their page is shown.
+  const MGR_OPEN={shifts:[['toggleShiftDetails','shiftDetailsBody'],['toggleForce','forceBody']],alerts:[['toggleRejected','rejectedBody']],employees:[['toggleEmployees','employeesBody'],['toggleAddEmployee','addEmployeeBody']],reports:[['toggleReport','reportBody']],settings:[['toggleSettings','settingsBody']]};
+  function mgrPageName(){const n=location.hash.replace(/^#\/?/,'').split(/[/?]/)[0];return MGR_PAGES[n]?n:'dashboard';}
+  function setMgrNav(open){
+    const nav=$('mgrNav'),scrim=$('mgrScrim'),b=$('mgrBurger');if(!nav)return;
+    nav.classList.toggle('open',open);scrim.classList.toggle('hide',!open);
+    if(b)b.setAttribute('aria-expanded',String(open));
+    document.body.style.overflow=open&&innerWidth<1024?'hidden':'';
+  }
+  function showMgrPage(){
+    const app=$('managerApp');if(!app)return;
+    const name=mgrPageName(),pg=MGR_PAGES[name];
+    app.dataset.page=name;
+    if(pg.week)app.dataset.week='1';else delete app.dataset.week;
+    $('mgrPageTitle').textContent=pg.title;$('mgrPageSub').textContent=pg.sub;
+    document.querySelectorAll('#mgrNav [data-route]').forEach(a=>{const on=a.dataset.route===name;a.classList.toggle('active',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+    (MGR_OPEN[name]||[]).forEach(([btn,body])=>{const b=$(body);if(b&&b.classList.contains('hide'))setSection($(btn),b,true);});
+    document.title=`${pg.title} — WorkClock Manager`;
+    setMgrNav(false);
+    window.scrollTo({top:0,behavior:'auto'});
+  }
+  function goMgrPage(name){if(mgrPageName()===name&&location.hash)showMgrPage();else location.hash='#/'+name;}
+  function initManagerShell(){
+    document.body.classList.add('mgrIn');
+    // The week picker moves from the Payroll card into the top bar, where it
+    // serves every page that follows the selected week.
+    const wk=document.querySelector('[data-page="payroll"] .weekNav');if(wk&&$('mgrWeekSlot'))$('mgrWeekSlot').appendChild(wk);
+    $('mgrBurger').onclick=()=>setMgrNav(!$('mgrNav').classList.contains('open'));
+    $('mgrNavClose').onclick=()=>setMgrNav(false);
+    $('mgrScrim').onclick=()=>setMgrNav(false);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')setMgrNav(false);});
+    $('navLogoutBtn').onclick=()=>$('logoutBtn').click();
+    document.querySelectorAll('#mgrNav [data-route]').forEach(a=>a.addEventListener('click',()=>{if(a.getAttribute('href')===location.hash)showMgrPage();}));
+    window.addEventListener('hashchange',showMgrPage);
+    showMgrPage();
+  }
+  // Same details the day pop-up passes to the review dialogs.
+  function shiftMeta(x,minimum){
+    const actual=Number(x.actual_hours??hours(x)),fullPay=Math.max(actual,minimum);
+    const ci=new Date(x.clock_in),co=x.clock_out?new Date(x.clock_out):null;
+    const hm=t=>t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const sameDay=co?iso(ci)===iso(co):true;
+    const stamp=t=>sameDay?hm(t):`${t.toLocaleDateString([],{month:'short',day:'numeric'})} ${hm(t)}`;
+    const times=co?`${stamp(ci)} – ${stamp(co)}`:`${hm(ci)} – still open`;
+    return {actual,fullPay,times,attrs:`data-name="${esc(x.name)}" data-actual="${actual.toFixed(2)}" data-full="${fullPay.toFixed(2)}" data-when="${esc(fmtDay(ci))}" data-times="${esc(times)}" data-in="${esc(x.clock_in)}" data-out="${esc(x.clock_out||'')}" data-paid="${x.manager_custom_paid_hours!=null?Number(x.manager_custom_paid_hours).toFixed(2):''}" data-min="${minimum}"`};
+  }
+  function updateNavBadges(sm){
+    const set=(id,n,cls)=>{const b=$(id);if(!b)return;b.textContent=n>99?'99+':String(n);b.classList.toggle('hide',!n);if(cls)b.classList.toggle(cls,n>0);};
+    set('badgeApprovals',Number(sm.pending_approvals||0));
+    set('badgeAlerts',Number(sm.rejected_clock_outs||0),'bad');
+  }
+  function renderDashboard(j,bounds,minimum){
+    const shifts=j.shifts||[];
+    const hm=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    const empty=t=>`<div class="dashEmpty">${t}</div>`;
+    const live=shifts.filter(x=>!x.clock_out).sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
+    $('dashLive').innerHTML=live.map(x=>`<div class="dashRow"><div><b><span class="liveDot"></span>${esc(x.name)}</b><span class="small">${esc(x.title||'')} · since ${esc(fmtDay(new Date(x.clock_in)))} ${hm(x.clock_in)}</span></div><span class="dashVal">${Number(x.actual_hours??hours(x)).toFixed(2)} h</span></div>`).join('')||empty('Nobody is clocked in right now.');
+    const pend=shifts.filter(x=>x.manager_review_status==='pending').sort((a,b)=>new Date(b.clock_in)-new Date(a.clock_in));
+    $('dashPending').innerHTML=pend.slice(0,5).map(x=>`<div class="dashRow"><div><b>${esc(x.name)}</b><span class="small">${esc(fmtDay(new Date(x.clock_in)))} · ${esc(x.clock_out_note||'')}</span></div><span class="dashVal">${Number(x.actual_hours??hours(x)).toFixed(2)} h</span></div>`).join('')+(pend.length>5?`<a class="dashMore" href="#/approvals">+ ${pend.length-5} more</a>`:'')||empty('Nothing to approve this week.');
+    const rej=j.rejectedAttempts||[];
+    $('dashAlerts').innerHTML=rej.slice(0,5).map(x=>{const t=new Date(x.created_at);return `<div class="dashRow"><div><b>${esc(x.name)}</b><span class="small">${esc(fmtDay(t))} ${hm(t)}${x.note?' · '+esc(x.note):''}</span></div><span class="dashVal">${Number(x.distance_miles).toFixed(2)} mi</span></div>`;}).join('')+(rej.length>5?`<a class="dashMore" href="#/alerts">+ ${rej.length-5} more</a>`:'')||empty('No location alerts this week.');
+    const days=Array(7).fill(0);(j.weekly||[]).forEach(e=>(e.days||[]).forEach((v,i)=>{if(i<7)days[i]+=Number(v||0);}));
+    const max=Math.max(1,...days),names=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    $('dashBars').innerHTML=days.map((v,i)=>{const d=new Date(bounds[i]);return `<div class="dashBar${v>0?'':' zero'}" title="${esc(fmtDay(d))}: ${v.toFixed(2)} h"><b>${v?v.toFixed(1):''}</b><i style="height:${Math.round(v/max*120)}px"></i><span>${names[i]} ${d.getDate()}</span></div>`;}).join('');
+  }
+  function renderApprovals(j,minimum,start){
+    const pend=(j.shifts||[]).filter(x=>x.manager_review_status==='pending').sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
+    $('approvalsRangeText').textContent=`Shifts waiting for your decision in the week of ${weekLabel(start)}.`;
+    $('approvalsList').innerHTML=pend.map(x=>{
+      const m=shiftMeta(x,minimum),away=Number(x.rejected_count||0)>0;
+      return `<div class="apprItem"><div><div class="apprWho"><b>${esc(x.name)}</b> <span class="small">${esc(x.title||'')}</span></div>
+        <div class="apprFacts"><span>${esc(fmtDay(new Date(x.clock_in)))}</span><span>${esc(m.times)}</span><span>Worked <strong>${m.actual.toFixed(2)} h</strong></span><span>Reason <strong>${esc(x.clock_out_note||'—')}</strong></span>${x.clock_out_message?`<span>“${esc(x.clock_out_message)}”</span>`:''}${away?`<span class="dgTag warn">outside area${x.clock_out_distance_miles!=null?' · '+Number(x.clock_out_distance_miles).toFixed(2)+' mi':''}</span>`:''}</div></div>
+        <div class="reviewBtns"><button class="mini primary" data-appr-full="${x.id}" ${m.attrs}>Approve full ${m.fullPay.toFixed(2)}h</button><button class="mini secondary" data-appr-actual="${x.id}" ${m.attrs}>Approve actual ${m.actual.toFixed(2)}h</button><button class="mini secondary" data-appr-custom="${x.id}" ${m.attrs}>Custom hours…</button></div></div>`;
+    }).join('')||'<div class="apprDone">All caught up — nothing is waiting for approval this week.</div>';
+    document.querySelectorAll('[data-appr-full]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.apprFull,'approve_full',b.dataset));
+    document.querySelectorAll('[data-appr-actual]').forEach(b=>b.onclick=()=>reviewShift(b.dataset.apprActual,'approve_actual',b.dataset));
+    document.querySelectorAll('[data-appr-custom]').forEach(b=>b.onclick=()=>openCustomReview(b.dataset.apprCustom,b.dataset));
+  }
   async function mgrRender(){
     if(!managerMode)return;
     try{
@@ -887,9 +979,10 @@
         const sh=(j.shifts||[]).find(x=>String(x.id)===String(id));if(!sh)return;
         const body=$('forceBody');
         if(body&&body.classList.contains('hide')){body.classList.remove('hide');$('toggleForce').textContent='Minimize';$('toggleForce').setAttribute('aria-expanded','true');}
+        if(mgrPageName()!=='shifts')goMgrPage('shifts');
         $('forceShift').value=String(sh.id);
         $('forceClockOutAt').value=localDateTimeValue(new Date());
-        window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'});
+        setTimeout(()=>window.scrollTo({top:$('forceShift').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'}),80);
       };
       const minimum=Number(j.settings?.project_completed_min_paid_hours??8);
       const workedThisWeek=new Set((j.shifts||[]).map(x=>String(x.employee_id)));
@@ -1015,6 +1108,7 @@
       $('rejected').closest('.stat').classList.toggle('tileBad',Number(sm.rejected_clock_outs||0)>0);
       $('pendingApprovals').closest('.stat').classList.toggle('tileWarn',Number(sm.pending_approvals||0)>0);
       $('liveClockIns').closest('.stat').classList.toggle('tileLive',Number(sm.live_clock_ins||0)>0);
+      renderDashboard(j,bounds,minimum);renderApprovals(j,minimum,start);updateNavBadges(sm);
       await loadWeeklyPaidHours(j);
       markRefreshed();
     }catch(e){$('employeeMsg').textContent='Connection error: '+e.message;if(!mgrRender._errShown){mgrRender._errShown=1;toast('Connection error: '+e.message,'bad');setTimeout(()=>mgrRender._errShown=0,60000);}}
@@ -1060,21 +1154,14 @@
       tabs.forEach(x=>{const on=x===tb;x.classList.toggle('on',on);x.setAttribute('aria-selected',String(on));const panel=$(x.dataset.settingsTab);if(panel)panel.classList.toggle('hide',!on);});
     });
   }
-  // Tapping a top tile jumps to (and opens) the section it summarises.
+  // Tapping a top tile opens the page it summarises.
   function initTileLinks(){
-    const go=(id,btn,body)=>{const el=$(id);if(!el)return;el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{
-      if(btn&&body&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);
-      const card=$(btn||id).closest('section.card');if(card){card.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');}
-    };};
-    const weekly=()=>$('weeklyRows');
-    go('empCount','toggleEmployees','employeesBody');
-    ['mHours','payroll'].forEach(id=>{const el=$(id);el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{const c=weekly().closest('section.card');c.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});c.classList.remove('flash');void c.offsetWidth;c.classList.add('flash');};});
-    go('rejected','toggleRejected','rejectedBody');
-    go('liveClockIns','toggleShiftDetails','shiftDetailsBody');
-    go('pendingApprovals','toggleShiftDetails','shiftDetailsBody');
+    [['empCount','employees'],['mHours','payroll'],['payroll','payroll'],['rejected','alerts'],['liveClockIns','shifts'],['pendingApprovals','approvals']].forEach(([id,page])=>{
+      const el=$(id);if(!el)return;const tile=el.closest('.stat');tile.classList.add('tileLink');tile.onclick=()=>goMgrPage(page);
+    });
   }
   async function startManagerApp(){
-    $('managerLogin').classList.add('hide');$('managerApp').classList.remove('hide');$('mdate').value=iso(new Date());
+    $('managerLogin').classList.add('hide');$('managerApp').classList.remove('hide');$('mdate').value=iso(new Date());initManagerShell();
     $('addEmployee').onclick=async()=>{const name=$('newName').value.trim(),title=$('newTitle').value.trim(),email=$('newEmail').value.trim(),wage=Number($('newWage').value||0),pin=$('newPin').value.trim();if(!name)return $('employeeMsg').textContent='Enter an employee name.';if(!Number.isFinite(wage)||wage<0)return $('employeeMsg').textContent='Enter a valid hourly wage.';if(!/^\d{4}$/.test(pin))return $('employeeMsg').textContent='PIN must be exactly 4 digits.';try{await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});['newName','newTitle','newEmail','newWage','newPin'].forEach(id=>$(id).value='');$('employeeMsg').textContent='Employee saved and PIN set.';toast('Employee saved and PIN set.');await loadPeople();await mgrRender();}catch(e){$('employeeMsg').textContent=displayMessage(e.payload||e.message);}};
     $('saveSettings').onclick=async()=>{try{const j=await api('/api/settings',{method:'PATCH',body:JSON.stringify({clock_out_radius_miles:Number($('radiusSetting').value),project_completed_min_paid_hours:Number($('projectMinSetting').value),max_active_employees:Number($('maxEmployeesSetting').value),data_retention_months:Number($('retentionSetting').value)})});const s=j.settings||{};$('radiusSetting').value=s.clock_out_radius_miles;$('projectMinSetting').value=s.project_completed_min_paid_hours;$('maxEmployeesSetting').value=s.max_active_employees;$('retentionSetting').value=s.data_retention_months;toast('Settings saved.');$('settingsMsg').textContent='Settings saved.';}catch(e){$('settingsMsg').textContent=e.message;}};
     $('changeManagerPasswordBtn').onclick=async()=>{const currentPassword=$('currentManagerPassword').value,newPassword=$('newManagerPassword').value,confirmPassword=$('confirmManagerPassword').value;if(!currentPassword||!newPassword||!confirmPassword)return $('managerPasswordMsg').textContent='Complete all password fields.';if(newPassword!==confirmPassword)return $('managerPasswordMsg').textContent='New passwords do not match.';try{await api('/api/manager-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})});$('managerPasswordMsg').textContent='Password changed. Please sign in again.';setTimeout(()=>location.reload(),700);}catch(e){$('managerPasswordMsg').textContent=e.message;}};

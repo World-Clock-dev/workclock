@@ -599,3 +599,115 @@ body.mgr .managerLink{color:var(--orange-d)}
 @media (prefers-reduced-motion: reduce){
   body.mgr #managerApp>section.card.reveal{opacity:1;transform:none}
 }
+
+/* =====================================================================
+   Manager app shell: sidebar menu (computers) / burger drawer (phones),
+   one page per section. Pages are switched by #/page in the address.
+   ===================================================================== */
+body.mgr{--navW:248px}
+body.mgr.mgrIn main{max-width:none;padding:18px 26px 50px calc(var(--navW) + 26px)}
+body.mgr .managerWrap{max-width:1320px}
+
+/* Only the current page's sections are shown. */
+#managerApp[data-page="dashboard"] [data-page]:not([data-page~="dashboard"]),
+#managerApp[data-page="payroll"] [data-page]:not([data-page~="payroll"]),
+#managerApp[data-page="shifts"] [data-page]:not([data-page~="shifts"]),
+#managerApp[data-page="approvals"] [data-page]:not([data-page~="approvals"]),
+#managerApp[data-page="alerts"] [data-page]:not([data-page~="alerts"]),
+#managerApp[data-page="employees"] [data-page]:not([data-page~="employees"]),
+#managerApp[data-page="reports"] [data-page]:not([data-page~="reports"]),
+#managerApp[data-page="settings"] [data-page]:not([data-page~="settings"]){display:none!important}
+/* Each section has its own page now, so the old Show/Minimize buttons go. */
+#managerApp .sectionHead [aria-controls$="Body"]{display:none}
+#managerApp[data-page] > [data-page]{animation:pageIn .28s var(--ease) both}
+@keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Sidebar */
+.mgrNav{position:fixed;inset:0 auto 0 0;width:var(--navW);background:var(--ink);color:#e4e4e7;display:flex;flex-direction:column;z-index:60;padding:18px 12px 14px;border-right:1px solid #1f1f23}
+.mgrNavTop{display:flex;align-items:center;justify-content:space-between;padding:2px 8px 18px;border-bottom:1px solid #222226;margin-bottom:12px}
+.mgrNav .brand strong{color:#fff;font-size:17px}
+.mgrNav .brand span{color:#a1a1aa}
+.mgrNavClose{display:none;background:transparent;color:#a1a1aa;font-size:28px;line-height:1;padding:2px 8px;border-radius:8px}
+.mgrNavLinks{display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1}
+.navLink{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:#d4d4d8;text-decoration:none;font-weight:700;font-size:14.5px;background:transparent;width:100%;text-align:left;position:relative;transition:background .15s,color .15s}
+.navLink:hover{background:#1c1c20;color:#fff}
+.navLink.active{background:var(--orange);color:var(--ink)}
+.navLink.active .navIcon{stroke:var(--ink)}
+.navIcon{width:20px;height:20px;flex:0 0 20px;stroke:#a1a1aa}
+.navLink:hover .navIcon{stroke:#fff}
+.navText{flex:1}
+.navBadge{min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:var(--orange);color:var(--ink);font-size:12px;font-weight:900;display:grid;place-items:center}
+.navLink.active .navBadge{background:var(--ink);color:#fff}
+.navBadge.bad{background:#ef4444;color:#fff}
+.mgrNavFoot{border-top:1px solid #222226;padding-top:10px;margin-top:10px}
+.navLogout{color:#fca5a5}
+.navLogout .navIcon{stroke:#fca5a5}
+.mgrScrim{position:fixed;inset:0;background:rgba(11,11,12,.45);z-index:55;backdrop-filter:blur(2px)}
+
+/* Top bar: burger (phones), page title, week picker, live clock */
+body.mgr .managerHeader{gap:14px;flex-wrap:wrap}
+.mgrHeadLeft{display:flex;align-items:center;gap:12px;min-width:0}
+.mgrTitle{display:flex;flex-direction:column;min-width:0}
+.mgrTitle strong{font-size:19px;color:#fff;line-height:1.2}
+.mgrTitle span{font-size:12px;color:#a1a1aa}
+.mgrWeekSlot{flex:1;display:flex;justify-content:center}
+.mgrWeekSlot:empty{display:none}
+body.mgr .mgrWeekSlot .weekNav button{background:#26262b;color:#fff}
+body.mgr .mgrWeekSlot .weekPickerBtn{background:#26262b;color:#fff;border-color:#3f3f46}
+.mgrBurger{display:none;width:42px;height:42px;border-radius:11px;background:#26262b;flex-direction:column;justify-content:center;align-items:center;gap:4px;flex:0 0 42px}
+.mgrBurger span{display:block;width:18px;height:2px;background:#fff;border-radius:2px;transition:transform .2s,opacity .2s}
+#managerApp:not([data-week]) .mgrWeekSlot{display:none}
+/* The header Log Out button moves to the menu. */
+body.mgr .managerHeader #logoutBtn{display:none}
+
+/* Dashboard */
+.dashGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.dashGrid .card{margin:0}
+.dashHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.dashHead h2{margin:0;font-size:16px}
+.dashMore{color:var(--orange-d);font-weight:800;text-decoration:none;font-size:13px;white-space:nowrap}
+.dashList{display:flex;flex-direction:column;gap:8px}
+.dashRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.dashRow b{display:block}
+.dashRow .small{display:block}
+.dashRow .dashVal{font-weight:900;white-space:nowrap}
+.liveDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:6px;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+.dashEmpty{padding:14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;text-align:center}
+.dashBars{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;height:170px;padding-top:6px}
+.dashBar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:6px}
+.dashBar i{display:block;width:100%;max-width:44px;border-radius:8px 8px 4px 4px;background:var(--orange);min-height:3px;transition:height .5s var(--ease)}
+.dashBar.zero i{background:var(--line)}
+.dashBar b{font-size:12px}
+.dashBar span{font-size:11px;color:var(--muted);font-weight:800}
+
+/* Approvals */
+.apprList{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.apprItem{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 18px;align-items:center}
+.apprItem .apprWho b{font-size:16px}
+.apprFacts{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin-top:4px}
+.apprFacts strong{color:var(--text)}
+.apprItem .reviewBtns{margin:0;justify-content:flex-end}
+.apprDone{padding:22px;border:1px dashed var(--line);border-radius:14px;text-align:center;color:var(--muted)}
+
+/* Tablet and phone: menu becomes a slide-out drawer opened with the burger */
+@media (max-width:1023px){
+  body.mgr.mgrIn main{padding:12px 12px 40px}
+  .mgrBurger{display:flex}
+  .mgrNav{transform:translateX(-102%);transition:transform .26s var(--ease);box-shadow:20px 0 50px rgba(0,0,0,.35);width:min(84vw,300px)}
+  .mgrNav.open{transform:none}
+  .mgrNavClose{display:block}
+  .mgrWeekSlot{order:3;flex-basis:100%;justify-content:flex-start}
+  .dashGrid{grid-template-columns:1fr}
+  .apprItem{grid-template-columns:1fr}
+  .apprItem .reviewBtns{justify-content:flex-start}
+}
+@media (max-width:480px){
+  .mgrTitle strong{font-size:17px}
+  body.mgr .mgrHeadRight .mgrUpdated{display:none}
+}
+@media (prefers-reduced-motion:reduce){.mgrNav,#managerApp[data-page] > [data-page]{transition:none;animation:none}}
+/* Menu links keep their own colours (the manager theme colours plain links orange). */
+body.mgr .mgrNav a.navLink{color:#d4d4d8}
+body.mgr .mgrNav a.navLink:hover{color:#fff}
+body.mgr .mgrNav a.navLink.active{color:var(--ink)}
+body.mgr .mgrNav .navLink:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
