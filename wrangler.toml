@@ -5,6 +5,9 @@ name = "workclock-w5qy0n"
 main = "src/worker.js"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
+# Keep variables set in the Cloudflare dashboard (ADMIN_EMAIL, EMAIL_FROM,
+# APP_URL) when a new version is deployed. Without this, deploys remove them.
+keep_vars = true
 
 # Static front end (index.html, app.js, style.css, icons) from the project root.
 # .assetsignore keeps server code, SQL, scripts and config from being served.
