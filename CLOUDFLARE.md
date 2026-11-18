@@ -9,7 +9,7 @@ This branch (`cloudflare-d1`) runs WorkClock on Cloudflare's free plan:
 | Database | Neon Postgres | Cloudflare D1 (`schema.d1.sql`) |
 | Nightly cleanup | Vercel cron, 03:00 UTC | Cron Trigger, 03:00 UTC |
 | PIN/password check | Postgres `pgcrypto` | `bcryptjs` in the Worker (reads the same hashes) |
-| Address | your Vercel URL | `https://workclock-w5qy0n.<account>.workers.dev` |
+| Address | your Vercel URL | `https://workclock-w5qy0n.wc7ptpfk.workers.dev` |
 
 There is no 12-function limit on Cloudflare, so new endpoints can be added as new files.
 No custom domain or company subdomain is configured; the app uses only the random
@@ -56,7 +56,14 @@ every answer was compared:
    per request. If Cloudflare ever reports CPU-limit errors on login, the fix is
    to re-hash on next login. No PIN would need resetting.
 
-## Deploying (only after approval)
+## Live setup (done)
+
+- D1 database `workclock` (id `8be6128e-c08a-41c4-bb45-e1853d04af04`), Eastern North America, schema applied.
+- Worker `workclock-w5qy0n`, built automatically by Cloudflare from the `cloudflare-d1` branch.
+- Account `workers.dev` name changed to a random `wc7ptpfk` so the address carries no company name.
+  No custom domain or route is attached.
+
+## Deploying from scratch (reference)
 
 ```bash
 npm install

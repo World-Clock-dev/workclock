@@ -1,5 +1,5 @@
 # WorkClock on Cloudflare Workers + D1.
-# The public address will be https://workclock-w5qy0n.<your-account>.workers.dev
+# Public address: https://workclock-w5qy0n.wc7ptpfk.workers.dev
 # (a random Cloudflare address; no custom domain or company subdomain is attached).
 name = "workclock-w5qy0n"
 main = "src/worker.js"
