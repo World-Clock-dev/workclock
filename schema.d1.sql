@@ -168,3 +168,21 @@ CREATE TABLE IF NOT EXISTS retention_runs (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS retention_runs_created_idx ON retention_runs(created_at DESC);
+
+-- Legacy columns that exist in the live Neon database from earlier versions of
+-- WorkClock. The current code does not use them; they are kept so migrated
+-- rows are copied exactly, with the same defaults as in Neon.
+ALTER TABLE employees ADD COLUMN job_title TEXT NOT NULL DEFAULT 'Employee';
+ALTER TABLE rejected_clock_outs ADD COLUMN message TEXT;
+ALTER TABLE shifts ADD COLUMN approval_status TEXT;
+ALTER TABLE shifts ADD COLUMN approved_at TEXT;
+ALTER TABLE shifts ADD COLUMN approved_by INTEGER;
+ALTER TABLE shifts ADD COLUMN approved_by_manager_id INTEGER;
+ALTER TABLE shifts ADD COLUMN approved_paid_hours REAL;
+ALTER TABLE shifts ADD COLUMN auto_clocked_out INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shifts ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shifts ADD COLUMN clock_out_source TEXT NOT NULL DEFAULT 'employee';
+ALTER TABLE shifts ADD COLUMN closed_by_manager INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE shifts ADD COLUMN paid_minutes INTEGER;
+ALTER TABLE shifts ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'actual';
+ALTER TABLE shifts ADD COLUMN stale_notice_seen INTEGER NOT NULL DEFAULT 1;

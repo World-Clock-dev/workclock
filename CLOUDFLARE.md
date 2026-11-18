@@ -63,6 +63,15 @@ every answer was compared:
 - Account `workers.dev` name changed to a random `wc7ptpfk` so the address carries no company name.
   No custom domain or route is attached.
 
+## Data move (done 18 Nov 2026)
+
+All data was copied from Neon on 18 Nov 2026. `scripts/neon-export-query.sql`, run
+read-only in Neon's SQL Editor, produced the D1 INSERT statements. They were loaded
+in the D1 console and checked table by table against Neon: row counts, id sums, pay
+hours, wages, first and last times and text lengths all match. Three values containing
+line breaks were then copied byte-for-byte. The live Neon schema had 14 legacy columns
+that `schema.sql` didn't list; they were added to D1 (see the end of `schema.d1.sql`).
+
 ## Deploying from scratch (reference)
 
 ```bash
