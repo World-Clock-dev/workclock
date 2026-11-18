@@ -59,7 +59,8 @@ every answer was compared:
 ## Live setup (done)
 
 - D1 database `workclock` (id `8be6128e-c08a-41c4-bb45-e1853d04af04`), Eastern North America, schema applied.
-- Worker `workclock-w5qy0n`, built automatically by Cloudflare from the `cloudflare-d1` branch.
+- Worker `workclock-w5qy0n`, built automatically by Cloudflare from the `cloudflare-d1` branch
+  (the Cloudflare GitHub app has access to this repository).
 - Account `workers.dev` name changed to a random `wc7ptpfk` so the address carries no company name.
   No custom domain or route is attached.
 
