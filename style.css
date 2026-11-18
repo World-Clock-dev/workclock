@@ -652,7 +652,7 @@ body.mgr .managerHeader{gap:14px;flex-wrap:wrap}
 .mgrTitle span{font-size:12px;color:#a1a1aa}
 .mgrWeekSlot{flex:1;display:flex;justify-content:center}
 .mgrWeekSlot:empty{display:none}
-body.mgr .mgrWeekSlot .weekNav button{background:#26262b;color:#fff}
+body.mgr .mgrWeekSlot .weekNav>button{background:#26262b;color:#fff}
 body.mgr .mgrWeekSlot .weekPickerBtn{background:#26262b;color:#fff;border-color:#3f3f46}
 .mgrBurger{display:none;width:42px;height:42px;border-radius:11px;background:#26262b;flex-direction:column;justify-content:center;align-items:center;gap:4px;flex:0 0 42px}
 .mgrBurger span{display:block;width:18px;height:2px;background:#fff;border-radius:2px;transition:transform .2s,opacity .2s}
@@ -711,3 +711,22 @@ body.mgr .mgrNav a.navLink{color:#d4d4d8}
 body.mgr .mgrNav a.navLink:hover{color:#fff}
 body.mgr .mgrNav a.navLink.active{color:var(--ink)}
 body.mgr .mgrNav .navLink:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+/* The week picker now lives in the top bar, so the bar must let its calendar
+   drop down over the page instead of clipping it. */
+body.mgr .managerHeader{overflow:visible;z-index:40}
+body.mgr .managerHeader::after{left:14px;right:14px;border-radius:3px}
+body.mgr .mgrWeekSlot .weekCal{z-index:80;color:var(--text)}
+/* The calendar's own buttons keep the calendar look wherever the picker sits
+   (the general ".weekNav button" rule is meant for the arrow buttons only). */
+.weekNav .weekCal .weekCalNav{width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:16px;line-height:1;display:grid;place-items:center;flex:0 0 30px}
+body.mgr .weekNav .weekCal .weekCalNav:hover{background:var(--orange-l);border-color:var(--orange-m)}
+.weekNav .weekCal .weekCalDay{width:auto;height:32px;flex:none;padding:0;border:0;border-radius:0;background:transparent;color:var(--text);font-size:13px;font-weight:700;line-height:1;display:grid;place-items:center}
+.weekNav .weekCal .weekCalGrid>.weekCalDay:nth-child(7n+1){border-radius:8px 0 0 8px}
+.weekNav .weekCal .weekCalGrid>.weekCalDay:nth-child(7n){border-radius:0 8px 8px 0}
+.weekNav .weekCal .weekCalDay.out{color:var(--muted);opacity:.55}
+.weekNav .weekCal .weekCalDay.hoverWeek{background:#eef2ff}
+.weekNav .weekCal .weekCalDay.inWeek,.weekNav .weekCal .weekCalDay.inWeek.hoverWeek{background:var(--primary);color:#fff;opacity:1}
+body.mgr .weekNav .weekCal .weekCalDay.thisWeek{background:var(--orange-l)}
+body.mgr .weekNav .weekCal .weekCalDay.hoverWeek{background:var(--orange-l)}
+body.mgr .weekNav .weekCal .weekCalDay.inWeek,body.mgr .weekNav .weekCal .weekCalDay.inWeek.hoverWeek{background:var(--ink);color:#fff;opacity:1}
+.weekNav .weekCal .weekCalFoot button{width:auto;height:auto;font-size:13px;line-height:1.2;padding:7px 12px;border-radius:9px;background:#eef2f7;color:var(--text);flex:none;display:inline-block}

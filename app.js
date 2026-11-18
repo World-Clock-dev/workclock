@@ -903,6 +903,9 @@
     document.querySelectorAll('#mgrNav [data-route]').forEach(a=>{const on=a.dataset.route===name;a.classList.toggle('active',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     (MGR_OPEN[name]||[]).forEach(([btn,body])=>{const b=$(body);if(b&&b.classList.contains('hide'))setSection($(btn),b,true);});
     document.title=`${pg.title} — WorkClock Manager`;
+    // A calendar left open on the previous page must not cover the new one.
+    document.querySelectorAll('.weekCal:not(.hide)').forEach(c=>c.classList.add('hide'));
+    document.querySelectorAll('.weekPickerBtn[aria-expanded="true"]').forEach(x=>x.setAttribute('aria-expanded','false'));
     setMgrNav(false);
     window.scrollTo({top:0,behavior:'auto'});
   }
