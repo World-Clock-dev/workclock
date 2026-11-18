@@ -15,3 +15,7 @@ test
 .dev.vars*
 .assetsignore
 .gitignore
+*.lock
+*.lockb
+*.yaml
+*.yml
