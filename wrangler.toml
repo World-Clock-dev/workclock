@@ -12,13 +12,14 @@ compatibility_flags = ["nodejs_compat"]
 directory = "."
 binding = "ASSETS"
 
-# Cloudflare D1 database. Create it once with:
+# Cloudflare D1 database (created in the dashboard, Eastern North America).
+# To recreate elsewhere:
 #   npx wrangler d1 create workclock
 # and paste the database_id it prints below.
 [[d1_databases]]
 binding = "DB"
 database_name = "workclock"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "8be6128e-c08a-41c4-bb45-e1853d04af04"
 
 # Nightly data-retention job, 03:00 UTC (same as the Vercel cron).
 [triggers]
