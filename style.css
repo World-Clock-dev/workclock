@@ -745,3 +745,22 @@ table.supLines,table.supLogTable{min-width:0}
 .supMine ul{margin:8px 0 6px;padding-left:18px;font-size:14px}
 .supMine .mini{margin-top:6px}
 @media(max-width:640px){.supItems{grid-template-columns:1fr}.supReqActions>button{flex:1}.supLines td:first-child{width:auto}#supCatFilter{flex:1}}
+
+/* ---- Employee menu ---- */
+.empHeader{position:relative}
+.empBurger{display:flex;flex-direction:column;justify-content:center;gap:4px;width:44px;height:44px;border-radius:12px;background:#fff;border:1px solid var(--line);padding:0 11px;flex:0 0 auto;box-shadow:var(--shadow)}
+.empBurger.hide{display:none!important}
+.empBurger span{display:block;height:2px;border-radius:2px;background:var(--text)}
+.empDrawer{position:fixed;top:0;left:0;bottom:0;width:min(290px,84vw);background:#fff;z-index:200;transform:translateX(-102%);transition:transform .25s ease;display:flex;flex-direction:column;padding:16px 12px;box-shadow:12px 0 40px rgba(15,23,42,.2)}
+.empDrawer.open{transform:none}
+.empDrawer .drawerTop{border-bottom-color:var(--line)}
+.empDrawer .drawerClose{color:var(--muted)}
+.empDrawer .brand span{color:var(--muted)}
+.empDrawerLink{display:flex;align-items:center;gap:12px;color:var(--text);text-decoration:none;font-weight:800;font-size:16px;padding:13px 12px;border-radius:12px;background:transparent;width:100%;text-align:left}
+.empDrawerLink:hover{background:#f3f4f6}
+.empDrawerLink.on{background:var(--primary);color:#fff}
+.empDrawerLink .navIcon{width:22px;height:22px;flex:0 0 auto}
+.empDrawerLink .navCount{margin-left:auto}
+.empDrawerOut{margin-top:auto;color:#b91c1c;border-top:1px solid var(--line);border-radius:0;padding-top:16px}
+.empScrim{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:190}
+.empDrawer .brand{margin:0}

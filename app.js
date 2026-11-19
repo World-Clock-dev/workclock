@@ -163,7 +163,8 @@
     supGone:['One of the items is no longer available. The list has been refreshed.','Uno de los artículos ya no está disponible. Se actualizó la lista.'],
     supQty:['Each item needs a quantity from 1 to 999.','Cada artículo necesita una cantidad de 1 a 999.'],
     supHandled:['This request has already been handled.','Este pedido ya fue atendido.'],
-    supLess:['Less','Menos'],supMore:['More','Más']
+    supLess:['Less','Menos'],supMore:['More','Más'],
+    menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
   const DAYNAMES = {en:['MON','TUE','WED','THU','FRI','SAT','SUN'],es:['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM']};
@@ -293,8 +294,8 @@
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
-  function showEmployeeLogin(){employeeIdentity=null;empCache=null;$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}
+  function showEmployeeLogin(){employeeIdentity=null;empCache=null;if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
   // Fills the ring on the live shift card toward a full 8-hour day.
   function updateShiftRing(h){
     const ring=$('shiftRingBar'),label=$('shiftRingPct');if(!ring)return;
@@ -520,6 +521,7 @@
     document.querySelectorAll('[data-sup-dec]').forEach(b=>b.onclick=()=>set(b.dataset.supDec,(supCart.get(b.dataset.supDec)||0)-1));
     document.querySelectorAll('[data-sup-inc]').forEach(b=>b.onclick=()=>set(b.dataset.supInc,(supCart.get(b.dataset.supInc)||0)+1));
     document.querySelectorAll('[data-sup-qty]').forEach(inp=>inp.onchange=()=>set(inp.dataset.supQty,inp.value));
+    const waitingN=supEmp.requests.filter(r=>r.status==='pending').length;$('empSupCount').textContent=waitingN;$('empSupCount').classList.toggle('hide',!waitingN);
     const picked=supCart.size;
     $('empSupSummary').textContent=picked?t('supPicked',{n:picked}):'';
     $('empSupSendBtn').disabled=!picked;
@@ -539,10 +541,36 @@
     $('empSupSearch').oninput=renderEmpSupplies;
     $('empSupSendBtn').onclick=sendEmpSupplies;
   }
+
+  /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
+  const EMP_PAGES=['clock','supplies'];
+  const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
+  function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
+  function showEmpPage(){
+    if(managerMode||!employeeIdentity)return;
+    const pg=empPage();
+    document.querySelectorAll('#employeeApp [data-epage]').forEach(el=>el.classList.toggle('pageOff',el.dataset.epage!==pg));
+    document.querySelectorAll('[data-eroute]').forEach(a=>{const on=a.dataset.eroute===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+    // On its own page the supplies list is always open.
+    $('toggleEmpSup').classList.toggle('hide',pg==='supplies');
+    if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
+    // The map was hidden while away; let Leaflet re-measure it.
+    if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
+    setEmpDrawer(false);window.scrollTo(0,0);
+  }
+  function initEmpMenu(){
+    $('empBurger').onclick=()=>setEmpDrawer(!$('empDrawer').classList.contains('open'));
+    $('empDrawerClose').onclick=()=>setEmpDrawer(false);
+    $('empScrim').onclick=()=>setEmpDrawer(false);
+    $('empDrawerLogout').onclick=()=>{setEmpDrawer(false);$('employeeLogoutBtn').click();};
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('empDrawer').classList.contains('open'))setEmpDrawer(false);});
+    window.addEventListener('hashchange',showEmpPage);
+  }
   async function initEmployee(){
     initLanguage();
     initEmployeeReport();
     initEmpSupplies();
+    initEmpMenu();
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
