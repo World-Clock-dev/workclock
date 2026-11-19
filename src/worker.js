@@ -22,6 +22,7 @@ import managerPassword from '../api/manager-password.js';
 import managerShift from '../api/manager-shift.js';
 import manager from '../api/manager.js';
 import settings from '../api/settings.js';
+import supplies from '../api/supplies.js';
 
 export const ROUTES = {
   'clock-in': clockIn,
@@ -36,6 +37,7 @@ export const ROUTES = {
   'manager-shift': managerShift,
   'manager': manager,
   'settings': settings,
+  'supplies': supplies,
 };
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };

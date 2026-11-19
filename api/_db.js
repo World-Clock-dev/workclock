@@ -72,6 +72,14 @@ export async function sql(strings, ...values) {
   }
 }
 
+/* Several statements as one D1 transaction: all apply or none do.
+   Each entry is [sqlText, ...params] with ? placeholders. */
+export async function sqlBatch(list) {
+  if (!DB) throw new Error('D1 binding "DB" is not configured.');
+  const out = await DB.batch(list.map(([text, ...params]) => DB.prepare(text).bind(...params.map(bindValue))));
+  return out.map(r => ({ rows: (r.results || []).map(pgRow), changes: r.meta?.changes ?? 0 }));
+}
+
 /* Time helpers replacing Postgres now() / interval arithmetic. */
 export const nowIso = () => new Date().toISOString();
 export const isoIn = ms => new Date(Date.now() + ms).toISOString();

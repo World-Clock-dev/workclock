@@ -1,0 +1,278 @@
+import { sql, sqlBatch, json, getManager, getEmployeeSession, requireSameOrigin, audit, nowIso } from './_db.js';
+
+/* Tools & Supplies.
+   Employees ask for supplies from their page; the manager sees the request in
+   the Supplies section, hands the supplies out and marks it Given (the given
+   quantities come off the shelf) or Rejects it. The manager keeps the item list
+   and sets each item's shelf quantity whenever they like. No prices anywhere.
+
+   Tables are created here on first use, so the feature needs no manual
+   database step. Every change to a shelf quantity is written to
+   supply_stock_log, which nobody can edit or delete from the app. */
+
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS supply_items (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     category TEXT NOT NULL DEFAULT 'Other',
+     unit TEXT NOT NULL DEFAULT 'Piece',
+     quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+     low_at INTEGER NOT NULL DEFAULT 0,
+     active INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS supply_items_name ON supply_items(lower(name))`,
+  `CREATE TABLE IF NOT EXISTS supply_requests (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     employee_id INTEGER NOT NULL REFERENCES employees(id),
+     status TEXT NOT NULL DEFAULT 'pending',
+     note TEXT,
+     manager_note TEXT,
+     created_at TEXT NOT NULL,
+     decided_at TEXT,
+     decided_by INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS supply_requests_status ON supply_requests(status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS supply_requests_employee ON supply_requests(employee_id, created_at)`,
+  `CREATE TABLE IF NOT EXISTS supply_request_lines (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     request_id INTEGER NOT NULL REFERENCES supply_requests(id),
+     item_id INTEGER NOT NULL REFERENCES supply_items(id),
+     item_name TEXT NOT NULL,
+     unit TEXT NOT NULL,
+     qty_requested INTEGER NOT NULL,
+     qty_given INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS supply_request_lines_request ON supply_request_lines(request_id)`,
+  `CREATE TABLE IF NOT EXISTS supply_stock_log (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     item_id INTEGER NOT NULL REFERENCES supply_items(id),
+     item_name TEXT NOT NULL,
+     change INTEGER NOT NULL,
+     quantity_after INTEGER NOT NULL,
+     reason TEXT NOT NULL,
+     request_id INTEGER,
+     employee_id INTEGER,
+     created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS supply_stock_log_created ON supply_stock_log(created_at)`
+];
+
+/* Starting catalog from the Tools & Supplies specification (paint and
+   coatings excluded). Quantities start at 0 for the manager to set. */
+const STARTING_CATALOG = [
+  ['Tape', 'Roll', ['Blue painter tape 1"', 'Blue painter tape 1.5"', 'Blue painter tape 2"', 'Green delicate-surface tape']],
+  ['Rollers', 'Piece', ['9" roller cover', '14" roller cover', '4" roller cover', '9" roller frame', '14" roller frame', '4" roller frame']],
+  ['Brushes', 'Piece', ['2" paintbrush', '2.5" paintbrush', '3" paintbrush']],
+  ['Buckets', 'Piece', ['5-gallon bucket', 'Handheld paint pail', 'Bucket grid']],
+  ['Trays', 'Piece', ['Paint tray', 'Disposable tray liner']],
+  ['Protection', 'Piece', ['Plastic drop cloth', 'Canvas drop cloth', 'Plastic covering box/dispenser']],
+  ['Protection', 'Roll', ['Masking plastic', 'Masking paper', 'Floor protection paper']],
+  ['Preparation', 'Piece', ['Sandpaper sheets', 'Sanding sponges', 'Sanding discs', 'Scrapers', 'Putty knives', 'Caulking gun']],
+  ['Preparation', 'Pack', ['Utility knife blades', 'Rags']],
+  ['Cleaning', 'Piece', ['Cleaning sponges', 'Cleaning brushes']],
+  ['Cleaning', 'Roll', ['Trash bags']],
+  ['Accessories', 'Piece', ['Extension poles', 'Roller bucket screens', 'Paint strainers']],
+  ['Accessories', 'Pack', ['Mixing sticks']],
+  ['Safety', 'Box', ['Disposable gloves', 'Dust masks']],
+  ['Safety', 'Piece', ['Safety glasses']]
+];
+
+let ready = false;
+async function ensureTables() {
+  if (ready) return;
+  await sqlBatch(SCHEMA.map(s => [s]));
+  const n = await sql`SELECT count(*) AS n FROM supply_items`;
+  if (!n[0].n) {
+    const now = nowIso();
+    const rows = [];
+    for (const [cat, unit, names] of STARTING_CATALOG) for (const name of names)
+      rows.push(['INSERT OR IGNORE INTO supply_items(name,category,unit,quantity,low_at,active,created_at,updated_at) VALUES(?,?,?,0,0,1,?,?)', name, cat, unit, now, now]);
+    await sqlBatch(rows);
+  }
+  ready = true;
+}
+
+const MAX_QTY = 100000, MAX_LINES = 40, MAX_OPEN_PER_EMPLOYEE = 5;
+const cleanText = (v, max) => { const s = String(v ?? '').trim().replace(/\s+/g, ' '); return s.length <= max ? s : null; };
+const wholeNumber = (v, min, max) => { const n = Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : null; };
+
+async function linesFor(requestIds) {
+  if (!requestIds.length) return new Map();
+  const rows = [];
+  for (let i = 0; i < requestIds.length; i += 90) {
+    const part = requestIds.slice(i, i + 90);
+    const strings = ['SELECT l.id,l.request_id,l.item_id,l.item_name,l.unit,l.qty_requested,l.qty_given,i.quantity AS on_shelf FROM supply_request_lines l LEFT JOIN supply_items i ON i.id=l.item_id WHERE l.request_id IN ('];
+    part.forEach((_, k) => strings.push(k < part.length - 1 ? ',' : ') ORDER BY l.id'));
+    rows.push(...await sql(strings, ...part));
+  }
+  const map = new Map();
+  for (const r of rows) { if (!map.has(r.request_id)) map.set(r.request_id, []); map.get(r.request_id).push(r); }
+  return map;
+}
+async function withLines(requests) {
+  const map = await linesFor(requests.map(r => Number(r.id)));
+  return requests.map(r => ({ ...r, lines: map.get(Number(r.id)) || [] }));
+}
+
+/* ---------------- Employee ---------------- */
+async function employeeSide(req, res, emp) {
+  const b = req.body || {};
+  if (req.method === 'GET') {
+    const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 ORDER BY category,name`;
+    const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
+    const out = await withLines(requests);
+    out.forEach(r => r.lines.forEach(l => { delete l.on_shelf; }));
+    return json(res, 200, { items, requests: out });
+  }
+  if (!requireSameOrigin(req, res)) return;
+  if (req.method === 'POST' && b.action === 'request') {
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    if (!lines.length) return json(res, 400, { error: 'Choose at least one item.', code: 'SUPPLY_EMPTY' });
+    if (lines.length > MAX_LINES) return json(res, 400, { error: `Up to ${MAX_LINES} items per request.` });
+    const note = cleanText(b.note, 500); if (note === null) return json(res, 400, { error: 'The note must be 500 characters or fewer.' });
+    const wanted = new Map();
+    for (const l of lines) {
+      const id = wholeNumber(l.item_id, 1, Number.MAX_SAFE_INTEGER), qty = wholeNumber(l.qty, 1, 999);
+      if (!id || !qty) return json(res, 400, { error: 'Each item needs a quantity from 1 to 999.', code: 'SUPPLY_QTY' });
+      wanted.set(id, (wanted.get(id) || 0) + qty);
+    }
+    const open = await sql`SELECT count(*) AS n FROM supply_requests WHERE employee_id=${emp.id} AND status='pending'`;
+    if (open[0].n >= MAX_OPEN_PER_EMPLOYEE) return json(res, 400, { error: 'You already have several requests waiting. Wait for the manager, or cancel one.', code: 'SUPPLY_TOO_MANY' });
+    const items = await sql`SELECT id,name,unit FROM supply_items WHERE active=1`;
+    const byId = new Map(items.map(i => [Number(i.id), i]));
+    for (const id of wanted.keys()) if (!byId.has(id)) return json(res, 400, { error: 'One of the items is no longer available. Refresh and try again.', code: 'SUPPLY_GONE' });
+    const now = nowIso();
+    const created = await sql`INSERT INTO supply_requests(employee_id,status,note,created_at) VALUES(${emp.id},'pending',${note || null},${now}) RETURNING id`;
+    const rid = Number(created[0].id);
+    await sqlBatch([...wanted].map(([id, qty]) => ['INSERT INTO supply_request_lines(request_id,item_id,item_name,unit,qty_requested) VALUES(?,?,?,?,?)', rid, id, byId.get(id).name, byId.get(id).unit, qty]));
+    await audit('employee', emp.id, 'supply_requested', { request_id: rid, items: wanted.size });
+    return json(res, 200, { ok: true, id: rid });
+  }
+  if (req.method === 'POST' && b.action === 'cancel') {
+    const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
+    const rows = await sql`UPDATE supply_requests SET status='cancelled',decided_at=${nowIso()} WHERE id=${id} AND employee_id=${emp.id} AND status='pending' RETURNING id`;
+    if (!rows.length) return json(res, 400, { error: 'This request has already been handled.', code: 'SUPPLY_HANDLED' });
+    await audit('employee', emp.id, 'supply_request_cancelled', { request_id: id });
+    return json(res, 200, { ok: true });
+  }
+  return json(res, 405, { error: 'Method not allowed' });
+}
+
+/* ---------------- Manager ---------------- */
+async function managerSide(req, res, manager) {
+  const b = req.body || {};
+  const u = new URL(req.url, 'https://workclock.invalid');
+  if (req.method === 'GET') {
+    const pending = await sql`SELECT count(*) AS n FROM supply_requests WHERE status='pending'`;
+    if (u.searchParams.get('count')) {
+      const latest = await sql`SELECT r.id,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
+      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null });
+    }
+    const items = await sql`SELECT id,name,category,unit,quantity,low_at,active,updated_at FROM supply_items ORDER BY active DESC,category,name`;
+    const requests = await sql`SELECT r.id,r.status,r.note,r.manager_note,r.created_at,r.decided_at,r.employee_id,e.name AS employee_name,e.title AS employee_title
+      FROM supply_requests r JOIN employees e ON e.id=r.employee_id
+      WHERE r.status='pending' OR r.created_at>=${new Date(Date.now() - 90 * 86400000).toISOString()}
+      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`;
+    const log = await sql`SELECT g.id,g.item_name,g.change,g.quantity_after,g.reason,g.request_id,g.created_at,e.name AS employee_name FROM supply_stock_log g LEFT JOIN employees e ON e.id=g.employee_id ORDER BY g.created_at DESC, g.id DESC LIMIT 150`;
+    return json(res, 200, { items, requests: await withLines(requests), log, pending: pending[0].n });
+  }
+  if (!requireSameOrigin(req, res)) return;
+
+  if ((req.method === 'POST' || req.method === 'PATCH') && b.action === 'item') {
+    const isNew = req.method === 'POST';
+    const id = isNew ? null : wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER);
+    if (!isNew && !id) return json(res, 400, { error: 'Item id required.' });
+    const old = isNew ? null : (await sql`SELECT * FROM supply_items WHERE id=${id}`)[0];
+    if (!isNew && !old) return json(res, 404, { error: 'Item not found.' });
+    const name = b.name === undefined && old ? old.name : cleanText(b.name, 80);
+    const category = b.category === undefined && old ? old.category : (cleanText(b.category, 40) || 'Other');
+    const unit = b.unit === undefined && old ? old.unit : (cleanText(b.unit, 20) || 'Piece');
+    const quantity = b.quantity === undefined && old ? old.quantity : wholeNumber(b.quantity ?? 0, 0, MAX_QTY);
+    const lowAt = b.low_at === undefined && old ? old.low_at : wholeNumber(b.low_at ?? 0, 0, MAX_QTY);
+    const active = b.active === undefined ? (old ? !!old.active : true) : !!b.active;
+    if (!name) return json(res, 400, { error: 'Enter an item name (up to 80 characters).' });
+    if (category === null || unit === null) return json(res, 400, { error: 'Category and unit must be short.' });
+    if (quantity === null) return json(res, 400, { error: `Quantity must be a whole number from 0 to ${MAX_QTY}.` });
+    if (lowAt === null) return json(res, 400, { error: 'Low-stock alert must be a whole number, 0 or more.' });
+    const now = nowIso();
+    try {
+      let row;
+      if (isNew) row = (await sql`INSERT INTO supply_items(name,category,unit,quantity,low_at,active,created_at,updated_at) VALUES(${name},${category},${unit},${quantity},${lowAt},${active},${now},${now}) RETURNING id`)[0];
+      else await sql`UPDATE supply_items SET name=${name},category=${category},unit=${unit},quantity=${quantity},low_at=${lowAt},active=${active},updated_at=${now} WHERE id=${id}`;
+      const itemId = isNew ? Number(row.id) : id;
+      const change = quantity - (old ? old.quantity : 0);
+      if (change !== 0) await sql`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,created_at) VALUES(${itemId},${name},${change},${quantity},${isNew ? 'Starting quantity' : 'Quantity set by manager'},${now})`;
+      await audit('manager', manager.id, isNew ? 'supply_item_created' : 'supply_item_updated', { item_id: itemId, name, quantity, change, active });
+      return json(res, 200, { ok: true, id: itemId });
+    } catch (e) {
+      if (e.code === '23505') return json(res, 400, { error: 'An item with this name already exists.' });
+      throw e;
+    }
+  }
+
+  if (req.method === 'POST' && b.action === 'decide') {
+    const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
+    const decision = b.decision;
+    if (!['given', 'rejected'].includes(decision)) return json(res, 400, { error: 'Choose Given or Reject.' });
+    const note = cleanText(b.note, 300); if (note === null) return json(res, 400, { error: 'The note must be 300 characters or fewer.' });
+    const request = (await sql`SELECT r.*,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.id=${id}`)[0];
+    if (!request) return json(res, 404, { error: 'Request not found.' });
+    if (request.status !== 'pending') return json(res, 400, { error: 'This request has already been handled.' });
+    const now = nowIso();
+    if (decision === 'rejected') {
+      const rows = await sql`UPDATE supply_requests SET status='rejected',manager_note=${note || null},decided_at=${now},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
+      if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
+      await audit('manager', manager.id, 'supply_request_rejected', { request_id: id });
+      return json(res, 200, { ok: true });
+    }
+    const lines = (await linesFor([id])).get(id) || [];
+    const given = new Map((Array.isArray(b.lines) ? b.lines : []).map(l => [Number(l.id), l.qty]));
+    const plan = [];
+    for (const l of lines) {
+      const q = given.has(Number(l.id)) ? wholeNumber(given.get(Number(l.id)), 0, MAX_QTY) : l.qty_requested;
+      if (q === null) return json(res, 400, { error: `Enter a whole number for ${l.item_name}.` });
+      if (q > (l.on_shelf ?? 0)) return json(res, 400, { error: `Not enough ${l.item_name} on the shelf: ${l.on_shelf ?? 0} ${l.unit} left. Lower the amount or update the stock first.`, code: 'SUPPLY_SHORT' });
+      plan.push({ ...l, q });
+    }
+    if (!plan.some(p => p.q > 0)) return json(res, 400, { error: 'Give at least one item, or reject the request.' });
+    // One transaction: the request is marked given only if it was still waiting,
+    // and each shelf quantity drops only if enough is there (CHECK quantity>=0).
+    const stmts = [['UPDATE supply_requests SET status=?,manager_note=?,decided_at=?,decided_by=? WHERE id=? AND status=?', 'given', note || null, now, manager.id, id, 'pending']];
+    // Every later statement only runs if the first one marked THIS request
+    // given in this transaction (same decided_at), so a double click or a second
+    // manager tab cannot take supplies off the shelf twice.
+    const mine = 'EXISTS(SELECT 1 FROM supply_requests WHERE id=? AND status=\'given\' AND decided_at=?)';
+    for (const p of plan) {
+      stmts.push([`UPDATE supply_request_lines SET qty_given=? WHERE id=? AND ${mine}`, p.q, p.id, id, now]);
+      if (p.q > 0) {
+        stmts.push([`UPDATE supply_items SET quantity=quantity-?,updated_at=? WHERE id=? AND ${mine}`, p.q, now, p.item_id, id, now]);
+        stmts.push([`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,request_id,employee_id,created_at) SELECT id,name,?,quantity,?,?,?,? FROM supply_items WHERE id=? AND ${mine}`, -p.q, 'Given to employee', id, request.employee_id, now, p.item_id, id, now]);
+      }
+    }
+    let out;
+    try { out = await sqlBatch(stmts); }
+    catch (e) {
+      if (/CHECK constraint/i.test(String(e?.message) + String(e?.cause?.message))) return json(res, 400, { error: 'Not enough on the shelf for one of the items. Refresh and try again.', code: 'SUPPLY_SHORT' });
+      throw e;
+    }
+    if (!out[0].changes) return json(res, 400, { error: 'This request has already been handled.' });
+    await audit('manager', manager.id, 'supply_request_given', { request_id: id, lines: plan.map(p => ({ item_id: p.item_id, qty: p.q })) });
+    return json(res, 200, { ok: true });
+  }
+  return json(res, 405, { error: 'Method not allowed' });
+}
+
+export default async function handler(req, res) {
+  try {
+    await ensureTables();
+    const u = new URL(req.url, 'https://workclock.invalid');
+    const b = req.body || {};
+    const employeeCall = u.searchParams.get('mine') === '1' || ['request', 'cancel'].includes(b.action);
+    if (employeeCall) {
+      const emp = await getEmployeeSession(req);
+      if (!emp) return json(res, 401, { error: 'Employee login required.' });
+      return await employeeSide(req, res, emp);
+    }
+    const manager = await getManager(req);
+    if (!manager) return json(res, 401, { error: 'Manager login required.' });
+    return await managerSide(req, res, manager);
+  } catch (e) { console.error(e); return json(res, 500, { error: 'Server error' }); }
+}
