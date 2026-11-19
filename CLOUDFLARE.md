@@ -64,40 +64,12 @@ every answer was compared:
 - Account `workers.dev` name changed to a random `wc7ptpfk` so the address carries no company name.
   No custom domain or route is attached.
 
-## Manager portal pages (Cloudflare version only)
+## Manager portal
 
-The manager portal is an app with a menu: a sidebar on computers and a burger
-drawer on phones and tablets (under 1024px). Each section is its own page with its
-own link (`/?manager=1#/payroll` and so on):
-Dashboard, Payroll, Shifts, Approvals, Location Alerts, Employees, Reports, Settings.
-The Approvals and Location Alerts menu items show live counts.
-
-The existing sections and their code are unchanged. Each one is tagged with
-`data-page`, and CSS shows only the current page's sections. Dashboard (clocked in
-now, waiting for approval, latest alerts, hours by day) and Approvals (approve full,
-actual or custom from one list) are new, and they use the same `/api/manager` data
-and the same review dialogs. The employee portal is unchanged.
-
-### Page layouts
-
-- **Payroll:** totals bar, Mon–Sun table with a total row, search and Download CSV.
-  On phones each employee is a card with seven day chips. Wages are edited on Employees.
-- **Shifts:** compact day details (times, badges, worked / paid / this day / earned,
-  map pins, actions). Force clock-out is a dialog, opened from an open shift or from
-  "Clocked in now" on the Dashboard. On phones there's a day-by-day list, and a day
-  opens in a sheet.
-- **Employees:** search, Active / On vacation / Terminated tabs, and one panel to edit
-  or add a person (title, wage, email, status, PIN).
-- **Location Alerts:** cards with a summary line. **Approvals** has a summary line.
-- **Reports:** quick ranges (1, 3, 6, 12 months, custom); days shown by default; on
-  phones the tables become stacked cards.
-- **Settings:** one row per setting, each with its own explanation and unit;
-  Data Retention has its own Save button.
-- Switching pages closes any open calendar, dialog or day sheet.
-
-Fixed along the way: the dashboard refresh used to replace the employee records with
-a version that had no email or PIN state, so saving an employee could clear their
-email. The records are now merged instead.
+The manager and employee screens (`index.html`, `app.js`, `style.css`) are identical
+to the original app on `main`. A redesign with separate pages was tried and then
+rolled back on 19 Nov 2026 at the client's request; it is still in this branch's
+history (commits 59910aa, 5c857a8, c3ef094) if it's ever wanted again.
 
 ## Data move (done 18 Nov 2026)
 
