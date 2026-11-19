@@ -599,3 +599,96 @@ body.mgr .managerLink{color:var(--orange-d)}
 @media (prefers-reduced-motion: reduce){
   body.mgr #managerApp>section.card.reveal{opacity:1;transform:none}
 }
+
+/* Week calendar: its own buttons keep the calendar look. The general
+   ".weekNav button" rule (arrow buttons) was making the days large and dark
+   and pushing "This week" over the edge. */
+.weekNav .weekCal .weekCalNav{width:30px;height:30px;padding:0;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:16px;line-height:1;display:grid;place-items:center;flex:0 0 30px}
+body.mgr .weekNav .weekCal .weekCalNav:hover{background:var(--orange-l);border-color:var(--orange-m)}
+.weekNav .weekCal .weekCalDay{width:auto;height:32px;flex:none;padding:0;border:0;border-radius:0;background:transparent;color:var(--text);font-size:13px;font-weight:700;line-height:1;display:grid;place-items:center}
+.weekNav .weekCal .weekCalGrid>.weekCalDay:nth-child(7n+1){border-radius:8px 0 0 8px}
+.weekNav .weekCal .weekCalGrid>.weekCalDay:nth-child(7n){border-radius:0 8px 8px 0}
+.weekNav .weekCal .weekCalDay.out{color:var(--muted);opacity:.55}
+.weekNav .weekCal .weekCalDay.hoverWeek{background:#eef2ff}
+.weekNav .weekCal .weekCalDay.inWeek,.weekNav .weekCal .weekCalDay.inWeek.hoverWeek{background:var(--primary);color:#fff;opacity:1}
+body.mgr .weekNav .weekCal .weekCalDay.thisWeek{background:var(--orange-l)}
+body.mgr .weekNav .weekCal .weekCalDay.hoverWeek{background:var(--orange-l)}
+body.mgr .weekNav .weekCal .weekCalDay.inWeek,body.mgr .weekNav .weekCal .weekCalDay.inWeek.hoverWeek{background:var(--ink);color:#fff;opacity:1}
+.weekNav .weekCal .weekCalFoot button{width:auto;height:auto;font-size:13px;line-height:1.2;padding:7px 12px;border-radius:9px;background:#eef2f7;color:var(--text);flex:none;display:inline-block}
+
+/* ---- Section menu: links in the header on computers, ☰ drawer on phones ---- */
+.pageOff{display:none!important}
+.mgrTopNav{display:flex;gap:4px;margin:0 auto 0 18px}
+.topLink{color:#d4d4d8;text-decoration:none;font-weight:800;font-size:14px;padding:8px 12px;border-radius:10px;transition:background .15s,color .15s}
+.topLink:hover{background:rgba(255,255,255,.08);color:#fff}
+.topLink.on{background:var(--orange,#f97316);color:#0b0b0c}
+.mgrBurger{display:none;flex-direction:column;justify-content:center;gap:4px;width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.08);padding:0 10px;flex:0 0 auto}
+.mgrBurger span{display:block;height:2px;border-radius:2px;background:#fff}
+.mgrDrawer{position:fixed;top:0;left:0;bottom:0;width:min(290px,84vw);background:#0b0b0c;color:#fff;z-index:200;transform:translateX(-102%);transition:transform .25s ease;display:flex;flex-direction:column;padding:16px 12px;box-shadow:12px 0 40px rgba(0,0,0,.3)}
+.mgrDrawer.open{transform:none}
+.mgrDrawer .brand span{color:#a1a1aa}
+.mgrDrawer .brandMark{background:#f97316;color:#0b0b0c}
+.drawerTop{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 16px;border-bottom:1px solid #27272a;margin-bottom:10px}
+.drawerClose{background:transparent;color:#a1a1aa;font-size:28px;line-height:1;width:38px;height:38px;border-radius:10px}
+.drawerLinks{display:flex;flex-direction:column;gap:4px}
+.drawerLink{display:flex;align-items:center;gap:12px;color:#e4e4e7;text-decoration:none;font-weight:800;font-size:15px;padding:12px;border-radius:12px;background:transparent;width:100%;text-align:left}
+.drawerLink.on{background:#f97316;color:#0b0b0c}
+.drawerLink .navIcon{width:20px;height:20px;flex:0 0 auto}
+.drawerLogout{margin-top:auto;color:#fca5a5;border-top:1px solid #27272a;border-radius:0;padding-top:16px}
+.mgrScrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:190}
+body.drawerOpen{overflow:hidden}
+.suppliesEmpty{display:grid;justify-items:center;gap:6px;text-align:center;padding:40px 16px;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
+.suppliesEmpty svg{width:44px;height:44px;color:var(--orange,#f97316)}
+.suppliesEmpty b{color:var(--text);font-size:16px}
+@media(max-width:900px){
+  .mgrTopNav{display:none}
+  .mgrBurger{display:flex}
+  body.mgr .managerHeader{justify-content:flex-start}
+  body.mgr .managerHeader .mgrHeadRight{margin-left:auto}
+  body.mgr .managerHeader #logoutBtn{display:none}
+}
+
+/* ---- Employees list ---- */
+.toolRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.searchBox{flex:1 1 220px;max-width:360px;position:relative}
+.searchBox input{margin:0;padding-left:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center}
+.toolBtn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;margin-left:auto}
+.toolBtn svg{width:16px;height:16px}
+.empTools .segTabs{display:flex;background:#f4f4f5;border-radius:11px;padding:3px;gap:2px}
+.segTab{background:transparent;border-radius:9px;padding:8px 12px;font-weight:800;font-size:13px;color:var(--muted);white-space:nowrap}
+.segTab span{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:999px;background:#e4e4e7;color:var(--text);font-size:11px;margin-left:4px;padding:0 6px}
+.segTab.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.segTab.on span{background:var(--orange);color:var(--ink)}
+.empNote{margin:0 0 8px}
+.empList{display:flex;flex-direction:column;gap:8px}
+.empRow{display:grid;grid-template-columns:42px minmax(0,1fr) auto auto auto 18px;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;transition:border-color .15s,box-shadow .15s}
+.empRow:hover{border-color:var(--orange-m);box-shadow:0 6px 18px rgba(249,115,22,.10)}
+.avatar{width:42px;height:42px;border-radius:12px;background:var(--ink);color:var(--orange);display:grid;place-items:center;font-weight:900;font-size:14px}
+.status-terminated .avatar{background:#e4e4e7;color:#71717a}
+.status-vacation .avatar{background:var(--orange-l);color:var(--orange-d)}
+.empMain b{display:block;font-size:15px}
+.empMain span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empWage{font-weight:900;font-size:15px;font-variant-numeric:tabular-nums}
+.empWage small{color:var(--muted);font-weight:700}
+.pinState{font-size:12px;font-weight:800;color:#166534}
+.pinState.need{color:#b45309}
+.chev{width:18px;height:18px;color:#a1a1aa}
+.empPanelCard{max-width:620px}
+.empForm{grid-template-columns:1fr 1fr}
+.empForm label{margin:8px 0}
+.empForm input:disabled{background:#f4f4f5;color:var(--muted)}
+.dashEmpty{padding:14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;text-align:center}
+.empTools .segTabs .segTab{border:0}
+@media(max-width:900px){.empRow{grid-template-columns:42px minmax(0,1fr) auto 18px}.empRow .statusBadge,.empRow .pinState{display:none}}
+@media(max-width:640px){
+  .toolBtn{margin-left:0;flex:1;justify-content:center}
+  .searchBox{max-width:none;flex-basis:100%}
+  .empTools .segTabs{display:grid;grid-template-columns:repeat(3,1fr);width:100%}
+  .segTab{padding:8px 4px;font-size:12px;white-space:normal;line-height:1.2}
+  .empRow{grid-template-columns:38px minmax(0,1fr) auto;gap:10px;padding:10px 12px}
+  .empRow .chev{display:none}
+  .avatar{width:38px;height:38px}
+  .empForm{grid-template-columns:1fr}
+}
+body.mgr .topLink{color:#d4d4d8}body.mgr .topLink:hover{color:#fff}body.mgr .topLink.on{color:#0b0b0c}
+body.mgr .drawerLink{color:#e4e4e7}body.mgr .drawerLink.on{color:#0b0b0c}body.mgr .drawerLogout{color:#fca5a5}
