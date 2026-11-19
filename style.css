@@ -764,3 +764,66 @@ table.supLines,table.supLogTable{min-width:0}
 .empDrawerOut{margin-top:auto;color:#b91c1c;border-top:1px solid var(--line);border-radius:0;padding-top:16px}
 .empScrim{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:190}
 .empDrawer .brand{margin:0}
+
+/* ---- Dashboard low-stock notice ---- */
+.lowAlert{display:flex;align-items:center;gap:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:16px;padding:14px 16px;margin:16px 0}
+.lowAlertIcon{width:38px;height:38px;border-radius:12px;background:#dc2626;color:#fff;display:grid;place-items:center;font-weight:900;font-size:20px;flex:0 0 auto}
+.lowAlertText{flex:1;min-width:0}.lowAlertText b{color:#991b1b}
+.lowChip{display:inline-block;background:#fff;border:1px solid #fecaca;border-radius:999px;padding:3px 10px;margin:6px 6px 0 0;font-size:13px}
+.lowChip b{color:#b91c1c}
+.lowAlertBtn{background:#dc2626;color:#fff;font-weight:800;text-decoration:none;border-radius:10px;padding:10px 14px;white-space:nowrap}
+@media(max-width:640px){.lowAlert{flex-wrap:wrap}.lowAlertBtn{width:100%;text-align:center}}
+/* supplies item buttons */
+.supItem{grid-template-columns:minmax(0,1fr) auto auto}
+.supItemBtns{display:flex;flex-direction:column;gap:4px}
+.supItemBtns .mini{padding:6px 10px;font-size:12px}
+.supDel{color:#b91c1c}
+.supDelBtn{margin-right:auto}
+#toggleSupStock{white-space:nowrap}
+/* usage chart: painters' names on top, bars below */
+.usageNav{align-items:center}
+.usageMonth{min-width:140px;text-align:center;font-size:15px}
+.usageChart{margin-top:6px}
+.usageCols{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 8px;align-items:stretch}
+.usageCol{flex:1 0 92px;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--line);border-radius:14px;padding:12px 8px;background:#fff}
+.usageCol.top{border-color:var(--orange-m,#fed7aa);background:#fffaf5}
+.usageName{font-weight:900;font-size:14px;text-align:center;line-height:1.2;min-height:34px;display:flex;align-items:center;overflow:hidden;word-break:break-word}
+.usageTrack{height:180px;width:46px;background:#f4f4f5;border-radius:10px;display:flex;align-items:flex-end;overflow:hidden}
+.usageBar{width:100%;background:var(--orange,#f97316);border-radius:10px 10px 0 0;position:relative;min-height:0;transition:height .4s}
+.usageBar span{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-weight:900;font-size:13px;color:var(--text)}
+.usageTrack{padding-top:24px;box-sizing:border-box}
+.usageSub{font-size:12px;color:var(--muted);font-weight:700}
+/* placeholders */
+.placeholderBox{display:grid;justify-items:center;gap:6px;text-align:center;padding:40px 16px;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
+.placeholderBox svg{width:44px;height:44px;color:var(--orange,#f97316)}
+.placeholderBox b{color:var(--text);font-size:16px}
+.placeholderBox span{max-width:520px}
+/* vacations */
+table.vacTable{min-width:760px}
+.vacTable td{vertical-align:top}
+.vacNum small{display:block;color:var(--muted);font-size:11px;font-weight:700}
+.vacBal{font-weight:900;color:#047857}.vacBal.neg{color:#b91c1c}
+.vacHist{padding:6px 0;border-top:1px solid #f1f1f3}
+/* uniforms */
+.uniIcon{display:inline-grid;place-items:center;width:30px;height:30px;color:var(--orange,#f97316);vertical-align:middle;margin-right:6px}
+.uniIcon svg{width:100%;height:100%}
+.uniIcon.sm{width:22px;height:22px}
+.uniIcon.lg{width:44px;height:44px;color:var(--primary);background:#eff6ff;border-radius:12px;padding:6px;box-sizing:border-box;margin:0}
+.uniLines{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.uniLine{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.uniSize{background:#0b0b0c;color:#fff;font-weight:900;font-size:12px;border-radius:7px;padding:2px 8px}
+table.uniSizeTable{min-width:620px}
+.uniSizeTable td,.uniSizeTable th{text-align:center}.uniSizeTable td:first-child,.uniSizeTable th:first-child{text-align:left}
+.uniSizeTable td.has{font-weight:900;color:#9a3412;background:#fff7ed}
+.uniGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:12px 0}
+.uniCard{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.uniCard.on{border-color:var(--primary);box-shadow:0 0 0 2px rgba(37,99,235,.15)}
+.uniCardHead{display:flex;align-items:center;gap:10px}.uniCardHead b{font-size:15px}
+.uniSizeLbl{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.uniSizes{display:flex;flex-wrap:wrap;gap:6px}
+.uniSz{min-width:44px;height:40px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:800;font-size:13px;color:var(--text)}
+.uniSz.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.uniQtyRow{display:flex;justify-content:space-between;align-items:center}
+.uniNoteLbl{margin:4px 0 10px}
+@media(max-width:1100px){.mgrTopNav{display:none}.mgrBurger{display:flex}body.mgr .managerHeader .mgrHeadRight{margin-left:auto}body.mgr .managerHeader #logoutBtn{display:none}}
+body.mgr .lowAlertBtn,body.mgr .lowAlertBtn:hover{color:#fff}

@@ -1,3 +1,4 @@
+import { bankShiftsBefore } from './_vacation.js';
 import { sql, json, requireManager, getManager, requireSameOrigin, settingNumber, audit, nowIso, monthsAgoIso } from './_db.js';
 import crypto from 'node:crypto';
 
@@ -54,6 +55,8 @@ async function retentionMonths() {
 // settings are never touched. Open shifts are never deleted, however old they
 // are, because removing one would strand an employee who is still clocked in.
 async function purge(cutoffIso) {
+  // Keep earned vacation: bank the paid hours of the shifts about to be deleted.
+  await bankShiftsBefore(cutoffIso);
   const shifts = await sql`DELETE FROM shifts WHERE clock_in < ${cutoffIso} AND clock_out IS NOT NULL RETURNING id`;
   const audits = await sql`DELETE FROM audit_logs WHERE created_at < ${cutoffIso} RETURNING id`;
   const attempts = await sql`DELETE FROM auth_attempts WHERE created_at < ${cutoffIso} RETURNING id`;

@@ -1,4 +1,5 @@
-import { sql, json, requireManager, settingNumber } from './_db.js';
+import { sql, json, requireManager, requireSameOrigin, settingNumber, audit } from './_db.js';
+import { vacationSummary, vacationHistory, recordVacationUsed } from './_vacation.js';
 import { allocatePaidHours, normalizeDayStarts, hoursBetween, effectiveShiftPay } from './_time.js';
 
 function getRange(req){
@@ -45,8 +46,30 @@ async function handleReport(req,res,u){
 export default async function handler(req,res){
   try{
     const manager=await requireManager(req,res);if(!manager)return;
-    if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
     const url=new URL(req.url,'https://workclock.invalid');
+    // Vacation (kept in this file so the Vercel version stays within 12 functions).
+    if(req.method==='POST'&&(req.body||{}).action==='vacation_used'){
+      if(!requireSameOrigin(req,res))return;
+      const b=req.body,id=Number(b.employeeId),hours=Number(b.hours),day=String(b.takenOn||'');
+      if(!Number.isInteger(id)||id<=0)return json(res,400,{error:'Choose an employee.'});
+      if(!Number.isFinite(hours)||hours<=0||hours>2000)return json(res,400,{error:'Enter the vacation hours taken (more than 0).'});
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(day))return json(res,400,{error:'Choose the date the vacation was taken.'});
+      const note=String(b.note||'').trim().slice(0,200);
+      const emp=await sql`SELECT id FROM employees WHERE id=${id}`;if(!emp.length)return json(res,404,{error:'Employee not found.'});
+      await recordVacationUsed(id,Math.round(hours*100)/100,day,note,manager.id);
+      await audit('manager',manager.id,'vacation_used_recorded',{employee_id:id,hours,taken_on:day});
+      return json(res,200,{ok:true});
+    }
+    if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
+    if(url.searchParams.get('view')==='vacations'){
+      const year=Number(url.searchParams.get('year'))||new Date().getUTCFullYear();
+      if(year<2000||year>2100)return json(res,400,{error:'Invalid year.'});
+      return json(res,200,{year,rate:{vacation_hours:40,per_paid_hours:2080},employees:await vacationSummary(year)});
+    }
+    if(url.searchParams.get('view')==='vacation_history'){
+      const id=Number(url.searchParams.get('employeeId'));if(!Number.isInteger(id)||id<=0)return json(res,400,{error:'Choose an employee.'});
+      return json(res,200,{history:await vacationHistory(id)});
+    }
     if(url.searchParams.get('view')==='report')return await handleReport(req,res,url);
     let range;try{range=getRange(req);}catch(e){return json(res,400,{error:e.message});}
     const {start,end,days}=range;

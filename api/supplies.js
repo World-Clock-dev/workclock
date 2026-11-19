@@ -21,7 +21,6 @@ const SCHEMA = [
      active INTEGER NOT NULL DEFAULT 1,
      created_at TEXT NOT NULL,
      updated_at TEXT NOT NULL)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS supply_items_name ON supply_items(lower(name))`,
   `CREATE TABLE IF NOT EXISTS supply_requests (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      employee_id INTEGER NOT NULL REFERENCES employees(id),
@@ -52,7 +51,24 @@ const SCHEMA = [
      request_id INTEGER,
      employee_id INTEGER,
      created_at TEXT NOT NULL)`,
-  `CREATE INDEX IF NOT EXISTS supply_stock_log_created ON supply_stock_log(created_at)`
+  `CREATE INDEX IF NOT EXISTS supply_stock_log_created ON supply_stock_log(created_at)`,
+  `CREATE TABLE IF NOT EXISTS uniform_requests (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     employee_id INTEGER NOT NULL REFERENCES employees(id),
+     status TEXT NOT NULL DEFAULT 'pending',
+     note TEXT,
+     manager_note TEXT,
+     created_at TEXT NOT NULL,
+     decided_at TEXT,
+     decided_by INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS uniform_requests_status ON uniform_requests(status, created_at)`,
+  `CREATE TABLE IF NOT EXISTS uniform_request_lines (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     request_id INTEGER NOT NULL REFERENCES uniform_requests(id),
+     item TEXT NOT NULL,
+     size TEXT NOT NULL,
+     qty INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS uniform_request_lines_request ON uniform_request_lines(request_id)`
 ];
 
 /* Starting catalog from the Tools & Supplies specification (paint and
@@ -79,6 +95,14 @@ let ready = false;
 async function ensureTables() {
   if (ready) return;
   await sqlBatch(SCHEMA.map(s => [s]));
+  // Later additions: full-stock amount (for the 20% alert) and soft delete.
+  const cols = (await sql`SELECT name FROM pragma_table_info('supply_items')`).map(c => c.name);
+  const mig = [];
+  if (!cols.includes('full_qty')) mig.push(['ALTER TABLE supply_items ADD COLUMN full_qty INTEGER NOT NULL DEFAULT 0']);
+  if (!cols.includes('deleted_at')) mig.push(['ALTER TABLE supply_items ADD COLUMN deleted_at TEXT']);
+  if (mig.length) await sqlBatch(mig);
+  // A deleted item's name can be used again.
+  await sqlBatch([['DROP INDEX IF EXISTS supply_items_name'], ['CREATE UNIQUE INDEX IF NOT EXISTS supply_items_live_name ON supply_items(lower(name)) WHERE deleted_at IS NULL']]);
   const n = await sql`SELECT count(*) AS n FROM supply_items`;
   if (!n[0].n) {
     const now = nowIso();
@@ -90,6 +114,9 @@ async function ensureTables() {
   ready = true;
 }
 
+/* Uniform items and sizes. Keys are stored; the pages show the names. */
+export const UNIFORM_ITEMS = ['tshirt_half', 'tshirt_full', 'trousers', 'jacket'];
+export const UNIFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 const MAX_QTY = 100000, MAX_LINES = 40, MAX_OPEN_PER_EMPLOYEE = 5;
 const cleanText = (v, max) => { const s = String(v ?? '').trim().replace(/\s+/g, ' '); return s.length <= max ? s : null; };
 const wholeNumber = (v, min, max) => { const n = Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : null; };
@@ -112,11 +139,32 @@ async function withLines(requests) {
   return requests.map(r => ({ ...r, lines: map.get(Number(r.id)) || [] }));
 }
 
+const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty FROM supply_items
+  WHERE deleted_at IS NULL AND active=1 AND full_qty>0 AND quantity*5<full_qty ORDER BY CAST(quantity AS REAL)/full_qty, name`;
+
+async function uniformLines(ids) {
+  if (!ids.length) return new Map();
+  const map = new Map();
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const strings = ['SELECT id,request_id,item,size,qty FROM uniform_request_lines WHERE request_id IN ('];
+    part.forEach((_, k) => strings.push(k < part.length - 1 ? ',' : ') ORDER BY id'));
+    for (const r of await sql(strings, ...part)) { if (!map.has(r.request_id)) map.set(r.request_id, []); map.get(r.request_id).push(r); }
+  }
+  return map;
+}
+async function withUniformLines(reqs) { const m = await uniformLines(reqs.map(r => Number(r.id))); return reqs.map(r => ({ ...r, lines: m.get(Number(r.id)) || [] })); }
+
 /* ---------------- Employee ---------------- */
 async function employeeSide(req, res, emp) {
   const b = req.body || {};
   if (req.method === 'GET') {
-    const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 ORDER BY category,name`;
+    const u = new URL(req.url, 'https://workclock.invalid');
+    if (u.searchParams.get('uniforms')) {
+      const ur = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM uniform_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, requests: await withUniformLines(ur) });
+    }
+    const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 AND deleted_at IS NULL ORDER BY category,name`;
     const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
     const out = await withLines(requests);
     out.forEach(r => r.lines.forEach(l => { delete l.on_shelf; }));
@@ -136,7 +184,7 @@ async function employeeSide(req, res, emp) {
     }
     const open = await sql`SELECT count(*) AS n FROM supply_requests WHERE employee_id=${emp.id} AND status='pending'`;
     if (open[0].n >= MAX_OPEN_PER_EMPLOYEE) return json(res, 400, { error: 'You already have several requests waiting. Wait for the manager, or cancel one.', code: 'SUPPLY_TOO_MANY' });
-    const items = await sql`SELECT id,name,unit FROM supply_items WHERE active=1`;
+    const items = await sql`SELECT id,name,unit FROM supply_items WHERE active=1 AND deleted_at IS NULL`;
     const byId = new Map(items.map(i => [Number(i.id), i]));
     for (const id of wanted.keys()) if (!byId.has(id)) return json(res, 400, { error: 'One of the items is no longer available. Refresh and try again.', code: 'SUPPLY_GONE' });
     const now = nowIso();
@@ -145,6 +193,30 @@ async function employeeSide(req, res, emp) {
     await sqlBatch([...wanted].map(([id, qty]) => ['INSERT INTO supply_request_lines(request_id,item_id,item_name,unit,qty_requested) VALUES(?,?,?,?,?)', rid, id, byId.get(id).name, byId.get(id).unit, qty]));
     await audit('employee', emp.id, 'supply_requested', { request_id: rid, items: wanted.size });
     return json(res, 200, { ok: true, id: rid });
+  }
+  if (req.method === 'POST' && b.action === 'uniform_request') {
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    if (!lines.length) return json(res, 400, { error: 'Choose at least one item and size.', code: 'UNIFORM_EMPTY' });
+    if (lines.length > 20) return json(res, 400, { error: 'Too many lines in one request.' });
+    const note = cleanText(b.note, 500); if (note === null) return json(res, 400, { error: 'The note must be 500 characters or fewer.' });
+    const clean = [];
+    for (const l of lines) {
+      const qty = wholeNumber(l.qty, 1, 20);
+      if (!UNIFORM_ITEMS.includes(l.item) || !UNIFORM_SIZES.includes(l.size) || !qty) return json(res, 400, { error: 'Choose an item, a size and a quantity from 1 to 20.', code: 'UNIFORM_BAD' });
+      clean.push([l.item, l.size, qty]);
+    }
+    const open = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND status='pending'`;
+    if (open[0].n >= 3) return json(res, 400, { error: 'You already have uniform requests waiting.', code: 'UNIFORM_TOO_MANY' });
+    const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,note,created_at) VALUES(${emp.id},'pending',${note || null},${nowIso()}) RETURNING id`)[0].id);
+    await sqlBatch(clean.map(([item, size, qty]) => ['INSERT INTO uniform_request_lines(request_id,item,size,qty) VALUES(?,?,?,?)', rid, item, size, qty]));
+    await audit('employee', emp.id, 'uniform_requested', { request_id: rid });
+    return json(res, 200, { ok: true, id: rid });
+  }
+  if (req.method === 'POST' && b.action === 'uniform_cancel') {
+    const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
+    const rows = await sql`UPDATE uniform_requests SET status='cancelled',decided_at=${nowIso()} WHERE id=${id} AND employee_id=${emp.id} AND status='pending' RETURNING id`;
+    if (!rows.length) return json(res, 400, { error: 'This request has already been handled.', code: 'SUPPLY_HANDLED' });
+    return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && b.action === 'cancel') {
     const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
@@ -164,15 +236,39 @@ async function managerSide(req, res, manager) {
     const pending = await sql`SELECT count(*) AS n FROM supply_requests WHERE status='pending'`;
     if (u.searchParams.get('count')) {
       const latest = await sql`SELECT r.id,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
-      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null });
+      const up = await sql`SELECT count(*) AS n FROM uniform_requests WHERE status='pending'`;
+      const ulatest = await sql`SELECT r.id,e.name AS employee_name FROM uniform_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
+      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null, uniformPending: up[0].n, uniformLatest: ulatest[0] || null, low: await lowItems() });
     }
-    const items = await sql`SELECT id,name,category,unit,quantity,low_at,active,updated_at FROM supply_items ORDER BY active DESC,category,name`;
+    if (u.searchParams.get('uniforms')) {
+      const ur = await sql`SELECT r.id,r.status,r.note,r.manager_note,r.created_at,r.decided_at,e.name AS employee_name,e.title AS employee_title
+        FROM uniform_requests r JOIN employees e ON e.id=r.employee_id
+        WHERE r.status='pending' OR r.created_at>=${new Date(Date.now() - 180 * 86400000).toISOString()}
+        ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`;
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, requests: await withUniformLines(ur) });
+    }
+    if (u.searchParams.get('usage')) {
+      const start = u.searchParams.get('start'), end = u.searchParams.get('end');
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return json(res, 400, { error: 'Valid start and end are required.' });
+      const s0 = new Date(start).toISOString(), e0 = new Date(end).toISOString();
+      const asked = await sql`SELECT r.employee_id,e.name,count(DISTINCT r.id) AS requests,sum(l.qty_requested) AS asked
+        FROM supply_requests r JOIN employees e ON e.id=r.employee_id JOIN supply_request_lines l ON l.request_id=r.id
+        WHERE r.created_at>=${s0} AND r.created_at<${e0} AND r.status<>'cancelled' GROUP BY r.employee_id,e.name`;
+      const given = await sql`SELECT r.employee_id,e.name,sum(COALESCE(l.qty_given,0)) AS given
+        FROM supply_requests r JOIN employees e ON e.id=r.employee_id JOIN supply_request_lines l ON l.request_id=r.id
+        WHERE r.status='given' AND r.decided_at>=${s0} AND r.decided_at<${e0} GROUP BY r.employee_id,e.name`;
+      const people = new Map();
+      for (const a of asked) people.set(String(a.employee_id), { employee_id: String(a.employee_id), name: a.name, requests: a.requests, asked: a.asked || 0, given: 0 });
+      for (const g of given) { const k = String(g.employee_id); if (!people.has(k)) people.set(k, { employee_id: k, name: g.name, requests: 0, asked: 0, given: 0 }); people.get(k).given = g.given || 0; }
+      return json(res, 200, { usage: [...people.values()].sort((a, b) => b.given - a.given || b.asked - a.asked || String(a.name).localeCompare(String(b.name))) });
+    }
+    const items = await sql`SELECT id,name,category,unit,quantity,low_at,full_qty,active,updated_at FROM supply_items WHERE deleted_at IS NULL ORDER BY active DESC,category,name`;
     const requests = await sql`SELECT r.id,r.status,r.note,r.manager_note,r.created_at,r.decided_at,r.employee_id,e.name AS employee_name,e.title AS employee_title
       FROM supply_requests r JOIN employees e ON e.id=r.employee_id
       WHERE r.status='pending' OR r.created_at>=${new Date(Date.now() - 90 * 86400000).toISOString()}
       ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`;
     const log = await sql`SELECT g.id,g.item_name,g.change,g.quantity_after,g.reason,g.request_id,g.created_at,e.name AS employee_name FROM supply_stock_log g LEFT JOIN employees e ON e.id=g.employee_id ORDER BY g.created_at DESC, g.id DESC LIMIT 150`;
-    return json(res, 200, { items, requests: await withLines(requests), log, pending: pending[0].n });
+    return json(res, 200, { items, requests: await withLines(requests), log, pending: pending[0].n, low: await lowItems() });
   }
   if (!requireSameOrigin(req, res)) return;
 
@@ -180,7 +276,7 @@ async function managerSide(req, res, manager) {
     const isNew = req.method === 'POST';
     const id = isNew ? null : wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER);
     if (!isNew && !id) return json(res, 400, { error: 'Item id required.' });
-    const old = isNew ? null : (await sql`SELECT * FROM supply_items WHERE id=${id}`)[0];
+    const old = isNew ? null : (await sql`SELECT * FROM supply_items WHERE id=${id} AND deleted_at IS NULL`)[0];
     if (!isNew && !old) return json(res, 404, { error: 'Item not found.' });
     const name = b.name === undefined && old ? old.name : cleanText(b.name, 80);
     const category = b.category === undefined && old ? old.category : (cleanText(b.category, 40) || 'Other');
@@ -188,6 +284,9 @@ async function managerSide(req, res, manager) {
     const quantity = b.quantity === undefined && old ? old.quantity : wholeNumber(b.quantity ?? 0, 0, MAX_QTY);
     const lowAt = b.low_at === undefined && old ? old.low_at : wholeNumber(b.low_at ?? 0, 0, MAX_QTY);
     const active = b.active === undefined ? (old ? !!old.active : true) : !!b.active;
+    // Full stock = 100%. Left blank, it follows the quantity entered.
+    let fullQty = b.full_qty === undefined || b.full_qty === '' || b.full_qty === null ? (old && old.full_qty ? old.full_qty : quantity) : wholeNumber(b.full_qty, 0, MAX_QTY);
+    if (fullQty === null) return json(res, 400, { error: 'Full stock must be a whole number, 0 or more.' });
     if (!name) return json(res, 400, { error: 'Enter an item name (up to 80 characters).' });
     if (category === null || unit === null) return json(res, 400, { error: 'Category and unit must be short.' });
     if (quantity === null) return json(res, 400, { error: `Quantity must be a whole number from 0 to ${MAX_QTY}.` });
@@ -195,8 +294,8 @@ async function managerSide(req, res, manager) {
     const now = nowIso();
     try {
       let row;
-      if (isNew) row = (await sql`INSERT INTO supply_items(name,category,unit,quantity,low_at,active,created_at,updated_at) VALUES(${name},${category},${unit},${quantity},${lowAt},${active},${now},${now}) RETURNING id`)[0];
-      else await sql`UPDATE supply_items SET name=${name},category=${category},unit=${unit},quantity=${quantity},low_at=${lowAt},active=${active},updated_at=${now} WHERE id=${id}`;
+      if (isNew) row = (await sql`INSERT INTO supply_items(name,category,unit,quantity,low_at,full_qty,active,created_at,updated_at) VALUES(${name},${category},${unit},${quantity},${lowAt},${fullQty},${active},${now},${now}) RETURNING id`)[0];
+      else await sql`UPDATE supply_items SET name=${name},category=${category},unit=${unit},quantity=${quantity},low_at=${lowAt},full_qty=${fullQty},active=${active},updated_at=${now} WHERE id=${id}`;
       const itemId = isNew ? Number(row.id) : id;
       const change = quantity - (old ? old.quantity : 0);
       if (change !== 0) await sql`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,created_at) VALUES(${itemId},${name},${change},${quantity},${isNew ? 'Starting quantity' : 'Quantity set by manager'},${now})`;
@@ -208,6 +307,23 @@ async function managerSide(req, res, manager) {
     }
   }
 
+  if (req.method === 'POST' && b.action === 'item_delete') {
+    const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Item id required.' });
+    // Kept in the database so past requests and Stock History still show it.
+    const rows = await sql`UPDATE supply_items SET deleted_at=${nowIso()},active=0,updated_at=${nowIso()} WHERE id=${id} AND deleted_at IS NULL RETURNING id,name`;
+    if (!rows.length) return json(res, 404, { error: 'Item not found.' });
+    await audit('manager', manager.id, 'supply_item_deleted', { item_id: id, name: rows[0].name });
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && b.action === 'uniform_decide') {
+    const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
+    if (!['given', 'rejected'].includes(b.decision)) return json(res, 400, { error: 'Choose Given or Reject.' });
+    const note = cleanText(b.note, 300); if (note === null) return json(res, 400, { error: 'The note must be 300 characters or fewer.' });
+    const rows = await sql`UPDATE uniform_requests SET status=${b.decision},manager_note=${note || null},decided_at=${nowIso()},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
+    if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
+    await audit('manager', manager.id, 'uniform_request_' + b.decision, { request_id: id });
+    return json(res, 200, { ok: true });
+  }
   if (req.method === 'POST' && b.action === 'decide') {
     const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
     const decision = b.decision;
@@ -265,7 +381,7 @@ export default async function handler(req, res) {
     await ensureTables();
     const u = new URL(req.url, 'https://workclock.invalid');
     const b = req.body || {};
-    const employeeCall = u.searchParams.get('mine') === '1' || ['request', 'cancel'].includes(b.action);
+    const employeeCall = u.searchParams.get('mine') === '1' || ['request', 'cancel', 'uniform_request', 'uniform_cancel'].includes(b.action);
     if (employeeCall) {
       const emp = await getEmployeeSession(req);
       if (!emp) return json(res, 401, { error: 'Employee login required.' });

@@ -12,6 +12,15 @@
   const dur = ms => { let s=Math.floor(Math.max(0,ms)/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);s%=60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
   const hours = x => Math.max(0, (new Date(x.clock_out || Date.now()) - new Date(x.clock_in)) / 3600000);
   const esc = s => String(s ?? '').replace(/[&<>\"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[m] || m));
+
+  /* Uniform item icons (simple line drawings). */
+  const UNI_SVG=d=>`<svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${d}</svg>`;
+  const UNI_ICONS={
+    tshirt_half:UNI_SVG('<path d="M17 6l-9 5 3 8 5-2v25h16V17l5 2 3-8-9-5c-1 3-4 5-7 5s-6-2-7-5z"/>'),
+    tshirt_full:UNI_SVG('<path d="M17 6l-7 4-5 26 6 1 4-18v23h18V19l4 18 6-1-5-26-7-4c-1 3-4 5-7 5s-6-2-7-5z"/>'),
+    trousers:UNI_SVG('<path d="M13 5h22l3 38h-9l-5-26-5 26h-9z"/><path d="M13 11h22"/>'),
+    jacket:UNI_SVG('<path d="M17 5l-7 4-5 28 6 1 3-14v20h20V24l3 14 6-1-5-28-7-4-7 8z"/><path d="M24 13v30M20 24h1M27 24h1M20 31h1M27 31h1"/>')
+  };
   /* ------------------------------------------------------------------
      Employee-portal language support (English / Spanish).
      The manager portal is always English, so `lang` is pinned to 'en'
@@ -164,6 +173,12 @@
     supQty:['Each item needs a quantity from 1 to 999.','Cada artículo necesita una cantidad de 1 a 999.'],
     supHandled:['This request has already been handled.','Este pedido ya fue atendido.'],
     supLess:['Less','Menos'],supMore:['More','Más'],
+    navUniforms:['Uniforms','Uniformes'],uniTitle:['Request Uniform','Pedir uniforme'],
+    uniHelp:['Pick the items you need, choose your size and how many, then send.','Elija las prendas que necesita, su talla y cuántas, y envíe.'],
+    uniNotePh:['e.g. my jacket is torn','p. ej. mi chaqueta está rota'],
+    uni_tshirt_half:['T-shirt, half sleeve','Camiseta, manga corta'],uni_tshirt_full:['T-shirt, full sleeve','Camiseta, manga larga'],uni_trousers:['Trousers','Pantalón'],uni_jacket:['Jacket','Chaqueta'],
+    uniSize:['Size','Talla'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
+    uniPickSome:['Choose at least one item and its size.','Elija al menos una prenda y su talla.'],uniTooMany:['You already have uniform requests waiting.','Ya tiene pedidos de uniforme en espera.'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -236,6 +251,7 @@
     if($('erResult')?.dataset.loaded)runEmployeeReport();
     if(employeeIdentity&&empCache)renderEmployee();
     if(employeeIdentity&&$('empSupItems'))renderEmpSupplies();
+    if(employeeIdentity&&$('empUniItems'))renderEmpUniforms();
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -542,8 +558,33 @@
     $('empSupSendBtn').onclick=sendEmpSupplies;
   }
 
+
+  /* ---- Employee: uniforms ---- */
+  const UNI_KEYS=['tshirt_half','tshirt_full','trousers','jacket'],UNI_SZ=['XS','S','M','L','XL','XXL','3XL'];
+  let uniEmp={requests:[]};const uniPick={};UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});
+  async function loadEmpUniforms(){try{uniEmp=await api('/api/supplies?mine=1&uniforms=1');renderEmpUniforms();}catch(e){if(e.status!==401)$('empUniMsg').textContent=displayMessage(e.payload||e.message);}}
+  function renderEmpUniforms(){
+    if(!$('empUniItems'))return;
+    $('empUniItems').innerHTML=UNI_KEYS.map(k=>{const p=uniPick[k];return `<div class="uniCard${p.qty?' on':''}"><div class="uniCardHead"><span class="uniIcon lg">${UNI_ICONS[k]}</span><b>${esc(t('uni_'+k))}</b></div><div class="uniSizeLbl">${esc(t('uniSize'))}</div><div class="uniSizes" role="group" aria-label="${esc(t('uniSize'))}">${UNI_SZ.map(z=>`<button type="button" class="uniSz${p.size===z?' on':''}" data-uni-size="${k}|${z}" aria-pressed="${p.size===z}">${z}</button>`).join('')}</div><div class="uniQtyRow"><span class="uniSizeLbl">${esc(t('uniQty'))}</span><div class="supStep"><button type="button" data-uni-dec="${k}" aria-label="${esc(t('supLess'))}"${p.qty?'':' disabled'}>−</button><input readonly value="${p.qty}" aria-label="${esc(t('uniQty'))}"/><button type="button" data-uni-inc="${k}" aria-label="${esc(t('supMore'))}">+</button></div></div></div>`;}).join('');
+    document.querySelectorAll('[data-uni-size]').forEach(b=>b.onclick=()=>{const [k,z]=b.dataset.uniSize.split('|');uniPick[k].size=z;if(!uniPick[k].qty)uniPick[k].qty=1;renderEmpUniforms();});
+    document.querySelectorAll('[data-uni-inc]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniInc];p.qty=Math.min(20,p.qty+1);renderEmpUniforms();});
+    document.querySelectorAll('[data-uni-dec]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniDec];p.qty=Math.max(0,p.qty-1);renderEmpUniforms();});
+    const n=UNI_KEYS.filter(k=>uniPick[k].qty).length;
+    $('empUniSummary').textContent=n?t('supPicked',{n}):'';$('empUniSendBtn').disabled=!n;
+    const waiting=uniEmp.requests.filter(r=>r.status==='pending').length;$('empUniCount').textContent=waiting;$('empUniCount').classList.toggle('hide',!waiting);
+    $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
+    document.querySelectorAll('[data-uni-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_cancel',id:Number(b.dataset.uniCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpUniforms();});
+  }
+  async function sendEmpUniforms(){
+    const lines=UNI_KEYS.filter(k=>uniPick[k].qty).map(k=>({item:k,size:uniPick[k].size,qty:uniPick[k].qty}));
+    if(!lines.length)return $('empUniMsg').textContent=t('uniPickSome');
+    const noSize=lines.find(l=>!l.size);if(noSize)return $('empUniMsg').textContent=t('uniPickSize',{item:t('uni_'+noSize.item)});
+    const btn=$('empUniSendBtn');btn.disabled=true;$('empUniMsg').textContent='';
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_request',note:$('empUniNote').value.trim(),lines})});UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});$('empUniNote').value='';toast(t('supSent'));$('empUniMsg').textContent=t('supSent');await loadEmpUniforms();}
+    catch(e){const c=e.payload?.code;$('empUniMsg').textContent=c==='UNIFORM_TOO_MANY'?t('uniTooMany'):c==='UNIFORM_EMPTY'?t('uniPickSome'):displayMessage(e.payload||e.message);btn.disabled=false;}
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies'];
+  const EMP_PAGES=['clock','supplies','uniforms'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -554,6 +595,7 @@
     // On its own page the supplies list is always open.
     $('toggleEmpSup').classList.toggle('hide',pg==='supplies');
     if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
+    if(pg==='uniforms')loadEmpUniforms();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);
@@ -565,6 +607,7 @@
     $('empDrawerLogout').onclick=()=>{setEmpDrawer(false);$('employeeLogoutBtn').click();};
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('empDrawer').classList.contains('open'))setEmpDrawer(false);});
     window.addEventListener('hashchange',showEmpPage);
+    $('empUniSendBtn').onclick=sendEmpUniforms;
   }
   async function initEmployee(){
     initLanguage();
@@ -1175,7 +1218,7 @@
       const card=$(btn||id).closest('section.card');if(card){card.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');}
     };};
     const weekly=()=>$('weeklyRows');
-    {const st=$('empCount').closest('.stat');st.classList.add('tileLink');st.onclick=()=>{location.hash='#/employees';};}
+    go('empCount','toggleEmployees','employeesBody');
     ['mHours','payroll'].forEach(id=>{const el=$(id);el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{const c=weekly().closest('section.card');c.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});c.classList.remove('flash');void c.offsetWidth;c.classList.add('flash');};});
     go('rejected','toggleRejected','rejectedBody');
     go('liveClockIns','toggleShiftDetails','shiftDetailsBody');
@@ -1188,13 +1231,17 @@
   function setSupBadge(n){
     document.querySelectorAll('[data-sup-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});
     if($('supCountPending'))$('supCountPending').textContent=n;
-    const base=document.title.replace(/^\(\d+\)\s*/,'');document.title=(n?`(${n}) `:'')+base;
+    
   }
   async function pollSupplies(){
     if($('managerApp').classList.contains('hide'))return;
     try{const j=await api('/api/supplies?count=1');const n=Number(j.pending||0);
       if(supKnownPending!==null&&n>supKnownPending){toast(j.latest?`New supply request from ${j.latest.employee_name}`:'New supply request');if(currentMgrPage()==='supplies')loadSupplies();}
-      supKnownPending=n;setSupBadge(n);}catch{}
+      supKnownPending=n;setSupBadge(n);
+      const un=Number(j.uniformPending||0);
+      if(uniKnownPending!==null&&un>uniKnownPending){toast(j.uniformLatest?`New uniform request from ${j.uniformLatest.employee_name}`:'New uniform request');if(currentMgrPage()==='uniforms')loadUniforms();}
+      uniKnownPending=un;setUniBadge(un);renderLowAlert(j.low||[]);
+      document.title=document.title.replace(/^\(\d+\)\s*/,'');if(n+un)document.title=`(${n+un}) `+document.title;}catch{}
   }
   async function loadSupplies(){
     try{supData=await api('/api/supplies');supKnownPending=Number(supData.pending||0);setSupBadge(supKnownPending);renderSupplies();}
@@ -1218,13 +1265,15 @@
     const cf=$('supCatFilter'),keep=cf.value;cf.innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');cf.value=cats.includes(keep)?keep:'';
     $('supCatList').innerHTML=cats.map(c=>`<option value="${esc(c)}"></option>`).join('');
     const q=($('supSearch').value||'').trim().toLowerCase(),lowOnly=$('supLowOnly').checked;
-    const isLow=i=>i.active&&i.low_at>0&&i.quantity<=i.low_at;
+    const isLow=supIsLow;
     const items=supData.items.filter(i=>(!q||(i.name+' '+i.category).toLowerCase().includes(q))&&(!cf.value||i.category===cf.value)&&(!lowOnly||isLow(i)));
     const lowN=supData.items.filter(isLow).length,outN=supData.items.filter(i=>i.active&&i.quantity===0).length;
     $('supStockSummary').innerHTML=`<span><b>${supData.items.filter(i=>i.active).length}</b> items</span><span class="${lowN?'warn':''}"><b>${lowN}</b> low</span><span class="${outN?'warn':''}"><b>${outN}</b> at zero</span>`;
     const shown=[...new Set(items.map(i=>i.category))];
-    $('supItemList').innerHTML=shown.map(c=>`<div class="supCat">${esc(c)}</div><div class="supItems">`+items.filter(i=>i.category===c).map(i=>`<div class="supItem${isLow(i)?' low':''}${i.quantity===0&&i.active?' zero':''}${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)}${i.low_at?` · warn at ${i.low_at}`:''}${i.active?'':' · hidden from painters'}</span></div><div class="supQty"><b>${i.quantity}</b><span>${isLow(i)?'Low':i.quantity===0&&i.active?'None left':'in stock'}</span></div><button class="mini secondary" data-sup-edit="${i.id}" type="button">Update</button></div>`).join('')+`</div>`).join('')||`<div class="dashEmpty">No items match.</div>`;
+    $('supItemList').innerHTML=shown.map(c=>`<div class="supCat">${esc(c)}</div><div class="supItems">`+items.filter(i=>i.category===c).map(i=>`<div class="supItem${isLow(i)?' low':''}${i.quantity===0&&i.active?' zero':''}${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)}${i.full_qty?` · full ${i.full_qty} · ${supPct(i)}%`:''}${i.active?'':' · hidden from painters'}</span></div><div class="supQty"><b>${i.quantity}</b><span>${isLow(i)?'Low':i.quantity===0&&i.active?'None left':'in stock'}</span></div><div class="supItemBtns"><button class="mini secondary" data-sup-edit="${i.id}" type="button">Edit</button><button class="mini secondary supDel" data-sup-del="${i.id}" type="button" aria-label="Delete ${esc(i.name)}">Delete</button></div></div>`).join('')+`</div>`).join('')||`<div class="dashEmpty">No items match.</div>`;
     document.querySelectorAll('[data-sup-edit]').forEach(b=>b.onclick=()=>openSupItem(supData.items.find(i=>String(i.id)===b.dataset.supEdit)));
+    document.querySelectorAll('[data-sup-del]').forEach(b=>b.onclick=()=>deleteSupItem(supData.items.find(i=>String(i.id)===b.dataset.supDel)));
+    renderLowAlert(supData.low||[]);
     // History
     $('supLogRows').innerHTML=supData.log.map(g=>`<tr><td>${esc(supWhen(g.created_at))}</td><td><b>${esc(g.item_name)}</b></td><td class="${g.change<0?'neg':'pos'}">${g.change>0?'+':''}${g.change}</td><td>${g.quantity_after}</td><td>${esc(g.reason)}${g.employee_name?` · ${esc(g.employee_name)}`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No changes yet.</td></tr>';
   }
@@ -1237,21 +1286,111 @@
     try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'decide',id:Number(id),decision,note,lines})});toast(decision==='given'?'Marked as given. Stock updated.':'Request rejected.');await loadSupplies();}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
+  const supIsLow=i=>i.active&&i.full_qty>0&&i.quantity*5<i.full_qty;
+  const supPct=i=>i.full_qty?Math.round(i.quantity/i.full_qty*100):0;
+  // Dashboard notice when any item is below 20% of its full stock.
+  function renderLowAlert(low){
+    const box=$('lowAlert');if(!box)return;
+    box.classList.toggle('hide',!low.length);
+    if(!low.length)return;
+    $('lowAlertTitle').textContent=low.length===1?'1 supply item is below 20%':`${low.length} supply items are below 20%`;
+    $('lowAlertList').innerHTML=low.slice(0,6).map(i=>`<span class="lowChip">${esc(i.name)} <b>${i.quantity}/${i.full_qty}</b></span>`).join('')+(low.length>6?`<span class="lowChip">+${low.length-6} more</span>`:'');
+  }
+  async function deleteSupItem(it){
+    if(!it)return;
+    if(!confirm(`Delete "${it.name}"?\n\nPainters will no longer see it. Past requests and Stock History keep its name.`))return;
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'item_delete',id:Number(it.id)})});$('supItemPanel').classList.add('hide');toast('Item deleted.');await loadSupplies();}
+    catch(e){toast(displayMessage(e.payload||e.message),'bad');}
+  }
+  // Usage by painter, per month.
+  let usageMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),usageMode='given',usageRows=[];
+  async function loadUsage(){
+    const start=new Date(usageMonth),end=new Date(usageMonth.getFullYear(),usageMonth.getMonth()+1,1);
+    $('usageMonth').textContent=start.toLocaleDateString([], {month:'long',year:'numeric'});
+    const now=new Date();$('usageNext').disabled=start.getFullYear()===now.getFullYear()&&start.getMonth()===now.getMonth();
+    try{usageRows=(await api(`/api/supplies?usage=1&start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`)).usage||[];}catch(e){usageRows=[];$('usageNote').textContent=displayMessage(e.payload||e.message);}
+    renderUsage();
+  }
+  function renderUsage(){
+    document.querySelectorAll('[data-usage-mode]').forEach(b=>b.classList.toggle('on',b.dataset.usageMode===usageMode));
+    const key=usageMode==='given'?'given':'asked';
+    const rows=[...usageRows].sort((a,b)=>b[key]-a[key]||String(a.name).localeCompare(String(b.name)));
+    const max=Math.max(1,...rows.map(r=>r[key]));
+    const total=rows.reduce((a,r)=>a+r[key],0);
+    $('usageChart').innerHTML=rows.length?`<div class="usageCols" role="list">${rows.map((r,i)=>`<div class="usageCol${i===0&&r[key]>0?' top':''}" role="listitem" aria-label="${esc(r.name)}: ${r[key]} items"><div class="usageName" title="${esc(r.name)}">${esc(r.name)}</div><div class="usageTrack"><div class="usageBar" style="height:${Math.max(r[key]?4:0,Math.round(r[key]/max*100))}%"><span>${r[key]}</span></div></div><div class="usageSub">${r.requests} request${r.requests===1?'':'s'}</div></div>`).join('')}</div>`:`<div class="dashEmpty">No supply requests this month.</div>`;
+    $('usageNote').textContent=rows.length?`${total} items ${usageMode==='given'?'given out':'asked for'} in total. Counted in units (rolls, pieces, packs, boxes).`:'';
+  }
+  // Uniforms
+  const UNI_NAMES={tshirt_half:'T-shirt, half sleeve',tshirt_full:'T-shirt, full sleeve',trousers:'Trousers',jacket:'Jacket'};
+  const UNI_SIZES=['XS','S','M','L','XL','XXL','3XL'];
+  let uniData={requests:[]},uniTab='pending',uniKnownPending=null;
+  function setUniBadge(n){document.querySelectorAll('[data-uni-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});if($('uniCountPending'))$('uniCountPending').textContent=n;}
+  async function loadUniforms(){
+    try{uniData=await api('/api/supplies?uniforms=1');uniKnownPending=uniData.requests.filter(r=>r.status==='pending').length;setUniBadge(uniKnownPending);renderUniforms();}
+    catch(e){$('uniReqList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
+  }
+  function renderUniforms(){
+    document.querySelectorAll('[data-uni-tab]').forEach(b=>b.classList.toggle('on',b.dataset.uniTab===uniTab));
+    const reqs=uniData.requests.filter(r=>uniTab==='all'||r.status===uniTab||(uniTab==='rejected'&&r.status==='cancelled'));
+    $('uniReqList').innerHTML=reqs.map(r=>{const pending=r.status==='pending';
+      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="uniLines">${r.lines.map(l=>`<div class="uniLine"><span class="uniIcon">${UNI_ICONS[l.item]||''}</span><b>${esc(UNI_NAMES[l.item]||l.item)}</b><span class="uniSize">${esc(l.size)}</span><span class="muted">× ${l.qty}</span></div>`).join('')}</div>${pending?`<div class="supReqActions"><input class="supMgrNote" data-uni-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-uni-reject="${r.id}" type="button">Reject</button><button class="primary" data-uni-give="${r.id}" type="button">Mark as given</button></div><div class="muted small" data-uni-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(supStatus[r.status]||r.status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${uniTab==='pending'?'No uniform requests waiting.':'Nothing here.'}</div>`;
+    document.querySelectorAll('[data-uni-give]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniGive,'given',b));
+    document.querySelectorAll('[data-uni-reject]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniReject,'rejected',b));
+    const tally={};uniData.requests.filter(r=>r.status==='pending').forEach(r=>r.lines.forEach(l=>{tally[l.item]=tally[l.item]||{};tally[l.item][l.size]=(tally[l.item][l.size]||0)+l.qty;}));
+    $('uniSizeRows').innerHTML=Object.keys(UNI_NAMES).map(k=>{const t=tally[k]||{},tot=Object.values(t).reduce((a,b)=>a+b,0);return `<tr><td><span class="uniIcon sm">${UNI_ICONS[k]}</span><b>${esc(UNI_NAMES[k])}</b></td>${UNI_SIZES.map(z=>`<td class="${t[z]?'has':''}">${t[z]||'—'}</td>`).join('')}<td><b>${tot||'—'}</b></td></tr>`;}).join('');
+  }
+  async function uniDecide(id,decision,btn){
+    const msg=document.querySelector(`[data-uni-msg="${id}"]`),note=(document.querySelector(`[data-uni-note="${id}"]`)?.value||'').trim();
+    if(decision==='rejected'&&!confirm('Reject this uniform request?'))return;
+    btn.disabled=true;msg.textContent='Saving…';
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_decide',id:Number(id),decision,note})});toast(decision==='given'?'Uniform request marked as given.':'Uniform request rejected.');await loadUniforms();}
+    catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
+  }
+  // Vacations
+  let vacYear=new Date().getFullYear(),vacRows=[];
+  async function loadVacations(){
+    $('vacYear').textContent=vacYear;$('vacYearH').textContent=vacYear;$('vacYearH2').textContent=vacYear;$('vacNext').disabled=vacYear>=new Date().getFullYear();
+    try{vacRows=(await api(`/api/manager?view=vacations&year=${vacYear}`)).employees||[];renderVacations();}
+    catch(e){$('vacRows').innerHTML=`<tr><td colspan="7">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
+  }
+  const hd=h=>{const d=Math.round(Number(h)/8*10)/10;return `${Number(h).toFixed(2)} h<small>${(Object.is(d,-0)?0:d).toFixed(1)} days (8 h)</small>`;};
+  function renderVacations(){
+    const q=($('vacSearch').value||'').trim().toLowerCase(),all=$('vacShowAll').checked;
+    const rows=vacRows.filter(r=>(all||r.employment_status!=='terminated')&&(!q||String(r.name).toLowerCase().includes(q)));
+    $('vacRows').innerHTML=rows.map(r=>`<tr><td><b>${esc(r.name)}</b>${r.employment_status!=='active'?` <span class="statusBadge ${r.employment_status}">${esc(statusText(r.employment_status))}</span>`:''}<div class="muted small">${esc(r.title||'')}</div></td><td>${Number(r.year_paid_hours).toFixed(2)}</td><td class="vacNum">${hd(r.year_earned)}</td><td class="vacNum">${hd(r.all_earned)}</td><td class="vacNum">${hd(r.used_hours)}</td><td class="vacNum vacBal${r.balance<0?' neg':''}">${hd(r.balance)}</td><td><button class="mini secondary" data-vac-rec="${r.employee_id}" type="button">Record taken</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No employees match.</td></tr>';
+    document.querySelectorAll('[data-vac-rec]').forEach(b=>b.onclick=()=>openVacPanel(vacRows.find(r=>r.employee_id===b.dataset.vacRec)));
+  }
+  async function openVacPanel(r){
+    $('vacPanel').dataset.id=r.employee_id;$('vacPanelSub').textContent=`${r.name} · balance ${Number(r.balance).toFixed(2)} hours`;
+    $('vacHours').value='';$('vacDate').value=iso(new Date());$('vacNoteIn').value='';$('vacPanelMsg').textContent='';$('vacHistory').textContent='Loading…';
+    $('vacPanel').classList.remove('hide');$('vacHours').focus();
+    try{const h=(await api(`/api/manager?view=vacation_history&employeeId=${encodeURIComponent(r.employee_id)}`)).history||[];
+      $('vacHistory').innerHTML=h.length?h.map(x=>`<div class="vacHist"><b>${Number(x.hours).toFixed(2)} h</b> <span class="muted">· ${esc(x.taken_on)}${x.note?' · '+esc(x.note):''}</span></div>`).join(''):'<span class="muted">No vacation recorded yet.</span>';}catch{$('vacHistory').textContent='';}
+  }
+  async function saveVac(){
+    const id=$('vacPanel').dataset.id,hours=Number($('vacHours').value),day=$('vacDate').value,msg=$('vacPanelMsg');
+    if(!(hours>0))return msg.textContent='Enter the hours taken.';if(!day)return msg.textContent='Choose the date.';
+    if(!confirm(`Record ${hours} vacation hours for ${(vacRows.find(r=>r.employee_id===id)||{}).name}? This cannot be undone from the app.`))return;
+    msg.textContent='Saving…';
+    try{await api('/api/manager',{method:'POST',body:JSON.stringify({action:'vacation_used',employeeId:Number(id),hours,takenOn:day,note:$('vacNoteIn').value.trim()})});$('vacPanel').classList.add('hide');toast('Vacation recorded.');await loadVacations();}
+    catch(e){msg.textContent=displayMessage(e.payload||e.message);}
+  }
   function openSupItem(it){
     const isNew=!it;$('supItemPanel').dataset.id=it?it.id:'';
     $('supItemTitle').textContent=isNew?'Add item':'Update item';
     $('supItemSub').textContent=isNew?'Painters will see it in their supplies list.':`Last changed ${supWhen(it.updated_at)}. Changing the quantity is recorded in Stock History.`;
     $('siName').value=it?.name||'';$('siCat').value=it?.category||($('supCatFilter').value||'');$('siUnit').value=it?.unit||'Piece';
-    $('siQty').value=it?it.quantity:'';$('siLow').value=it?it.low_at:'';$('siActive').value=!it||it.active?'1':'0';
+    $('siQty').value=it?it.quantity:'';$('siFull').value=it&&it.full_qty?it.full_qty:'';$('supItemDelete').classList.toggle('hide',isNew);$('siActive').value=!it||it.active?'1':'0';
     $('supItemMsg').textContent='';$('supItemSave').textContent=isNew?'Add item':'Save';
     $('supItemPanel').classList.remove('hide');(isNew?$('siName'):$('siQty')).focus();
   }
   async function saveSupItem(){
     const id=$('supItemPanel').dataset.id,isNew=!id,msg=$('supItemMsg');
-    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),low_at:Number($('siLow').value||0),active:$('siActive').value==='1'};
+    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),full_qty:$('siFull').value===''?'':Number($('siFull').value),active:$('siActive').value==='1'};
     if(!body.name)return msg.textContent='Enter an item name.';
     if(!Number.isInteger(body.quantity)||body.quantity<0)return msg.textContent='Quantity must be a whole number, 0 or more.';
-    if(!Number.isInteger(body.low_at)||body.low_at<0)return msg.textContent='The warning amount must be a whole number, 0 or more.';
+    if(body.full_qty!==''&&(!Number.isInteger(body.full_qty)||body.full_qty<0))return msg.textContent='Full stock must be a whole number, 0 or more.';
+    if(body.full_qty!==''&&body.full_qty>0&&body.quantity>body.full_qty)body.full_qty=body.quantity;
     if(!isNew)body.id=Number(id);
     msg.textContent='Saving…';
     try{await api('/api/supplies',{method:isNew?'POST':'PATCH',body:JSON.stringify(body)});$('supItemPanel').classList.add('hide');toast(isNew?'Item added.':'Item updated.');await loadSupplies();}
@@ -1267,12 +1406,24 @@
     $('supItemSave').onclick=saveSupItem;
     $('supItemPanel').onclick=e=>{if(e.target===$('supItemPanel'))$('supItemPanel').classList.add('hide');};
     const tb=$('toggleSupLog'),body=$('supLogBody');tb.onclick=()=>setSection(tb,body,body.classList.contains('hide'));
+    $('supItemDelete').onclick=()=>deleteSupItem(supData.items.find(i=>String(i.id)===$('supItemPanel').dataset.id));
+    $('siQty').addEventListener('input',()=>{const q=Number($('siQty').value),f=Number($('siFull').value);if($('siFull').value!==''&&q>f)$('siFull').value=q;});
+    const ts=$('toggleSupStock'),bs=$('supStockBody');ts.onclick=()=>setSection(ts,bs,bs.classList.contains('hide'),'Show items','Hide items');
+    $('usagePrev').onclick=()=>{usageMonth=new Date(usageMonth.getFullYear(),usageMonth.getMonth()-1,1);loadUsage();};
+    $('usageNext').onclick=()=>{usageMonth=new Date(usageMonth.getFullYear(),usageMonth.getMonth()+1,1);loadUsage();};
+    document.querySelectorAll('[data-usage-mode]').forEach(b=>b.onclick=()=>{usageMode=b.dataset.usageMode;renderUsage();});
+    document.querySelectorAll('[data-uni-tab]').forEach(b=>b.onclick=()=>{uniTab=b.dataset.uniTab;renderUniforms();});
+    $('uniRefresh').onclick=loadUniforms;
+    $('vacPrev').onclick=()=>{vacYear--;loadVacations();};$('vacNext').onclick=()=>{vacYear++;loadVacations();};
+    $('vacSearch').oninput=renderVacations;$('vacShowAll').onchange=renderVacations;
+    $('vacCancel').onclick=()=>$('vacPanel').classList.add('hide');$('vacSave').onclick=saveVac;
+    $('vacPanel').onclick=e=>{if(e.target===$('vacPanel'))$('vacPanel').classList.add('hide');};
     pollSupplies();setInterval(pollSupplies,30000);
   }
   // Section menu: Dashboard, Employees, Supplies, Settings. Each section shows
   // its own cards (tagged data-page) in the original layout; the address keeps
   // the section (#/employees) so refresh and the back button stay put.
-  const MGR_PAGES=['dashboard','employees','supplies','settings'];
+  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance'];
   function setDrawer(open){
     const d=$('mgrDrawer'),s=$('mgrScrim'),b=$('mgrBurger');if(!d)return;
     d.classList.toggle('open',open);s.classList.toggle('hide',!open);b.setAttribute('aria-expanded',String(open));
@@ -1285,12 +1436,12 @@
     document.querySelectorAll('#managerApp [data-route]').forEach(a=>{const on=a.dataset.route===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // Close anything left open on the previous section.
     document.querySelectorAll('.weekCal').forEach(c=>c.classList.add('hide'));
-    ['clockInEdit','customReview','empPanel','supItemPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
+    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
     const open=(btn,body)=>{if($(body)&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);};
-    if(pg==='employees'){open('toggleEmployees','employeesBody');open('toggleReport','reportBody');renderPeople();}
-    if(pg==='settings')open('toggleSettings','settingsBody');
-    if(pg==='supplies')loadSupplies();
-    document.title=({dashboard:'Dashboard',employees:'Employees',supplies:'Supplies',settings:'Settings'})[pg]+' · WorkClock Manager';if(supKnownPending)document.title=`(${supKnownPending}) `+document.title;
+    if(pg==='supplies'){loadSupplies();loadUsage();}
+    if(pg==='uniforms')loadUniforms();
+    if(pg==='vacations')loadVacations();
+    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
   function initMgrNav(){
