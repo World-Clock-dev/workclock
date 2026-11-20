@@ -100,6 +100,8 @@ async function ensureTables() {
   const mig = [];
   if (!cols.includes('full_qty')) mig.push(['ALTER TABLE supply_items ADD COLUMN full_qty INTEGER NOT NULL DEFAULT 0']);
   if (!cols.includes('deleted_at')) mig.push(['ALTER TABLE supply_items ADD COLUMN deleted_at TEXT']);
+  const ucols = (await sql`SELECT name FROM pragma_table_info('uniform_request_lines')`).map(c => c.name);
+  if (!ucols.includes('unit_price')) mig.push(['ALTER TABLE uniform_request_lines ADD COLUMN unit_price REAL']);
   if (mig.length) await sqlBatch(mig);
   // A deleted item's name can be used again.
   await sqlBatch([['DROP INDEX IF EXISTS supply_items_name'], ['CREATE UNIQUE INDEX IF NOT EXISTS supply_items_live_name ON supply_items(lower(name)) WHERE deleted_at IS NULL']]);
@@ -139,6 +141,16 @@ async function withLines(requests) {
   return requests.map(r => ({ ...r, lines: map.get(Number(r.id)) || [] }));
 }
 
+/* Uniform prices live in app_settings as uniform_price_<item>; $20 each unless changed. */
+const DEFAULT_UNIFORM_PRICE = 20;
+async function uniformPrices() {
+  const rows = await sql`SELECT key,value FROM app_settings WHERE key LIKE 'uniform_price_%'`;
+  const map = Object.fromEntries(rows.map(r => [r.key.slice('uniform_price_'.length), Number(r.value)]));
+  return Object.fromEntries(UNIFORM_ITEMS.map(k => [k, Number.isFinite(map[k]) ? map[k] : DEFAULT_UNIFORM_PRICE]));
+}
+const money = v => Math.round(Number(v) * 100) / 100;
+const lineAmount = (l, prices) => money(Number(l.qty) * (l.unit_price != null ? Number(l.unit_price) : prices[l.item] ?? DEFAULT_UNIFORM_PRICE));
+
 const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty FROM supply_items
   WHERE deleted_at IS NULL AND active=1 AND full_qty>0 AND quantity*5<full_qty ORDER BY CAST(quantity AS REAL)/full_qty, name`;
 
@@ -147,13 +159,16 @@ async function uniformLines(ids) {
   const map = new Map();
   for (let i = 0; i < ids.length; i += 90) {
     const part = ids.slice(i, i + 90);
-    const strings = ['SELECT id,request_id,item,size,qty FROM uniform_request_lines WHERE request_id IN ('];
+    const strings = ['SELECT id,request_id,item,size,qty,unit_price FROM uniform_request_lines WHERE request_id IN ('];
     part.forEach((_, k) => strings.push(k < part.length - 1 ? ',' : ') ORDER BY id'));
     for (const r of await sql(strings, ...part)) { if (!map.has(r.request_id)) map.set(r.request_id, []); map.get(r.request_id).push(r); }
   }
   return map;
 }
-async function withUniformLines(reqs) { const m = await uniformLines(reqs.map(r => Number(r.id))); return reqs.map(r => ({ ...r, lines: m.get(Number(r.id)) || [] })); }
+async function withUniformLines(reqs) {
+  const m = await uniformLines(reqs.map(r => Number(r.id))), prices = await uniformPrices();
+  return reqs.map(r => { const lines = (m.get(Number(r.id)) || []).map(l => ({ ...l, unit_price: l.unit_price != null ? Number(l.unit_price) : prices[l.item], amount: lineAmount(l, prices) })); return { ...r, lines, total: money(lines.reduce((a, l) => a + l.amount, 0)) }; });
+}
 
 /* ---------------- Employee ---------------- */
 async function employeeSide(req, res, emp) {
@@ -162,7 +177,7 @@ async function employeeSide(req, res, emp) {
     const u = new URL(req.url, 'https://workclock.invalid');
     if (u.searchParams.get('uniforms')) {
       const ur = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM uniform_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
-      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, requests: await withUniformLines(ur) });
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur) });
     }
     const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 AND deleted_at IS NULL ORDER BY category,name`;
     const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
@@ -207,8 +222,9 @@ async function employeeSide(req, res, emp) {
     }
     const open = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND status='pending'`;
     if (open[0].n >= 3) return json(res, 400, { error: 'You already have uniform requests waiting.', code: 'UNIFORM_TOO_MANY' });
+    const prices = await uniformPrices();
     const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,note,created_at) VALUES(${emp.id},'pending',${note || null},${nowIso()}) RETURNING id`)[0].id);
-    await sqlBatch(clean.map(([item, size, qty]) => ['INSERT INTO uniform_request_lines(request_id,item,size,qty) VALUES(?,?,?,?)', rid, item, size, qty]));
+    await sqlBatch(clean.map(([item, size, qty]) => ['INSERT INTO uniform_request_lines(request_id,item,size,qty,unit_price) VALUES(?,?,?,?,?)', rid, item, size, qty, prices[item]]));
     await audit('employee', emp.id, 'uniform_requested', { request_id: rid });
     return json(res, 200, { ok: true, id: rid });
   }
@@ -245,7 +261,22 @@ async function managerSide(req, res, manager) {
         FROM uniform_requests r JOIN employees e ON e.id=r.employee_id
         WHERE r.status='pending' OR r.created_at>=${new Date(Date.now() - 180 * 86400000).toISOString()}
         ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`;
-      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, requests: await withUniformLines(ur) });
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur) });
+    }
+    if (u.searchParams.get('deductions')) {
+      // Uniforms handed out in the week: their cost comes off that week's pay.
+      const start = u.searchParams.get('start'), end = u.searchParams.get('end');
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return json(res, 400, { error: 'Valid start and end are required.' });
+      const given = await sql`SELECT r.id,r.employee_id,r.decided_at,e.name AS employee_name FROM uniform_requests r JOIN employees e ON e.id=r.employee_id
+        WHERE r.status='given' AND r.decided_at>=${new Date(start).toISOString()} AND r.decided_at<${new Date(end).toISOString()} ORDER BY e.name,r.decided_at`;
+      const reqs = await withUniformLines(given);
+      const by = new Map();
+      for (const r of reqs) {
+        const k = String(r.employee_id);
+        if (!by.has(k)) by.set(k, { employee_id: k, name: r.employee_name, total: 0, lines: [] });
+        const d = by.get(k); d.total = money(d.total + r.total); d.lines.push(...r.lines.map(l => ({ item: l.item, size: l.size, qty: l.qty, amount: l.amount, given_at: r.decided_at })));
+      }
+      return json(res, 200, { deductions: [...by.values()] });
     }
     if (u.searchParams.get('usage')) {
       const start = u.searchParams.get('start'), end = u.searchParams.get('end');
@@ -314,6 +345,18 @@ async function managerSide(req, res, manager) {
     if (!rows.length) return json(res, 404, { error: 'Item not found.' });
     await audit('manager', manager.id, 'supply_item_deleted', { item_id: id, name: rows[0].name });
     return json(res, 200, { ok: true });
+  }
+  if (req.method === 'POST' && b.action === 'uniform_prices') {
+    const prices = b.prices || {}, now = nowIso(), stmts = [];
+    for (const k of UNIFORM_ITEMS) {
+      if (prices[k] === undefined) continue;
+      const v = Number(prices[k]);
+      if (!Number.isFinite(v) || v < 0 || v > 1000) return json(res, 400, { error: 'Prices must be between $0 and $1,000.' });
+      stmts.push(['INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', 'uniform_price_' + k, String(money(v)), now]);
+    }
+    if (stmts.length) await sqlBatch(stmts);
+    await audit('manager', manager.id, 'uniform_prices_updated', { prices });
+    return json(res, 200, { ok: true, prices: await uniformPrices() });
   }
   if (req.method === 'POST' && b.action === 'uniform_decide') {
     const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });

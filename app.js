@@ -177,7 +177,10 @@
     uniHelp:['Pick the items you need, choose your size and how many, then send.','Elija las prendas que necesita, su talla y cuántas, y envíe.'],
     uniNotePh:['e.g. my jacket is torn','p. ej. mi chaqueta está rota'],
     uni_tshirt_half:['T-shirt, half sleeve','Camiseta, manga corta'],uni_tshirt_full:['T-shirt, full sleeve','Camiseta, manga larga'],uni_trousers:['Trousers','Pantalón'],uni_jacket:['Jacket','Chaqueta'],
-    uniSize:['Size','Talla'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
+    uniSize:['Size','Talla'],uniEach:['${p} each','${p} cada una'],
+    uniTotal:['Total: ${t}','Total: ${t}'],
+    uniDeductNote:['The cost is taken off your pay in the week your manager gives you the items.','El costo se descuenta de su pago la semana en que su gerente le entrega las prendas.'],
+    uniCost:['Cost ${t}','Costo ${t}'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
     uniPickSome:['Choose at least one item and its size.','Elija al menos una prenda y su talla.'],uniTooMany:['You already have uniform requests waiting.','Ya tiene pedidos de uniforme en espera.'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
@@ -561,18 +564,18 @@
 
   /* ---- Employee: uniforms ---- */
   const UNI_KEYS=['tshirt_half','tshirt_full','trousers','jacket'],UNI_SZ=['XS','S','M','L','XL','XXL','3XL'];
-  let uniEmp={requests:[]};const uniPick={};UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});
+  let uniEmp={requests:[],prices:{}};const uniPrice=k=>Number(uniEmp.prices?.[k]??20);const uniPick={};UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});
   async function loadEmpUniforms(){try{uniEmp=await api('/api/supplies?mine=1&uniforms=1');renderEmpUniforms();}catch(e){if(e.status!==401)$('empUniMsg').textContent=displayMessage(e.payload||e.message);}}
   function renderEmpUniforms(){
     if(!$('empUniItems'))return;
-    $('empUniItems').innerHTML=UNI_KEYS.map(k=>{const p=uniPick[k];return `<div class="uniCard${p.qty?' on':''}"><div class="uniCardHead"><span class="uniIcon lg">${UNI_ICONS[k]}</span><b>${esc(t('uni_'+k))}</b></div><div class="uniSizeLbl">${esc(t('uniSize'))}</div><div class="uniSizes" role="group" aria-label="${esc(t('uniSize'))}">${UNI_SZ.map(z=>`<button type="button" class="uniSz${p.size===z?' on':''}" data-uni-size="${k}|${z}" aria-pressed="${p.size===z}">${z}</button>`).join('')}</div><div class="uniQtyRow"><span class="uniSizeLbl">${esc(t('uniQty'))}</span><div class="supStep"><button type="button" data-uni-dec="${k}" aria-label="${esc(t('supLess'))}"${p.qty?'':' disabled'}>−</button><input readonly value="${p.qty}" aria-label="${esc(t('uniQty'))}"/><button type="button" data-uni-inc="${k}" aria-label="${esc(t('supMore'))}">+</button></div></div></div>`;}).join('');
+    $('empUniItems').innerHTML=UNI_KEYS.map(k=>{const p=uniPick[k];return `<div class="uniCard${p.qty?' on':''}"><div class="uniCardHead"><span class="uniIcon lg">${UNI_ICONS[k]}</span><div><b>${esc(t('uni_'+k))}</b><div class="uniPriceTag">${esc(t('uniEach',{p:uniPrice(k).toFixed(2)}))}</div></div></div><div class="uniSizeLbl">${esc(t('uniSize'))}</div><div class="uniSizes" role="group" aria-label="${esc(t('uniSize'))}">${UNI_SZ.map(z=>`<button type="button" class="uniSz${p.size===z?' on':''}" data-uni-size="${k}|${z}" aria-pressed="${p.size===z}">${z}</button>`).join('')}</div><div class="uniQtyRow"><span class="uniSizeLbl">${esc(t('uniQty'))}</span><div class="supStep"><button type="button" data-uni-dec="${k}" aria-label="${esc(t('supLess'))}"${p.qty?'':' disabled'}>−</button><input readonly value="${p.qty}" aria-label="${esc(t('uniQty'))}"/><button type="button" data-uni-inc="${k}" aria-label="${esc(t('supMore'))}">+</button></div></div></div>`;}).join('');
     document.querySelectorAll('[data-uni-size]').forEach(b=>b.onclick=()=>{const [k,z]=b.dataset.uniSize.split('|');uniPick[k].size=z;if(!uniPick[k].qty)uniPick[k].qty=1;renderEmpUniforms();});
     document.querySelectorAll('[data-uni-inc]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniInc];p.qty=Math.min(20,p.qty+1);renderEmpUniforms();});
     document.querySelectorAll('[data-uni-dec]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniDec];p.qty=Math.max(0,p.qty-1);renderEmpUniforms();});
-    const n=UNI_KEYS.filter(k=>uniPick[k].qty).length;
-    $('empUniSummary').textContent=n?t('supPicked',{n}):'';$('empUniSendBtn').disabled=!n;
+    const n=UNI_KEYS.filter(k=>uniPick[k].qty).length,sum=UNI_KEYS.reduce((a,k)=>a+uniPick[k].qty*uniPrice(k),0);
+    $('empUniSummary').innerHTML=n?`${esc(t('supPicked',{n}))} · <b>${esc(t('uniTotal',{t:sum.toFixed(2)}))}</b>`:'';$('empUniSendBtn').disabled=!n;
     const waiting=uniEmp.requests.filter(r=>r.status==='pending').length;$('empUniCount').textContent=waiting;$('empUniCount').classList.toggle('hide',!waiting);
-    $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
+    $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty} · $${Number(l.amount||0).toFixed(2)}</span></li>`).join('')}</ul>${r.status!=='rejected'&&r.status!=='cancelled'?`<div class="small"><b>${esc(t('uniCost',{t:Number(r.total||0).toFixed(2)}))}</b></div>`:''}${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
     document.querySelectorAll('[data-uni-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_cancel',id:Number(b.dataset.uniCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpUniforms();});
   }
   async function sendEmpUniforms(){
@@ -906,8 +909,15 @@
       if((e.employment_status||'active')==='terminated'&&Number(e.total||0)===0)return false;
       return true;
     });
+    // Uniforms given this week come off this week's pay.
+    let ded=[];try{ded=(await api(`/api/supplies?deductions=1&start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}`)).deductions||[];}catch{}
+    const dedBy=new Map(ded.map(d=>[String(d.employee_id),d]));
+    for(const d of ded)if(!weekly.some(e=>String(e.employee_id)===String(d.employee_id))){const full=(j.weekly||[]).find(e=>String(e.employee_id)===String(d.employee_id));if(full)weekly.push(full);}
+    const box=$('uniDedNotice');
+    if(box){box.classList.toggle('hide',!ded.length);
+      box.innerHTML=ded.length?`<div class="uniDedHead"><span class="uniDedIcon" aria-hidden="true">$</span><div><b>Uniform deductions for this week</b><div class="small">Take these amounts off this week's pay.</div></div><strong class="uniDedSum">−$${ded.reduce((a,d)=>a+d.total,0).toFixed(2)}</strong></div><ul>${ded.map(d=>`<li><b>${esc(d.name)}</b>: −$${d.total.toFixed(2)} <span class="muted">(${d.lines.map(l=>`${l.qty} × ${esc(UNI_NAMES[l.item]||l.item)} ${esc(l.size)}`).join(', ')})</span></li>`).join('')}</ul>`:'';}
     $('weeklyRangeText').textContent=`Week of ${weekLabel(start)}`;
-    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b></td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b>${dedBy.has(String(e.employee_id))?`<div class="uniDed">−$${dedBy.get(String(e.employee_id)).total.toFixed(2)} uniform</div>${(()=>{const net=Number(e.earnings)-dedBy.get(String(e.employee_id)).total;return net>=0?`<div class="uniNet">Pay $${net.toFixed(2)}</div>`:`<div class="uniNet owed">Pay $0.00 · $${(-net).toFixed(2)} still owed</div>`;})()}`:''}</td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
     playRowsIn($('weeklyRows'));
     document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();toast(`Wage updated for ${person?.name||'employee'}.`);}catch(e){toast(e.message,'bad');}});
   }
@@ -1326,24 +1336,34 @@
   let uniData={requests:[]},uniTab='pending',uniKnownPending=null;
   function setUniBadge(n){document.querySelectorAll('[data-uni-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});if($('uniCountPending'))$('uniCountPending').textContent=n;}
   async function loadUniforms(){
-    try{uniData=await api('/api/supplies?uniforms=1');uniKnownPending=uniData.requests.filter(r=>r.status==='pending').length;setUniBadge(uniKnownPending);renderUniforms();}
+    try{uniData=await api('/api/supplies?uniforms=1');uniKnownPending=uniData.requests.filter(r=>r.status==='pending').length;setUniBadge(uniKnownPending);renderUniforms();renderUniPrices();}
     catch(e){$('uniReqList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
   }
   function renderUniforms(){
     document.querySelectorAll('[data-uni-tab]').forEach(b=>b.classList.toggle('on',b.dataset.uniTab===uniTab));
     const reqs=uniData.requests.filter(r=>uniTab==='all'||r.status===uniTab||(uniTab==='rejected'&&r.status==='cancelled'));
     $('uniReqList').innerHTML=reqs.map(r=>{const pending=r.status==='pending';
-      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="uniLines">${r.lines.map(l=>`<div class="uniLine"><span class="uniIcon">${UNI_ICONS[l.item]||''}</span><b>${esc(UNI_NAMES[l.item]||l.item)}</b><span class="uniSize">${esc(l.size)}</span><span class="muted">× ${l.qty}</span></div>`).join('')}</div>${pending?`<div class="supReqActions"><input class="supMgrNote" data-uni-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-uni-reject="${r.id}" type="button">Reject</button><button class="primary" data-uni-give="${r.id}" type="button">Mark as given</button></div><div class="muted small" data-uni-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(supStatus[r.status]||r.status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${uniTab==='pending'?'No uniform requests waiting.':'Nothing here.'}</div>`;
+      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="uniLines">${r.lines.map(l=>`<div class="uniLine"><span class="uniIcon">${UNI_ICONS[l.item]||''}</span><b>${esc(UNI_NAMES[l.item]||l.item)}</b><span class="uniSize">${esc(l.size)}</span><span class="muted">× ${l.qty}</span><span class="uniAmt">$${Number(l.amount||0).toFixed(2)}</span></div>`).join('')}<div class="uniTotal">Total to deduct: <b>$${Number(r.total||0).toFixed(2)}</b>${pending?' <span class="muted small">· deducted the week you mark it Given</span>':''}</div></div>${pending?`<div class="supReqActions"><input class="supMgrNote" data-uni-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-uni-reject="${r.id}" type="button">Reject</button><button class="primary" data-uni-give="${r.id}" type="button">Mark as given</button></div><div class="muted small" data-uni-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(supStatus[r.status]||r.status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${uniTab==='pending'?'No uniform requests waiting.':'Nothing here.'}</div>`;
     document.querySelectorAll('[data-uni-give]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniGive,'given',b));
     document.querySelectorAll('[data-uni-reject]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniReject,'rejected',b));
     const tally={};uniData.requests.filter(r=>r.status==='pending').forEach(r=>r.lines.forEach(l=>{tally[l.item]=tally[l.item]||{};tally[l.item][l.size]=(tally[l.item][l.size]||0)+l.qty;}));
     $('uniSizeRows').innerHTML=Object.keys(UNI_NAMES).map(k=>{const t=tally[k]||{},tot=Object.values(t).reduce((a,b)=>a+b,0);return `<tr><td><span class="uniIcon sm">${UNI_ICONS[k]}</span><b>${esc(UNI_NAMES[k])}</b></td>${UNI_SIZES.map(z=>`<td class="${t[z]?'has':''}">${t[z]||'—'}</td>`).join('')}<td><b>${tot||'—'}</b></td></tr>`;}).join('');
   }
+  function renderUniPrices(){
+    const pr=uniData.prices||{};
+    $('uniPriceGrid').innerHTML=Object.keys(UNI_NAMES).map(k=>`<label class="uniPrice"><span class="uniIcon">${UNI_ICONS[k]}</span><span>${esc(UNI_NAMES[k])}</span><span class="uniPriceIn">$<input data-uni-price="${k}" type="number" min="0" max="1000" step="0.01" value="${Number(pr[k]??20).toFixed(2)}"/></span></label>`).join('');
+  }
+  async function saveUniPrices(){
+    const prices={};for(const i of document.querySelectorAll('[data-uni-price]')){const v=Number(i.value);if(!Number.isFinite(v)||v<0||v>1000)return $('uniPriceMsg').textContent='Prices must be between $0 and $1,000.';prices[i.dataset.uniPrice]=v;}
+    $('uniPriceMsg').textContent='Saving…';
+    try{const j=await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_prices',prices})});uniData.prices=j.prices;renderUniPrices();$('uniPriceMsg').textContent='Prices saved. New requests use these prices.';toast('Uniform prices saved.');}
+    catch(e){$('uniPriceMsg').textContent=displayMessage(e.payload||e.message);}
+  }
   async function uniDecide(id,decision,btn){
     const msg=document.querySelector(`[data-uni-msg="${id}"]`),note=(document.querySelector(`[data-uni-note="${id}"]`)?.value||'').trim();
     if(decision==='rejected'&&!confirm('Reject this uniform request?'))return;
     btn.disabled=true;msg.textContent='Saving…';
-    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_decide',id:Number(id),decision,note})});toast(decision==='given'?'Uniform request marked as given.':'Uniform request rejected.');await loadUniforms();}
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_decide',id:Number(id),decision,note})});toast(decision==='given'?'Marked as given. The cost now shows as a deduction on this week\'s Weekly Paid Hours.':'Uniform request rejected.');await loadUniforms();loadWeeklyPaidHours().catch(()=>{});}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
   // Vacations
@@ -1414,6 +1434,7 @@
     document.querySelectorAll('[data-usage-mode]').forEach(b=>b.onclick=()=>{usageMode=b.dataset.usageMode;renderUsage();});
     document.querySelectorAll('[data-uni-tab]').forEach(b=>b.onclick=()=>{uniTab=b.dataset.uniTab;renderUniforms();});
     $('uniRefresh').onclick=loadUniforms;
+    $('uniPriceSave').onclick=saveUniPrices;
     $('vacPrev').onclick=()=>{vacYear--;loadVacations();};$('vacNext').onclick=()=>{vacYear++;loadVacations();};
     $('vacSearch').oninput=renderVacations;$('vacShowAll').onchange=renderVacations;
     $('vacCancel').onclick=()=>$('vacPanel').classList.add('hide');$('vacSave').onclick=saveVac;

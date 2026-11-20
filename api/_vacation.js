@@ -41,6 +41,9 @@ const SHIFT_COLS = `s.id,s.employee_id,s.clock_in,s.clock_out,s.clock_out_note,s
 /* Called by the retention job right before it deletes closed shifts older
    than the cutoff. */
 export async function bankShiftsBefore(cutoffIso) {
+  // Always (re)check the tables here: this runs once a night, and if banking
+  // fails the cleanup stops before deleting any shift.
+  ready = false;
   await ensureVacationTables();
   const shifts = await sql([`SELECT ${SHIFT_COLS} FROM shifts s WHERE s.clock_in < `, ` AND s.clock_out IS NOT NULL`], cutoffIso);
   if (!shifts.length) return 0;
