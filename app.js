@@ -182,6 +182,13 @@
     uniDeductNote:['The cost is taken off your pay in the week your manager gives you the items.','El costo se descuenta de su pago la semana en que su gerente le entrega las prendas.'],
     uniCost:['Cost ${t}','Costo ${t}'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
     uniPickSome:['Choose at least one item and its size.','Elija al menos una prenda y su talla.'],uniTooMany:['You already have uniform requests waiting.','Ya tiene pedidos de uniforme en espera.'],
+    uniDeduction:['UNIFORM DEDUCTION','DESCUENTO DE UNIFORME'],weekPay:['WEEK PAY','PAGO DE LA SEMANA'],
+    navVacation:['Vacation','Vacaciones'],vacTitle:['My Vacation','Mis vacaciones'],
+    vacHelp:['You earn 40 hours of vacation for every 2,080 paid hours you work: about 0.77 hours for each 40-hour week.','Gana 40 horas de vacaciones por cada 2,080 horas pagadas trabajadas: unas 0.77 horas por cada semana de 40 horas.'],
+    vacBalance:['AVAILABLE NOW','DISPONIBLE AHORA'],vacEarnedYear:['EARNED THIS YEAR','GANADO ESTE AÑO'],vacEarnedAll:['EARNED IN TOTAL','GANADO EN TOTAL'],vacTaken:['TAKEN','USADO'],
+    vacHours:['hours','horas'],vacDays:['about {d} days of 8 hours','aprox. {d} días de 8 horas'],vacFrom:['from {h} paid hours','de {h} horas pagadas'],
+    vacNote:['Hours are counted from your paid shifts once you clock out. To take vacation, talk to your manager; they record it here.','Las horas se cuentan de sus turnos pagados al marcar la salida. Para tomar vacaciones, hable con su gerente; él lo registra aquí.'],
+    supUpdated:['Your manager answered a supply request.','Su gerente respondió un pedido de materiales.'],uniUpdated:['Your manager answered a uniform request.','Su gerente respondió un pedido de uniforme.'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -255,6 +262,7 @@
     if(employeeIdentity&&empCache)renderEmployee();
     if(employeeIdentity&&$('empSupItems'))renderEmpSupplies();
     if(employeeIdentity&&$('empUniItems'))renderEmpUniforms();
+    if(employeeIdentity&&empPage()==='vacation')loadEmpVacation();
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -313,8 +321,8 @@
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
-  function showEmployeeLogin(){employeeIdentity=null;empCache=null;if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
+  function showEmployeeLogin(){employeeIdentity=null;empCache=null;clearInterval(empPollTimer);empCountsKnown=null;empCounts.supplies=0;empCounts.uniforms=0;if($('empBurgerDot'))setEmpCounts();if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';startEmpPoll();if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
   // Fills the ring on the live shift card toward a full 8-hour day.
   function updateShiftRing(h){
     const ring=$('shiftRingBar'),label=$('shiftRingPct');if(!ring)return;
@@ -361,6 +369,10 @@
     if($('days').dataset.html!==daysHtml){$('days').innerHTML=daysHtml;$('days').dataset.html=daysHtml;}
     renderWeekFlags(start);
     animNum($('weekTotal'),total);animNum($('weekEarned'),total*rate,money);
+    // Uniforms handed out this week come off this week's pay.
+    const ded=Number(empCache.deduction?.total||0);
+    $('weekDedBox').classList.toggle('hide',!ded);$('weekPayBox').classList.toggle('hide',!ded);
+    if(ded){$('weekDed').textContent=`−$${ded.toFixed(2)}`;$('weekDedItems').textContent=(empCache.deduction.lines||[]).map(l=>`${l.qty} × ${t('uni_'+l.item)} ${l.size}`).join(', ');$('weekPay').textContent=`$${Math.max(0,total*rate-ded).toFixed(2)}`;}
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
     animNum($('hoursToday'),today);animNum($('earnedToday'),today*rate,money);animNum($('hoursWeek'),total);animNum($('earnedWeek'),total*rate,money);
     renderEmployeeMap();
@@ -419,7 +431,7 @@
   async function loadEmployee(){
     if(managerMode||!employeeIdentity)return;
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),bounds=dayBounds(start,7),end=new Date(bounds[bounds.length-1]);
-    try{empCache=await api(`/api/employee?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);employeeIdentity=empCache.employee;projectMinimum=Number(empCache.settings?.project_completed_min_paid_hours??8);renderEmployee();}
+    try{const dedP=api(`/api/supplies?mine=1&deductions=1&start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}`).catch(()=>null);empCache=await api(`/api/employee?start=${encodeURIComponent(bounds[0])}&end=${encodeURIComponent(end.toISOString())}&dayStarts=${qp(bounds)}`);empCache.deduction=await dedP;employeeIdentity=empCache.employee;projectMinimum=Number(empCache.settings?.project_completed_min_paid_hours??8);renderEmployee();}
     catch(e){if(e.status===401)showEmployeeLogin();else stat(displayMessage(e.payload||e.message),'bad');}
   }
   function tick(){if(managerMode)return;const d=new Date();$('clock').textContent=d.toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});$('dateText').textContent=d.toLocaleDateString(locale(),{weekday:'long',month:'long',day:'numeric',year:'numeric'});if(empCache?.openShift)renderEmployee();}
@@ -529,7 +541,7 @@
   let supEmp={items:[],requests:[]};const supCart=new Map();
   const supStatusText=st=>({pending:t('supWaiting'),given:t('supGiven'),rejected:t('supRejected'),cancelled:t('supCancelled')}[st]||st);
   const supErr=e=>{const c=e.payload?.code;return c==='SUPPLY_EMPTY'?t('supPickSome'):c==='SUPPLY_TOO_MANY'?t('supTooMany'):c==='SUPPLY_GONE'?t('supGone'):c==='SUPPLY_QTY'?t('supQty'):c==='SUPPLY_HANDLED'?t('supHandled'):displayMessage(e.payload||e.message);};
-  async function loadEmpSupplies(){try{supEmp=await api('/api/supplies?mine=1');for(const id of [...supCart.keys()])if(!supEmp.items.some(i=>String(i.id)===id))supCart.delete(id);renderEmpSupplies();}catch(e){if(e.status===401)return;$('empSupMsg').textContent=supErr(e);}}
+  async function loadEmpSupplies(){try{supEmp=await api('/api/supplies?mine=1&seen=1');empCounts.supplies=0;setEmpCounts();for(const id of [...supCart.keys()])if(!supEmp.items.some(i=>String(i.id)===id))supCart.delete(id);renderEmpSupplies();}catch(e){if(e.status===401)return;$('empSupMsg').textContent=supErr(e);}}
   function renderEmpSupplies(){
     if(!$('empSupItems'))return;
     const q=($('empSupSearch').value||'').trim().toLowerCase();
@@ -540,7 +552,6 @@
     document.querySelectorAll('[data-sup-dec]').forEach(b=>b.onclick=()=>set(b.dataset.supDec,(supCart.get(b.dataset.supDec)||0)-1));
     document.querySelectorAll('[data-sup-inc]').forEach(b=>b.onclick=()=>set(b.dataset.supInc,(supCart.get(b.dataset.supInc)||0)+1));
     document.querySelectorAll('[data-sup-qty]').forEach(inp=>inp.onchange=()=>set(inp.dataset.supQty,inp.value));
-    const waitingN=supEmp.requests.filter(r=>r.status==='pending').length;$('empSupCount').textContent=waitingN;$('empSupCount').classList.toggle('hide',!waitingN);
     const picked=supCart.size;
     $('empSupSummary').textContent=picked?t('supPicked',{n:picked}):'';
     $('empSupSendBtn').disabled=!picked;
@@ -565,7 +576,7 @@
   /* ---- Employee: uniforms ---- */
   const UNI_KEYS=['tshirt_half','tshirt_full','trousers','jacket'],UNI_SZ=['XS','S','M','L','XL','XXL','3XL'];
   let uniEmp={requests:[],prices:{}};const uniPrice=k=>Number(uniEmp.prices?.[k]??20);const uniPick={};UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});
-  async function loadEmpUniforms(){try{uniEmp=await api('/api/supplies?mine=1&uniforms=1');renderEmpUniforms();}catch(e){if(e.status!==401)$('empUniMsg').textContent=displayMessage(e.payload||e.message);}}
+  async function loadEmpUniforms(){try{uniEmp=await api('/api/supplies?mine=1&uniforms=1&seen=1');empCounts.uniforms=0;setEmpCounts();renderEmpUniforms();}catch(e){if(e.status!==401)$('empUniMsg').textContent=displayMessage(e.payload||e.message);}}
   function renderEmpUniforms(){
     if(!$('empUniItems'))return;
     $('empUniItems').innerHTML=UNI_KEYS.map(k=>{const p=uniPick[k];return `<div class="uniCard${p.qty?' on':''}"><div class="uniCardHead"><span class="uniIcon lg">${UNI_ICONS[k]}</span><div><b>${esc(t('uni_'+k))}</b><div class="uniPriceTag">${esc(t('uniEach',{p:uniPrice(k).toFixed(2)}))}</div></div></div><div class="uniSizeLbl">${esc(t('uniSize'))}</div><div class="uniSizes" role="group" aria-label="${esc(t('uniSize'))}">${UNI_SZ.map(z=>`<button type="button" class="uniSz${p.size===z?' on':''}" data-uni-size="${k}|${z}" aria-pressed="${p.size===z}">${z}</button>`).join('')}</div><div class="uniQtyRow"><span class="uniSizeLbl">${esc(t('uniQty'))}</span><div class="supStep"><button type="button" data-uni-dec="${k}" aria-label="${esc(t('supLess'))}"${p.qty?'':' disabled'}>−</button><input readonly value="${p.qty}" aria-label="${esc(t('uniQty'))}"/><button type="button" data-uni-inc="${k}" aria-label="${esc(t('supMore'))}">+</button></div></div></div>`;}).join('');
@@ -574,7 +585,6 @@
     document.querySelectorAll('[data-uni-dec]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniDec];p.qty=Math.max(0,p.qty-1);renderEmpUniforms();});
     const n=UNI_KEYS.filter(k=>uniPick[k].qty).length,sum=UNI_KEYS.reduce((a,k)=>a+uniPick[k].qty*uniPrice(k),0);
     $('empUniSummary').innerHTML=n?`${esc(t('supPicked',{n}))} · <b>${esc(t('uniTotal',{t:sum.toFixed(2)}))}</b>`:'';$('empUniSendBtn').disabled=!n;
-    const waiting=uniEmp.requests.filter(r=>r.status==='pending').length;$('empUniCount').textContent=waiting;$('empUniCount').classList.toggle('hide',!waiting);
     $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty} · $${Number(l.amount||0).toFixed(2)}</span></li>`).join('')}</ul>${r.status!=='rejected'&&r.status!=='cancelled'?`<div class="small"><b>${esc(t('uniCost',{t:Number(r.total||0).toFixed(2)}))}</b></div>`:''}${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
     document.querySelectorAll('[data-uni-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_cancel',id:Number(b.dataset.uniCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpUniforms();});
   }
@@ -586,8 +596,35 @@
     try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_request',note:$('empUniNote').value.trim(),lines})});UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});$('empUniNote').value='';toast(t('supSent'));$('empUniMsg').textContent=t('supSent');await loadEmpUniforms();}
     catch(e){const c=e.payload?.code;$('empUniMsg').textContent=c==='UNIFORM_TOO_MANY'?t('uniTooMany'):c==='UNIFORM_EMPTY'?t('uniPickSome'):displayMessage(e.payload||e.message);btn.disabled=false;}
   }
+
+  /* ---- Employee: answers from the manager, and vacation ---- */
+  const empCounts={supplies:0,uniforms:0};let empCountsKnown=null,empPollTimer=null;
+  function setEmpCounts(){
+    [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
+    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms));
+  }
+  async function pollEmpCounts(){
+    if(managerMode||!employeeIdentity)return;
+    try{const j=await api('/api/supplies?mine=1&count=1');const pg=empPage();
+      if(empCountsKnown){if(j.supplies>empCountsKnown.supplies&&pg!=='supplies')toast(t('supUpdated'));if(j.uniforms>empCountsKnown.uniforms&&pg!=='uniforms')toast(t('uniUpdated'));}
+      empCountsKnown={supplies:j.supplies,uniforms:j.uniforms};
+      // The page being looked at counts as read.
+      if(pg==='supplies'&&j.supplies)return loadEmpSupplies();
+      if(pg==='uniforms'&&j.uniforms)return loadEmpUniforms();
+      empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;setEmpCounts();
+    }catch{}
+  }
+  function startEmpPoll(){pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
+  async function loadEmpVacation(){
+    try{const v=(await api('/api/supplies?mine=1&vacation=1')).vacation||{year_paid_hours:0,year_earned:0,all_earned:0,used_hours:0,balance:0};
+      const h=x=>`${Number(x).toFixed(2)} ${t('vacHours')}`;
+      $('vBal').textContent=h(v.balance);$('vBalDays').textContent=t('vacDays',{d:(Math.max(0,v.balance)/8).toFixed(1)});
+      $('vYear').textContent=h(v.year_earned);$('vYearHrs').textContent=t('vacFrom',{h:Number(v.year_paid_hours).toFixed(2)});
+      $('vAll').textContent=h(v.all_earned);$('vUsed').textContent=h(v.used_hours);$('vacMsg').textContent='';
+    }catch(e){if(e.status!==401)$('vacMsg').textContent=displayMessage(e.payload||e.message);}
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms'];
+  const EMP_PAGES=['clock','supplies','uniforms','vacation'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -599,6 +636,7 @@
     $('toggleEmpSup').classList.toggle('hide',pg==='supplies');
     if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
     if(pg==='uniforms')loadEmpUniforms();
+    if(pg==='vacation')loadEmpVacation();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);

@@ -1,3 +1,4 @@
+import { vacationSummary } from './_vacation.js';
 import { sql, sqlBatch, json, getManager, getEmployeeSession, requireSameOrigin, audit, nowIso } from './_db.js';
 
 /* Tools & Supplies.
@@ -102,6 +103,11 @@ async function ensureTables() {
   if (!cols.includes('deleted_at')) mig.push(['ALTER TABLE supply_items ADD COLUMN deleted_at TEXT']);
   const ucols = (await sql`SELECT name FROM pragma_table_info('uniform_request_lines')`).map(c => c.name);
   if (!ucols.includes('unit_price')) mig.push(['ALTER TABLE uniform_request_lines ADD COLUMN unit_price REAL']);
+  // employee_seen = 0 once the manager decides, until the painter opens that page.
+  for (const t of ['supply_requests', 'uniform_requests']) {
+    const c = (await sql([`SELECT name FROM pragma_table_info('${t}')`])).map(x => x.name);
+    if (!c.includes('employee_seen')) mig.push([`ALTER TABLE ${t} ADD COLUMN employee_seen INTEGER NOT NULL DEFAULT 1`]);
+  }
   if (mig.length) await sqlBatch(mig);
   // A deleted item's name can be used again.
   await sqlBatch([['DROP INDEX IF EXISTS supply_items_name'], ['CREATE UNIQUE INDEX IF NOT EXISTS supply_items_live_name ON supply_items(lower(name)) WHERE deleted_at IS NULL']]);
@@ -175,6 +181,27 @@ async function employeeSide(req, res, emp) {
   const b = req.body || {};
   if (req.method === 'GET') {
     const u = new URL(req.url, 'https://workclock.invalid');
+    if (u.searchParams.get('count')) {
+      const a = await sql`SELECT count(*) AS n FROM supply_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
+      const c = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
+      return json(res, 200, { supplies: a[0].n, uniforms: c[0].n });
+    }
+    if (u.searchParams.get('vacation')) {
+      const year = new Date().getUTCFullYear();
+      const mine = (await vacationSummary(year)).find(r => String(r.employee_id) === String(emp.id)) || null;
+      return json(res, 200, { year, vacation: mine && { year_paid_hours: mine.year_paid_hours, year_earned: mine.year_earned, all_earned: mine.all_earned, used_hours: mine.used_hours, balance: mine.balance } });
+    }
+    if (u.searchParams.get('deductions')) {
+      const start = u.searchParams.get('start'), end = u.searchParams.get('end');
+      if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return json(res, 400, { error: 'Valid start and end are required.' });
+      const given = await sql`SELECT id,decided_at FROM uniform_requests WHERE employee_id=${emp.id} AND status='given' AND decided_at>=${new Date(start).toISOString()} AND decided_at<${new Date(end).toISOString()}`;
+      const reqs = await withUniformLines(given);
+      return json(res, 200, { total: money(reqs.reduce((a, r) => a + r.total, 0)), lines: reqs.flatMap(r => r.lines.map(l => ({ item: l.item, size: l.size, qty: l.qty, amount: l.amount }))) });
+    }
+    if (u.searchParams.get('seen')) {
+      if (u.searchParams.get('uniforms')) await sql`UPDATE uniform_requests SET employee_seen=1 WHERE employee_id=${emp.id} AND employee_seen=0`;
+      else await sql`UPDATE supply_requests SET employee_seen=1 WHERE employee_id=${emp.id} AND employee_seen=0`;
+    }
     if (u.searchParams.get('uniforms')) {
       const ur = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM uniform_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
       return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur) });
@@ -362,7 +389,7 @@ async function managerSide(req, res, manager) {
     const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
     if (!['given', 'rejected'].includes(b.decision)) return json(res, 400, { error: 'Choose Given or Reject.' });
     const note = cleanText(b.note, 300); if (note === null) return json(res, 400, { error: 'The note must be 300 characters or fewer.' });
-    const rows = await sql`UPDATE uniform_requests SET status=${b.decision},manager_note=${note || null},decided_at=${nowIso()},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
+    const rows = await sql`UPDATE uniform_requests SET status=${b.decision},employee_seen=0,manager_note=${note || null},decided_at=${nowIso()},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
     if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
     await audit('manager', manager.id, 'uniform_request_' + b.decision, { request_id: id });
     return json(res, 200, { ok: true });
@@ -377,7 +404,7 @@ async function managerSide(req, res, manager) {
     if (request.status !== 'pending') return json(res, 400, { error: 'This request has already been handled.' });
     const now = nowIso();
     if (decision === 'rejected') {
-      const rows = await sql`UPDATE supply_requests SET status='rejected',manager_note=${note || null},decided_at=${now},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
+      const rows = await sql`UPDATE supply_requests SET status='rejected',employee_seen=0,manager_note=${note || null},decided_at=${now},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
       if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
       await audit('manager', manager.id, 'supply_request_rejected', { request_id: id });
       return json(res, 200, { ok: true });
@@ -394,7 +421,7 @@ async function managerSide(req, res, manager) {
     if (!plan.some(p => p.q > 0)) return json(res, 400, { error: 'Give at least one item, or reject the request.' });
     // One transaction: the request is marked given only if it was still waiting,
     // and each shelf quantity drops only if enough is there (CHECK quantity>=0).
-    const stmts = [['UPDATE supply_requests SET status=?,manager_note=?,decided_at=?,decided_by=? WHERE id=? AND status=?', 'given', note || null, now, manager.id, id, 'pending']];
+    const stmts = [['UPDATE supply_requests SET status=?,employee_seen=0,manager_note=?,decided_at=?,decided_by=? WHERE id=? AND status=?', 'given', note || null, now, manager.id, id, 'pending']];
     // Every later statement only runs if the first one marked THIS request
     // given in this transaction (same decided_at), so a double click or a second
     // manager tab cannot take supplies off the shelf twice.

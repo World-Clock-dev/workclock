@@ -847,3 +847,17 @@ body.mgr .lowAlertBtn,body.mgr .lowAlertBtn:hover{color:#fff}
 .uniDed{font-size:12px;font-weight:800;color:#b91c1c;white-space:nowrap}
 .uniNet{font-size:12px;font-weight:900;color:#047857;white-space:nowrap}
 .uniNet.owed{color:#b91c1c}
+
+/* ---- Employee: deductions, vacation, update dot ---- */
+.totals .dedBox strong{color:#b91c1c}
+.totals .dedBox small{display:block;font-size:11px;color:var(--muted);font-weight:700;line-height:1.3}
+#weekPayBox strong{color:#047857}
+.empBurger{position:relative}
+.burgerDot{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff}
+.vacTiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.vacTile{border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.vacTile span{font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:800}
+.vacTile strong{font-size:22px}
+.vacTile small{font-size:12px;color:var(--muted);font-weight:700}
+.vacTile.big{grid-column:1/-1;background:#ecfdf5;border-color:#a7f3d0}
+.vacTile.big strong{font-size:30px;color:#047857}
