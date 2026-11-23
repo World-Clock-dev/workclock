@@ -986,3 +986,18 @@ table.mntTable{min-width:520px}.mntTable td{white-space:normal}
 .pEmp{display:flex;align-items:center;gap:8px;margin:0;font-weight:700;border:1px solid var(--line);border-radius:10px;padding:8px}
 .pEmp input{width:auto;margin:0}
 @media(max-width:640px){.calDay{min-height:58px;padding:2px}.calChip{font-size:9px;padding:1px 3px}.calHead span{font-size:9px;padding:4px 0}}
+
+/* ---- Help & manual ---- */
+.drawerHelp{margin-top:auto;border-top:1px solid var(--line);padding-top:8px}
+.empDrawer .drawerHelp+.empDrawerOut{margin-top:0}
+.helpSearch{max-width:none;margin:8px 0}
+.helpList{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.helpItem{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.helpHead{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:#fff;padding:13px 14px;text-align:left;font-weight:800;font-size:15px;color:var(--text);min-height:48px}
+.helpHead svg{width:18px;height:18px;flex:0 0 auto;transition:transform .2s;color:var(--muted)}
+.helpItem.open .helpHead svg{transform:rotate(180deg)}
+.helpBody{display:none;padding:0 14px 12px;font-size:14px;line-height:1.55;color:#374151}
+.helpItem.open .helpBody{display:block}
+.helpBody p{margin:6px 0}
+.helpGo{display:inline-flex;text-decoration:none;margin-top:4px}
+mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}

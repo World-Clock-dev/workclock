@@ -32,6 +32,21 @@
   const mapsLink=a=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a)}`;
   const fileSize=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
   const readAsDataURL=f=>new Promise((ok,bad)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=bad;r.readAsDataURL(f);});
+  /* Starting supply catalog in Spanish. Items the manager adds later show as typed. */
+  const SUP_ES={'Tape':'Cinta','Rollers':'Rodillos','Brushes':'Brochas','Buckets':'Cubetas','Trays':'Bandejas','Protection':'Protección','Preparation':'Preparación','Cleaning':'Limpieza','Accessories':'Accesorios','Safety':'Seguridad','Other':'Otros',
+    'Roll':'Rollo','Piece':'Pieza','Pack':'Paquete','Box':'Caja',
+    'Blue painter tape 1"':'Cinta azul de pintor 1"','Blue painter tape 1.5"':'Cinta azul de pintor 1.5"','Blue painter tape 2"':'Cinta azul de pintor 2"','Green delicate-surface tape':'Cinta verde para superficies delicadas',
+    '9" roller cover':'Funda de rodillo 9"','14" roller cover':'Funda de rodillo 14"','4" roller cover':'Funda de rodillo 4"','9" roller frame':'Marco de rodillo 9"','14" roller frame':'Marco de rodillo 14"','4" roller frame':'Marco de rodillo 4"',
+    '2" paintbrush':'Brocha 2"','2.5" paintbrush':'Brocha 2.5"','3" paintbrush':'Brocha 3"',
+    '5-gallon bucket':'Cubeta de 5 galones','Handheld paint pail':'Cubo de pintura de mano','Bucket grid':'Rejilla para cubeta',
+    'Paint tray':'Bandeja de pintura','Disposable tray liner':'Forro desechable para bandeja',
+    'Plastic drop cloth':'Lona de plástico','Canvas drop cloth':'Lona de tela','Plastic covering box/dispenser':'Caja/dispensador de plástico protector',
+    'Masking plastic':'Plástico para enmascarar','Masking paper':'Papel para enmascarar','Floor protection paper':'Papel protector de piso',
+    'Sandpaper sheets':'Hojas de lija','Sanding sponges':'Esponjas de lijar','Sanding discs':'Discos de lija','Scrapers':'Raspadores','Putty knives':'Espátulas','Caulking gun':'Pistola de calafateo',
+    'Utility knife blades':'Hojas de cúter','Rags':'Trapos','Cleaning sponges':'Esponjas de limpieza','Cleaning brushes':'Cepillos de limpieza','Trash bags':'Bolsas de basura',
+    'Extension poles':'Palos de extensión','Roller bucket screens':'Rejillas para cubeta de rodillo','Paint strainers':'Coladores de pintura','Mixing sticks':'Palos para mezclar',
+    'Disposable gloves':'Guantes desechables','Dust masks':'Mascarillas contra polvo','Safety glasses':'Lentes de seguridad'};
+  const supT=x=>lang==='es'&&SUP_ES[x]?SUP_ES[x]:x;
   /* Uniform item icons (simple line drawings). */
   const UNI_SVG=d=>`<svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${d}</svg>`;
   const UNI_ICONS={
@@ -241,6 +256,10 @@
     vPlate:['Plate','Placa'],vVin:['VIN','VIN'],vDriver:['Driver','Conductor'],vNone:['Not assigned','Sin asignar'],vMnt:['Maintenance history','Historial de mantenimiento'],vNoMnt:['No maintenance recorded yet.','Aún no hay mantenimiento registrado.'],vDate:['Date','Fecha'],vWhat:['What was done','Qué se hizo'],vMiles:['Mileage','Millaje'],vCost:['Cost','Costo'],vNotes:['Notes','Notas'],
     resTitle:['Job Resources','Recursos de trabajo'],resHelp:['These documents explain the job and how we work. Tap one to open it.','Estos documentos explican el trabajo y cómo trabajamos. Toque uno para abrirlo.'],resEmpty:['No documents yet.','Aún no hay documentos.'],resOpen:['Open','Abrir'],
     resK_handbook:['Employee Handbook','Manual del empleado'],resK_sop:['Standard Operating Procedure (SOP)','Procedimiento operativo estándar (SOP)'],resK_other:['Document','Documento'],
+    perHour:['/hr','/hora'],prevLbl:['Previous','Anterior'],nextLbl:['Next','Siguiente'],qtyLbl:['Quantity','Cantidad'],
+    navHelp:['Help','Ayuda'],helpTitle:['Help & Manual','Ayuda y manual'],helpIntro:['Search for a section or a question, then tap a topic to read how it works.','Busque una sección o una pregunta y toque un tema para leer cómo funciona.'],
+    helpSearchPh:['Search: clock out, vacation, uniform…','Buscar: salida, vacaciones, uniforme…'],helpFound:['{n} topics found','{n} temas encontrados'],helpNone:['Nothing found. Try another word.','No se encontró nada. Pruebe otra palabra.'],helpGo:['Open this section','Abrir esta sección'],
+    photoBad:['That file could not be read as a photo. Try again.','No se pudo leer ese archivo como foto. Intente de nuevo.'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -249,6 +268,30 @@
   /* Server replies are English. Map the ones an employee can see, so a
      rejected clock-out or a locked PIN reads in their language too. */
   const SERVER_ES = {
+    'Choose an item, a size and a quantity from 1 to 20.':'Elija una prenda, una talla y una cantidad de 1 a 20.',
+    'Choose at least one item and size.':'Elija al menos una prenda y su talla.',
+    'Choose at least one item.':'Elija al menos un artículo.',
+    'Each extra item needs a name and a quantity from 1 to 999.':'Cada artículo adicional necesita un nombre y una cantidad de 1 a 999.',
+    'Each item needs a quantity from 1 to 999.':'Cada artículo necesita una cantidad de 1 a 999.',
+    'Enter a valid email.':'Escriba un correo electrónico válido.',
+    'One of the items is no longer available. Refresh and try again.':'Uno de los artículos ya no está disponible. Actualice e intente de nuevo.',
+    'The SSN must have 9 digits.':'El SSN debe tener 9 dígitos.',
+    'The licence photo is too large. Take it again a little further away.':'La foto de la licencia es demasiado grande. Tómela de nuevo un poco más lejos.',
+    'The licence photo must be a JPG, PNG or WEBP image.':'La foto de la licencia debe ser una imagen JPG, PNG o WEBP.',
+    'The note must be 500 characters or fewer.':'La nota debe tener 500 caracteres o menos.',
+    'This request has already been handled.':'Este pedido ya fue atendido.',
+    'Too many lines in one request.':'Demasiadas líneas en un pedido.',
+    'Up to 40 items per request.':'Hasta 40 artículos por pedido.',
+    'Up to 10 items that are not on the list.':'Hasta 10 artículos que no están en la lista.',
+    'You already have several requests waiting. Wait for the manager, or cancel one.':'Ya tiene varios pedidos en espera. Espere a su gerente o cancele uno.',
+    'You already have uniform requests waiting.':'Ya tiene pedidos de uniforme en espera.',
+    'Valid start and end are required.':'Se requieren fechas de inicio y fin válidas.',
+    'Choose a month or a year.':'Elija un mes o un año.',
+    'Employee login required.':'Debe iniciar sesión como empleado.',
+    'Login required.':'Debe iniciar sesión.',
+    'Not found.':'No encontrado.',
+    'Server error':'Error del servidor. Intente de nuevo.',
+    'Request failed':'La solicitud falló. Intente de nuevo.',
     'A valid GPS location is required.':'Se requiere una ubicación GPS válida.',
     'Already clocked-in.':'Ya tiene una entrada registrada.',
     'Already clocked out.':'Ya registró su salida.',
@@ -279,6 +322,8 @@
     if(o)return `SALIDA FUERA DEL ÁREA PERMITIDA — está a ${o[1]} millas del lugar de entrada (permitido ${o[2]} millas). Su tiempo se detuvo y su gerente revisará este turno.`;
     let m=text.match(/^CLOCK OUT REJECTED — you are ([\d.]+) miles from Clock In\. You must be within ([\d.]+) miles\.$/);
     if(m)return `SALIDA RECHAZADA — está a ${m[1]} millas del lugar de entrada. Debe estar dentro de ${m[2]} millas.`;
+    let ck=text.match(/^Check the (.+)\.$/);
+    if(ck){const F={'full name':'el nombre completo','dob':'la fecha de nacimiento','address':'la dirección','phone':'el teléfono','email':'el correo','emergency name':'el nombre del contacto de emergencia','emergency phone':'el teléfono de emergencia','emergency relation':'el parentesco'};return `Revise ${F[ck[1]]||ck[1]}.`;}
     m=text.match(/^Clock Out message must be (\d+) characters or fewer\.$/);
     if(m)return `El mensaje de salida debe tener ${m[1]} caracteres o menos.`;
     return text;
@@ -301,6 +346,8 @@
     document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
     document.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.placeholder=t(el.dataset.i18nPh);});
     document.querySelectorAll('[data-i18n-aria]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAria));});
+    if($('employeeRecovery')&&!$('employeeRecovery').classList.contains('hide'))$('employeeRecoveryMsg').textContent=t('recoveryHelp');
+    if(employeeIdentity&&$('employeeRateDisplay'))$('employeeRateDisplay').textContent=`$${Number((empCache?.employee||employeeIdentity).hourly_wage||0).toFixed(2)}${t('perHour')}`;
     // Reason options: translate the label, never the stored value.
     document.querySelectorAll('#earlyNote option[data-i18n-opt]').forEach(el=>{el.textContent=t(el.dataset.i18nOpt);});
     document.querySelectorAll('#empWeekCal .weekCalDows span').forEach((el,i)=>{el.textContent=DOWS[lang][i];});
@@ -320,6 +367,7 @@
     if(employeeIdentity&&empPage()==='projects')loadEmpProjects();
     if(employeeIdentity&&empPage()==='vehicle')loadEmpVehicle();
     if(employeeIdentity&&empPage()==='resources')loadEmpResources();
+    if(employeeIdentity&&empPage()==='help')renderHelp();
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -379,7 +427,7 @@
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
   function showEmployeeLogin(){employeeIdentity=null;empCache=null;clearInterval(empPollTimer);empCountsKnown=null;empCounts.supplies=0;empCounts.uniforms=0;if($('empBurgerDot'))setEmpCounts();if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
-  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=Number(emp.hourly_wage||0).toFixed(2)==='0.00'?'$0.00/hr':`$${Number(emp.hourly_wage||0).toFixed(2)}/hr`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';startEmpPoll();if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
+  function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=`$${Number(emp.hourly_wage||0).toFixed(2)}${t('perHour')}`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';startEmpPoll();if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
   // Fills the ring on the live shift card toward a full 8-hour day.
   function updateShiftRing(h){
     const ring=$('shiftRingBar'),label=$('shiftRingPct');if(!ring)return;
@@ -410,7 +458,7 @@
   function renderEmployee(){
     if(managerMode||!employeeIdentity||!empCache)return;
     const p=empCache.employee,open=empCache.openShift;
-    $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent=`$${Number(p.hourly_wage||0).toFixed(2)}/hr`;
+    $('employeeTitleDisplay').textContent=p.title||'';$('employeeRateDisplay').textContent=`$${Number(p.hourly_wage||0).toFixed(2)}${t('perHour')}`;
     $('shift').classList.toggle('hide',!open);$('earlyNoteWrap').classList.toggle('hide',!open);$('in').disabled=!!open;$('out').disabled=!open;
     if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());updateShiftRing(elapsedHours);const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent=t('reasonPick');}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
@@ -602,9 +650,9 @@
   function renderEmpSupplies(){
     if(!$('empSupItems'))return;
     const q=($('empSupSearch').value||'').trim().toLowerCase();
-    const items=supEmp.items.filter(i=>!q||(i.name+' '+i.category).toLowerCase().includes(q));
+    const items=supEmp.items.filter(i=>!q||[i.name,i.category,supT(i.name),supT(i.category)].join(' ').toLowerCase().includes(q));
     const cats=[...new Set(items.map(i=>i.category))];
-    $('empSupItems').innerHTML=cats.map(c=>`<div class="supCat">${esc(c)}</div>`+items.filter(i=>i.category===c).map(i=>{const n=supCart.get(String(i.id))||0;return `<div class="supPick${n?' on':''}"><div class="supPickName"><b>${esc(i.name)}</b><span>${esc(i.unit)}</span></div><div class="supStep"><button type="button" data-sup-dec="${i.id}" aria-label="${esc(t('supLess'))}"${n?'':' disabled'}>−</button><input data-sup-qty="${i.id}" inputmode="numeric" value="${n||''}" placeholder="0" aria-label="${esc(i.name)}"/><button type="button" data-sup-inc="${i.id}" aria-label="${esc(t('supMore'))}">+</button></div></div>`;}).join('')).join('')||`<div class="dashEmpty">${esc(supEmp.items.length?t('supNoMatch'):t('supNoItems'))}</div>`;
+    $('empSupItems').innerHTML=cats.map(c=>`<div class="supCat">${esc(supT(c))}</div>`+items.filter(i=>i.category===c).map(i=>{const n=supCart.get(String(i.id))||0;return `<div class="supPick${n?' on':''}"><div class="supPickName"><b>${esc(supT(i.name))}</b><span>${esc(supT(i.unit))}</span></div><div class="supStep"><button type="button" data-sup-dec="${i.id}" aria-label="${esc(t('supLess'))}"${n?'':' disabled'}>−</button><input data-sup-qty="${i.id}" inputmode="numeric" value="${n||''}" placeholder="0" aria-label="${esc(supT(i.name))}"/><button type="button" data-sup-inc="${i.id}" aria-label="${esc(t('supMore'))}">+</button></div></div>`;}).join('')).join('')||`<div class="dashEmpty">${esc(supEmp.items.length?t('supNoMatch'):t('supNoItems'))}</div>`;
     const set=(id,v)=>{v=Math.max(0,Math.min(999,Math.floor(Number(v)||0)));if(v)supCart.set(String(id),v);else supCart.delete(String(id));renderEmpSupplies();};
     document.querySelectorAll('[data-sup-dec]').forEach(b=>b.onclick=()=>set(b.dataset.supDec,(supCart.get(b.dataset.supDec)||0)-1));
     document.querySelectorAll('[data-sup-inc]').forEach(b=>b.onclick=()=>set(b.dataset.supInc,(supCart.get(b.dataset.supInc)||0)+1));
@@ -614,7 +662,7 @@
     const picked=supCart.size+supCustom.length;
     $('empSupSummary').textContent=picked?t('supPicked',{n:picked}):'';
     $('empSupSendBtn').disabled=!picked;
-    $('empSupMine').innerHTML=supEmp.requests.length?supEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(l.item_name)}</b> <span class="muted">· ${esc(t('supAsked',{n:l.qty_requested+' '+l.unit}))}${r.status==='given'?' · '+esc(t('supGot',{n:(l.qty_given??0)+' '+l.unit})):''}</span></li>`).join('')}${(r.custom||[]).map(c=>`<li><b>${esc(c.name)}</b> <span class="customTag">${esc(t('supCustomTag'))}</span> <span class="muted">· ${esc(t('supAsked',{n:c.qty}))}${r.status==='given'?' · '+esc(t('supGot',{n:c.qty_given??0})):''}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-sup-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
+    $('empSupMine').innerHTML=supEmp.requests.length?supEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(supT(l.item_name))}</b> <span class="muted">· ${esc(t('supAsked',{n:l.qty_requested+' '+supT(l.unit)}))}${r.status==='given'?' · '+esc(t('supGot',{n:(l.qty_given??0)+' '+supT(l.unit)})):''}</span></li>`).join('')}${(r.custom||[]).map(c=>`<li><b>${esc(c.name)}</b> <span class="customTag">${esc(t('supCustomTag'))}</span> <span class="muted">· ${esc(t('supAsked',{n:c.qty}))}${r.status==='given'?' · '+esc(t('supGot',{n:c.qty_given??0})):''}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-sup-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
     document.querySelectorAll('[data-sup-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'cancel',id:Number(b.dataset.supCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpSupplies();});
   }
   async function sendEmpSupplies(){
@@ -710,7 +758,7 @@
   }
   function initEmpInfo(){
     $('infoSave').onclick=saveEmpInfo;
-    $('iLic').onchange=async()=>{const f=$('iLic').files[0];if(!f)return;try{infoLic=await shrinkImage(f);$('iLicImg').src=infoLic;$('iLicImg').classList.remove('hide');renderEmpInfo(false);}catch{toast('?','bad');}};
+    $('iLic').onchange=async()=>{const f=$('iLic').files[0];if(!f)return;try{infoLic=await shrinkImage(f);$('iLicImg').src=infoLic;$('iLicImg').classList.remove('hide');renderEmpInfo(false);}catch{toast(t('photoBad'),'bad');}};
     $('iLicView').onclick=async()=>{try{const j=await api('/api/records?mine=1&license=1');if(j.image){$('iLicImg').src=j.image;$('iLicImg').classList.remove('hide');}}catch{}};
   }
 
@@ -769,8 +817,55 @@
     $('eProjPrev').onclick=()=>{eProjMonth=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()-1,1);loadEmpProjects();};
     $('eProjNext').onclick=()=>{eProjMonth=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()+1,1);loadEmpProjects();};
   }
+
+  /* ---- Employee: Help & Manual (searchable, English and Spanish) ---- */
+  const HELP=[
+    {id:'signin',en:{t:'Signing in and your PIN',k:'login log in password pin forgot',b:['Sign in with your full name exactly as your manager added it, and your private 4-digit PIN.','Forgot your PIN? Tap “Forgot your PIN?”, type your name and send the request. Your manager will set a new PIN. Your PIN is never sent by email.','After too many wrong tries, sign-in is paused for a short time. Wait and try again.']},
+     es:{t:'Iniciar sesión y su PIN',k:'entrar contraseña pin olvidé',b:['Inicie sesión con su nombre completo, tal como lo registró su gerente, y su PIN privado de 4 dígitos.','¿Olvidó su PIN? Toque “¿Olvidó su PIN?”, escriba su nombre y envíe la solicitud. Su gerente le pondrá un PIN nuevo. Su PIN nunca se envía por correo.','Después de varios intentos fallidos, el inicio de sesión se pausa por un rato. Espere e intente de nuevo.']}},
+    {id:'menu',en:{t:'The menu and language',k:'menu sidebar spanish english language red dot',b:['Tap ☰ (top left) to open the menu and move between sections.','A red dot on ☰ or a red number in the menu means something needs your attention, for example your manager answered a request, or My Info is missing details.','Tap “Español” / “English” at the top to switch the whole app between Spanish and English.']},
+     es:{t:'El menú y el idioma',k:'menú barra lateral español inglés idioma punto rojo',b:['Toque ☰ (arriba a la izquierda) para abrir el menú y moverse entre secciones.','Un punto rojo en ☰ o un número rojo en el menú significa que algo necesita su atención; por ejemplo, su gerente respondió un pedido o faltan datos en Mis datos.','Toque “Español” / “English” arriba para cambiar toda la aplicación entre español e inglés.']}},
+    {id:'clockin',page:'clock',en:{t:'Clock In',k:'start shift gps location clock in',b:['Go to Time Clock and tap Clock In when you start work.','Allow location (GPS) when your phone asks. Your location is saved with the clock-in.','Your time starts counting right away and shows on the screen.']},
+     es:{t:'Marcar entrada',k:'empezar turno gps ubicación entrada',b:['Vaya a Reloj y toque Marcar entrada cuando empiece a trabajar.','Permita la ubicación (GPS) cuando su teléfono lo pida. Su ubicación se guarda con la entrada.','Su tiempo empieza a contar enseguida y se ve en la pantalla.']}},
+    {id:'clockout',page:'clock',en:{t:'Clock Out',k:'end shift reason distance message clock out',b:['Tap Clock Out when you finish. Allow location again.','You must be within the distance your manager set from where you clocked in. If you are too far, the clock-out is refused or sent to your manager to review.','If you leave before 8 hours, choose a reason from the list. You can also add a short message for your manager.']},
+     es:{t:'Marcar salida',k:'terminar turno motivo distancia mensaje salida',b:['Toque Marcar salida cuando termine. Permita la ubicación otra vez.','Debe estar dentro de la distancia que fijó su gerente desde donde marcó la entrada. Si está muy lejos, la salida se rechaza o se envía a su gerente para revisión.','Si se va antes de 8 horas, elija un motivo de la lista. También puede escribir un mensaje corto para su gerente.']}},
+    {id:'week',page:'clock',en:{t:'Weekly Summary and pay',k:'hours week earned paid deduction pay calendar',b:['Weekly Summary shows your paid hours for each day, the week total and what you earned. Use ‹ › or the calendar to see other weeks.','Boxes at the top show clock-outs that were denied and days waiting for your manager’s approval.','If you got a uniform you are paying for, the week also shows “Uniform deduction” and “Week pay” (what you are paid after the deduction).']},
+     es:{t:'Resumen semanal y pago',k:'horas semana ganado pagado descuento pago calendario',b:['El Resumen semanal muestra sus horas pagadas de cada día, el total de la semana y lo que ganó. Use ‹ › o el calendario para ver otras semanas.','Los recuadros de arriba muestran salidas rechazadas y días que esperan la aprobación de su gerente.','Si recibió un uniforme que usted paga, la semana también muestra “Descuento de uniforme” y “Pago de la semana” (lo que recibe después del descuento).']}},
+    {id:'report',page:'clock',en:{t:'My Report',k:'report history months days earnings',b:['At the bottom of Time Clock, open My Report to see your working days, hours and earnings over a longer time.','Pick a quick range or choose a start and end date.']},
+     es:{t:'Mi reporte',k:'reporte historial meses días ganancias',b:['Al final de Reloj, abra Mi reporte para ver sus días trabajados, horas y ganancias en un periodo más largo.','Elija un rango rápido o una fecha de inicio y de fin.']}},
+    {id:'supplies',page:'supplies',en:{t:'Requesting supplies',k:'supplies tape rollers brushes request materials not on the list',b:['Open Supplies, search or scroll, and use + / − to choose how many of each item you need.','Need something that is not on the list? Type it under “Something not on the list?” and tap Add.','Add a note if you like, then tap Send request. Your manager is notified.']},
+     es:{t:'Pedir materiales',k:'materiales cinta rodillos brochas pedido no está en la lista',b:['Abra Materiales, busque o desplácese, y use + / − para elegir cuántos de cada artículo necesita.','¿Necesita algo que no está en la lista? Escríbalo en “¿Algo que no está en la lista?” y toque Agregar.','Agregue una nota si quiere y toque Enviar pedido. Se avisa a su gerente.']}},
+    {id:'status',page:'supplies',en:{t:'Request status: Requested, Approved, Delivered',k:'status approved delivered rejected cancel requested waiting',b:['Requested: your manager has your request.','Approved: your manager accepted it and will hand it to you.','Delivered: you received it. It shows how many you got.','Rejected: not approved; your manager may leave a note explaining why.','While a request is still Requested, you can cancel it.']},
+     es:{t:'Estado del pedido: Pedido, Aprobado, Entregado',k:'estado aprobado entregado rechazado cancelar pedido espera',b:['Pedido: su gerente tiene su pedido.','Aprobado: su gerente lo aceptó y se lo entregará.','Entregado: usted lo recibió. Muestra cuántos recibió.','Rechazado: no fue aprobado; su gerente puede dejar una nota explicando por qué.','Mientras un pedido esté en Pedido, puede cancelarlo.']}},
+    {id:'uniforms',page:'uniforms',en:{t:'Uniforms, sizes and cost',k:'uniform shirt t-shirt trousers pants jacket size price cost deduction free',b:['Open Uniforms, choose a size (XS to 3XL) for each item you need and how many, then tap Send request.','Each item shows its price. When your manager delivers uniforms you are buying, the cost is taken off your pay that week.','If the company gives you a uniform for free, your request shows “Free from the company” and nothing is deducted.']},
+     es:{t:'Uniformes, tallas y costo',k:'uniforme camisa camiseta pantalón chaqueta talla precio costo descuento gratis',b:['Abra Uniformes, elija una talla (XS a 3XL) para cada prenda que necesite y cuántas, y toque Enviar pedido.','Cada prenda muestra su precio. Cuando su gerente le entrega uniformes que usted compra, el costo se descuenta de su pago esa semana.','Si la compañía le da un uniforme gratis, su pedido dice “Gratis de la compañía” y no se descuenta nada.']}},
+    {id:'vacation',page:'vacation',en:{t:'Vacation',k:'vacation holiday time off balance earned eligible first year',b:['You earn 40 hours of vacation for every 2,080 paid hours (about 0.77 hours per 40-hour week).','You need to complete your first full year (from your start date) to be eligible for paid vacation. The Vacation page shows the date you become eligible.','“Available now” is what you have earned minus what you have taken. To take vacation, talk to your manager; they record it.']},
+     es:{t:'Vacaciones',k:'vacaciones descanso saldo ganado derecho primer año',b:['Gana 40 horas de vacaciones por cada 2,080 horas pagadas (unas 0.77 horas por semana de 40 horas).','Debe completar su primer año completo (desde su fecha de inicio) para tener derecho a vacaciones pagadas. La página de Vacaciones muestra la fecha en que tendrá derecho.','“Disponible ahora” es lo que ha ganado menos lo que ha usado. Para tomar vacaciones, hable con su gerente; él lo registra.']}},
+    {id:'performance',page:'performance',en:{t:'Performance score',k:'performance score evaluation on time hours touch-up complaint bonus 85',b:['Your score each month adds up to 100% from four parts: manager evaluation (up to 30%), clocking in on time between 7:55 and 8:10 am (up to 20%), working 38.5 hours or more each week (up to 20%), and customer touch-ups or complaints (0–1 = 30%, 2 = 10%, 3 or more = 0%).','Switch between Monthly and Yearly. The year is the average of the months you worked.','Your score affects your importance in the company and any future bonus or yearly vacation. 85% and above is perfect.']},
+     es:{t:'Puntaje de desempeño',k:'desempeño puntaje evaluación a tiempo horas retoque queja bono 85',b:['Su puntaje de cada mes suma 100% con cuatro partes: evaluación del gerente (hasta 30%), marcar la entrada a tiempo entre 7:55 y 8:10 am (hasta 20%), trabajar 38.5 horas o más cada semana (hasta 20%), y retoques o quejas de clientes (0–1 = 30%, 2 = 10%, 3 o más = 0%).','Cambie entre Mensual y Anual. El año es el promedio de los meses trabajados.','Su puntaje afecta su importancia en la compañía y cualquier bono futuro o vacaciones anuales. 85% o más es perfecto.']}},
+    {id:'projects',page:'projects',en:{t:'My Projects',k:'projects jobs calendar address map crew start finish',b:['My Projects shows a calendar of the jobs you are assigned to.','Tap a job to see the address (tap it to open the map), the start and finish days, and who else is on the crew.']},
+     es:{t:'Mis proyectos',k:'proyectos trabajos calendario dirección mapa equipo inicio fin',b:['Mis proyectos muestra un calendario de los trabajos que tiene asignados.','Toque un trabajo para ver la dirección (tóquela para abrir el mapa), los días de inicio y fin, y quién más está en el equipo.']}},
+    {id:'vehicle',page:'vehicle',en:{t:'My Vehicle',k:'vehicle truck van car plate vin maintenance',b:['If a company vehicle is assigned to you, My Vehicle appears in the menu.','It shows the year, make, model, plate, VIN and the maintenance history.']},
+     es:{t:'Mi vehículo',k:'vehículo camioneta carro placa vin mantenimiento',b:['Si tiene asignado un vehículo de la compañía, Mi vehículo aparece en el menú.','Muestra el año, la marca, el modelo, la placa, el VIN y el historial de mantenimiento.']}},
+    {id:'resources',page:'resources',en:{t:'Job Resources',k:'handbook sop documents pdf rules procedure',b:['Job Resources has the Employee Handbook and the Standard Operating Procedure (SOP) as PDFs.','Tap a document to open it. These explain the job and how we work.']},
+     es:{t:'Recursos de trabajo',k:'manual sop documentos pdf reglas procedimiento',b:['Recursos de trabajo tiene el Manual del empleado y el Procedimiento operativo estándar (SOP) en PDF.','Toque un documento para abrirlo. Explican el trabajo y cómo trabajamos.']}},
+    {id:'info',page:'info',en:{t:'My Info',k:'personal details address phone ssn licence license emergency contact privacy',b:['Fill in your personal details when you are hired: name, date of birth, address, phone, email, SSN, emergency contact and a photo of your driver’s licence.','Only you and your manager can see them. Your SSN and licence photo are stored encrypted; your SSN shows only the last 4 digits.','Your job status and start date are set by your manager.']},
+     es:{t:'Mis datos',k:'datos personales dirección teléfono ssn licencia contacto de emergencia privacidad',b:['Complete sus datos personales cuando lo contraten: nombre, fecha de nacimiento, dirección, teléfono, correo, SSN, contacto de emergencia y una foto de su licencia de conducir.','Solo usted y su gerente pueden verlos. Su SSN y la foto de su licencia se guardan cifrados; su SSN muestra solo los últimos 4 dígitos.','Su estado de trabajo y su fecha de inicio los registra su gerente.']}},
+    {id:'privacy',en:{t:'Privacy and signing out',k:'privacy sign out logout security',b:['Your time, earnings and location records are private to your login.','On a shared phone, open the menu and tap Sign Out when you finish.']},
+     es:{t:'Privacidad y cerrar sesión',k:'privacidad cerrar sesión salir seguridad',b:['Sus registros de tiempo, ganancias y ubicación son privados para su inicio de sesión.','En un teléfono compartido, abra el menú y toque Cerrar sesión al terminar.']}}
+  ];
+  const fold=x=>String(x||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  let helpOpen=new Set();
+  function renderHelp(){
+    const q=fold($('helpSearch').value.trim()),words=q.split(/\s+/).filter(Boolean);
+    const L=lang==='es'?'es':'en';
+    const hits=HELP.filter(h=>{const c=h[L],hay=fold([c.t,c.k,...c.b].join(' '));return words.every(w=>hay.includes(w));});
+    $('helpCount').textContent=q?(hits.length?t('helpFound',{n:hits.length}):t('helpNone')):'';
+    const mark=txt=>{let out=esc(txt);if(!words.length)return out;for(const w of words){const f=fold(txt);let i=f.indexOf(w);if(i<0)continue;const raw=txt.slice(i,i+w.length);out=out.split(esc(raw)).join(`<mark>${esc(raw)}</mark>`);}return out;};
+    $('helpList').innerHTML=hits.map(h=>{const c=h[L],open=q||helpOpen.has(h.id);return `<article class="helpItem${open?' open':''}"><button type="button" class="helpHead" data-help="${h.id}" aria-expanded="${open}"><span>${mark(c.t)}</span><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><div class="helpBody">${c.b.map(p=>`<p>${mark(p)}</p>`).join('')}${h.page?`<a class="mini secondary helpGo" href="#/${h.page}">${esc(t('helpGo'))}</a>`:''}</div></article>`;}).join('')||`<div class="dashEmpty">${esc(t('helpNone'))}</div>`;
+    document.querySelectorAll('[data-help]').forEach(b=>b.onclick=()=>{const id=b.dataset.help;helpOpen.has(id)?helpOpen.delete(id):helpOpen.add(id);if(!$('helpSearch').value.trim())renderHelp();else b.closest('.helpItem').classList.toggle('open');});
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','projects','vehicle','resources','info'];
+  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','projects','vehicle','resources','info','help'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -788,6 +883,7 @@
     if(pg==='projects')loadEmpProjects();
     if(pg==='vehicle')loadEmpVehicle();
     if(pg==='resources')loadEmpResources();
+    if(pg==='help')renderHelp();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);
@@ -809,6 +905,7 @@
     initEmpInfo();
     initEmpPerf();
     initEmpCompany();
+    $('helpSearch').oninput=renderHelp;
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
