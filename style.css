@@ -861,3 +861,32 @@ body.mgr .lowAlertBtn,body.mgr .lowAlertBtn:hover{color:#fff}
 .vacTile small{font-size:12px;color:var(--muted);font-weight:700}
 .vacTile.big{grid-column:1/-1;background:#ecfdf5;border-color:#a7f3d0}
 .vacTile.big strong{font-size:30px;color:#047857}
+
+/* ---- Round 1 ---- */
+.dateBar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 8px}
+.dbModes{display:inline-flex;background:#f4f4f5;border-radius:10px;padding:3px;gap:2px}
+.dbMode{background:transparent;border-radius:8px;padding:7px 11px;font-weight:800;font-size:13px;color:var(--muted)}
+.dbMode.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.dbMonth{display:flex;align-items:center;gap:8px}
+.dbMonth button{width:36px;height:36px;border-radius:9px;background:#0b0b0c;color:#fff;font-size:20px;line-height:1}
+.dbLabel{min-width:130px;text-align:center}
+.dbCustom{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.dbCustom label{margin:0;font-size:12px}
+.dbCustom input{margin-top:3px;padding:8px;width:auto}
+.dbHint{margin:0 0 10px}
+.segTab span.grey{background:#e4e4e7;color:var(--text)}
+.supBadge.approved{background:#eff6ff;color:#1d4ed8}
+.supPeriod{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+.supPeriod .pos{color:#047857;font-weight:800}.supPeriod .neg{color:#b91c1c;font-weight:800}
+.customTag{font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;background:#f5f3ff;color:#6d28d9;border-radius:6px;padding:2px 6px;vertical-align:1px}
+.supCustomBox{border:1px dashed #c4b5fd;border-radius:12px;padding:10px;margin-top:10px}
+.supCustomRow2{display:flex;gap:6px;margin-top:6px}
+.supCustomRow2 input{margin:0}
+.supCustomRow2 #empSupCustomQty{width:70px;flex:0 0 auto}
+.customList{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.customChip{display:inline-flex;align-items:center;gap:6px;background:#f5f3ff;border-radius:999px;padding:4px 4px 4px 10px;font-size:13px}
+.customChip button{width:24px;height:24px;border-radius:50%;background:#ddd6fe;font-weight:900}
+/* Tables: first column stays put while the rest scrolls sideways */
+.vacTable th:first-child,.vacTable td:first-child,.uniSizeTable th:first-child,.uniSizeTable td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 var(--line)}
+.vacTable th:first-child,.uniSizeTable th:first-child{background:#fafafa}
+.vacTable td:first-child{min-width:150px}

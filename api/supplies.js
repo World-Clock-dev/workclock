@@ -53,6 +53,13 @@ const SCHEMA = [
      employee_id INTEGER,
      created_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS supply_stock_log_created ON supply_stock_log(created_at)`,
+  `CREATE TABLE IF NOT EXISTS supply_custom_lines (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     request_id INTEGER NOT NULL REFERENCES supply_requests(id),
+     name TEXT NOT NULL,
+     qty INTEGER NOT NULL,
+     qty_given INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS supply_custom_lines_request ON supply_custom_lines(request_id)`,
   `CREATE TABLE IF NOT EXISTS uniform_requests (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      employee_id INTEGER NOT NULL REFERENCES employees(id),
@@ -107,6 +114,7 @@ async function ensureTables() {
   for (const t of ['supply_requests', 'uniform_requests']) {
     const c = (await sql([`SELECT name FROM pragma_table_info('${t}')`])).map(x => x.name);
     if (!c.includes('employee_seen')) mig.push([`ALTER TABLE ${t} ADD COLUMN employee_seen INTEGER NOT NULL DEFAULT 1`]);
+    if (!c.includes('approved_at')) mig.push([`ALTER TABLE ${t} ADD COLUMN approved_at TEXT`]);
   }
   if (mig.length) await sqlBatch(mig);
   // A deleted item's name can be used again.
@@ -142,9 +150,20 @@ async function linesFor(requestIds) {
   for (const r of rows) { if (!map.has(r.request_id)) map.set(r.request_id, []); map.get(r.request_id).push(r); }
   return map;
 }
+async function customFor(ids) {
+  const map = new Map();
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const strings = ['SELECT id,request_id,name,qty,qty_given FROM supply_custom_lines WHERE request_id IN ('];
+    part.forEach((_, k) => strings.push(k < part.length - 1 ? ',' : ') ORDER BY id'));
+    for (const r of await sql(strings, ...part)) { if (!map.has(r.request_id)) map.set(r.request_id, []); map.get(r.request_id).push(r); }
+  }
+  return map;
+}
 async function withLines(requests) {
-  const map = await linesFor(requests.map(r => Number(r.id)));
-  return requests.map(r => ({ ...r, lines: map.get(Number(r.id)) || [] }));
+  const ids = requests.map(r => Number(r.id));
+  const map = await linesFor(ids), custom = ids.length ? await customFor(ids) : new Map();
+  return requests.map(r => ({ ...r, lines: map.get(Number(r.id)) || [], custom: custom.get(Number(r.id)) || [] }));
 }
 
 /* Uniform prices live in app_settings as uniform_price_<item>; $20 each unless changed. */
@@ -157,8 +176,8 @@ async function uniformPrices() {
 const money = v => Math.round(Number(v) * 100) / 100;
 const lineAmount = (l, prices) => money(Number(l.qty) * (l.unit_price != null ? Number(l.unit_price) : prices[l.item] ?? DEFAULT_UNIFORM_PRICE));
 
-const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty FROM supply_items
-  WHERE deleted_at IS NULL AND active=1 AND full_qty>0 AND quantity*5<full_qty ORDER BY CAST(quantity AS REAL)/full_qty, name`;
+const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty,low_at FROM supply_items
+  WHERE deleted_at IS NULL AND active=1 AND ((full_qty>0 AND quantity*5<full_qty) OR (low_at>0 AND quantity<low_at)) ORDER BY CASE WHEN full_qty>0 THEN CAST(quantity AS REAL)/full_qty ELSE 0 END, name`;
 
 async function uniformLines(ids) {
   if (!ids.length) return new Map();
@@ -207,7 +226,7 @@ async function employeeSide(req, res, emp) {
       return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur) });
     }
     const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 AND deleted_at IS NULL ORDER BY category,name`;
-    const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
+    const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at,approved_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
     const out = await withLines(requests);
     out.forEach(r => r.lines.forEach(l => { delete l.on_shelf; }));
     return json(res, 200, { items, requests: out });
@@ -215,7 +234,15 @@ async function employeeSide(req, res, emp) {
   if (!requireSameOrigin(req, res)) return;
   if (req.method === 'POST' && b.action === 'request') {
     const lines = Array.isArray(b.lines) ? b.lines : [];
-    if (!lines.length) return json(res, 400, { error: 'Choose at least one item.', code: 'SUPPLY_EMPTY' });
+    const customIn = Array.isArray(b.custom) ? b.custom : [];
+    if (!lines.length && !customIn.length) return json(res, 400, { error: 'Choose at least one item.', code: 'SUPPLY_EMPTY' });
+    if (customIn.length > 10) return json(res, 400, { error: 'Up to 10 items that are not on the list.' });
+    const custom = [];
+    for (const c of customIn) {
+      const name = cleanText(c.name, 80), qty = wholeNumber(c.qty, 1, 999);
+      if (!name || !qty) return json(res, 400, { error: 'Each extra item needs a name and a quantity from 1 to 999.', code: 'SUPPLY_CUSTOM' });
+      custom.push([name, qty]);
+    }
     if (lines.length > MAX_LINES) return json(res, 400, { error: `Up to ${MAX_LINES} items per request.` });
     const note = cleanText(b.note, 500); if (note === null) return json(res, 400, { error: 'The note must be 500 characters or fewer.' });
     const wanted = new Map();
@@ -232,7 +259,9 @@ async function employeeSide(req, res, emp) {
     const now = nowIso();
     const created = await sql`INSERT INTO supply_requests(employee_id,status,note,created_at) VALUES(${emp.id},'pending',${note || null},${now}) RETURNING id`;
     const rid = Number(created[0].id);
-    await sqlBatch([...wanted].map(([id, qty]) => ['INSERT INTO supply_request_lines(request_id,item_id,item_name,unit,qty_requested) VALUES(?,?,?,?,?)', rid, id, byId.get(id).name, byId.get(id).unit, qty]));
+    const ins = [...wanted].map(([id, qty]) => ['INSERT INTO supply_request_lines(request_id,item_id,item_name,unit,qty_requested) VALUES(?,?,?,?,?)', rid, id, byId.get(id).name, byId.get(id).unit, qty]);
+    custom.forEach(([name, qty]) => ins.push(['INSERT INTO supply_custom_lines(request_id,name,qty) VALUES(?,?,?)', rid, name, qty]));
+    await sqlBatch(ins);
     await audit('employee', emp.id, 'supply_requested', { request_id: rid, items: wanted.size });
     return json(res, 200, { ok: true, id: rid });
   }
@@ -320,13 +349,29 @@ async function managerSide(req, res, manager) {
       for (const g of given) { const k = String(g.employee_id); if (!people.has(k)) people.set(k, { employee_id: k, name: g.name, requests: 0, asked: 0, given: 0 }); people.get(k).given = g.given || 0; }
       return json(res, 200, { usage: [...people.values()].sort((a, b) => b.given - a.given || b.asked - a.asked || String(a.name).localeCompare(String(b.name))) });
     }
-    const items = await sql`SELECT id,name,category,unit,quantity,low_at,full_qty,active,updated_at FROM supply_items WHERE deleted_at IS NULL ORDER BY active DESC,category,name`;
-    const requests = await sql`SELECT r.id,r.status,r.note,r.manager_note,r.created_at,r.decided_at,r.employee_id,e.name AS employee_name,e.title AS employee_title
+    // Date ranges: open requests (requested/approved) always show; the rest by
+    // date sent. Stock shows each item's amount at the start and end of the range.
+    const rng = (k, fallbackDays) => {
+      const a = u.searchParams.get(k + 'Start'), z = u.searchParams.get(k + 'End');
+      const s0 = a && !Number.isNaN(Date.parse(a)) ? new Date(a).toISOString() : new Date(Date.now() - fallbackDays * 86400000).toISOString();
+      const e0 = z && !Number.isNaN(Date.parse(z)) ? new Date(z).toISOString() : new Date(Date.now() + 86400000).toISOString();
+      return [s0, e0];
+    };
+    const [rs, re] = rng('req', 31), [ss, se] = rng('stock', 31), [ls, le] = rng('log', 31);
+    const items = await sql`SELECT i.id,i.name,i.category,i.unit,i.quantity,i.low_at,i.full_qty,i.active,i.updated_at,
+        (SELECT g.quantity_after FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at<${ss} ORDER BY g.created_at DESC,g.id DESC LIMIT 1) AS begin_qty,
+        (SELECT g.quantity_after FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at<${se} ORDER BY g.created_at DESC,g.id DESC LIMIT 1) AS end_qty,
+        (SELECT COALESCE(sum(g.change),0) FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at>=${ss} AND g.created_at<${se} AND g.change>0) AS added,
+        (SELECT COALESCE(-sum(g.change),0) FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at>=${ss} AND g.created_at<${se} AND g.change<0) AS removed
+      FROM supply_items i WHERE i.deleted_at IS NULL ORDER BY i.active DESC,i.category,i.name`;
+    const requests = await sql`SELECT r.id,r.status,r.note,r.manager_note,r.created_at,r.decided_at,r.approved_at,r.employee_id,e.name AS employee_name,e.title AS employee_title
       FROM supply_requests r JOIN employees e ON e.id=r.employee_id
-      WHERE r.status='pending' OR r.created_at>=${new Date(Date.now() - 90 * 86400000).toISOString()}
-      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 300`;
-    const log = await sql`SELECT g.id,g.item_name,g.change,g.quantity_after,g.reason,g.request_id,g.created_at,e.name AS employee_name FROM supply_stock_log g LEFT JOIN employees e ON e.id=g.employee_id ORDER BY g.created_at DESC, g.id DESC LIMIT 150`;
-    return json(res, 200, { items, requests: await withLines(requests), log, pending: pending[0].n, low: await lowItems() });
+      WHERE r.status IN ('pending','approved') OR (r.created_at>=${rs} AND r.created_at<${re})
+      ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, r.created_at DESC LIMIT 500`;
+    const log = await sql`SELECT g.id,g.item_name,g.change,g.quantity_after,g.reason,g.request_id,g.created_at,e.name AS employee_name FROM supply_stock_log g LEFT JOIN employees e ON e.id=g.employee_id
+      WHERE g.created_at>=${ls} AND g.created_at<${le} ORDER BY g.created_at DESC, g.id DESC LIMIT 1000`;
+    const approvedN = await sql`SELECT count(*) AS n FROM supply_requests WHERE status='approved'`;
+    return json(res, 200, { items, requests: await withLines(requests), log, pending: pending[0].n, approved: approvedN[0].n, low: await lowItems() });
   }
   if (!requireSameOrigin(req, res)) return;
 
@@ -397,20 +442,34 @@ async function managerSide(req, res, manager) {
   if (req.method === 'POST' && b.action === 'decide') {
     const id = wholeNumber(b.id, 1, Number.MAX_SAFE_INTEGER); if (!id) return json(res, 400, { error: 'Request id required.' });
     const decision = b.decision;
-    if (!['given', 'rejected'].includes(decision)) return json(res, 400, { error: 'Choose Given or Reject.' });
+    if (!['approved', 'given', 'rejected'].includes(decision)) return json(res, 400, { error: 'Choose Approve, Delivered or Reject.' });
     const note = cleanText(b.note, 300); if (note === null) return json(res, 400, { error: 'The note must be 300 characters or fewer.' });
     const request = (await sql`SELECT r.*,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.id=${id}`)[0];
     if (!request) return json(res, 404, { error: 'Request not found.' });
-    if (request.status !== 'pending') return json(res, 400, { error: 'This request has already been handled.' });
+    if (!['pending', 'approved'].includes(request.status)) return json(res, 400, { error: 'This request has already been handled.' });
     const now = nowIso();
+    if (decision === 'approved') {
+      const rows = await sql`UPDATE supply_requests SET status='approved',employee_seen=0,approved_at=${now},manager_note=COALESCE(${note || null},manager_note) WHERE id=${id} AND status='pending' RETURNING id`;
+      if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
+      await audit('manager', manager.id, 'supply_request_approved', { request_id: id });
+      return json(res, 200, { ok: true });
+    }
     if (decision === 'rejected') {
-      const rows = await sql`UPDATE supply_requests SET status='rejected',employee_seen=0,manager_note=${note || null},decided_at=${now},decided_by=${manager.id} WHERE id=${id} AND status='pending' RETURNING id`;
+      const rows = await sql`UPDATE supply_requests SET status='rejected',employee_seen=0,manager_note=${note || null},decided_at=${now},decided_by=${manager.id} WHERE id=${id} AND status IN ('pending','approved') RETURNING id`;
       if (!rows.length) return json(res, 400, { error: 'This request has already been handled.' });
       await audit('manager', manager.id, 'supply_request_rejected', { request_id: id });
       return json(res, 200, { ok: true });
     }
     const lines = (await linesFor([id])).get(id) || [];
     const given = new Map((Array.isArray(b.lines) ? b.lines : []).map(l => [Number(l.id), l.qty]));
+    const customLines = (await customFor([id])).get(id) || [];
+    const givenCustom = new Map((Array.isArray(b.custom) ? b.custom : []).map(l => [Number(l.id), l.qty]));
+    const customPlan = [];
+    for (const c of customLines) {
+      const q = givenCustom.has(Number(c.id)) ? wholeNumber(givenCustom.get(Number(c.id)), 0, MAX_QTY) : c.qty;
+      if (q === null) return json(res, 400, { error: `Enter a whole number for ${c.name}.` });
+      customPlan.push({ ...c, q });
+    }
     const plan = [];
     for (const l of lines) {
       const q = given.has(Number(l.id)) ? wholeNumber(given.get(Number(l.id)), 0, MAX_QTY) : l.qty_requested;
@@ -418,10 +477,10 @@ async function managerSide(req, res, manager) {
       if (q > (l.on_shelf ?? 0)) return json(res, 400, { error: `Not enough ${l.item_name} on the shelf: ${l.on_shelf ?? 0} ${l.unit} left. Lower the amount or update the stock first.`, code: 'SUPPLY_SHORT' });
       plan.push({ ...l, q });
     }
-    if (!plan.some(p => p.q > 0)) return json(res, 400, { error: 'Give at least one item, or reject the request.' });
+    if (!plan.some(p => p.q > 0) && !customPlan.some(p => p.q > 0)) return json(res, 400, { error: 'Deliver at least one item, or reject the request.' });
     // One transaction: the request is marked given only if it was still waiting,
     // and each shelf quantity drops only if enough is there (CHECK quantity>=0).
-    const stmts = [['UPDATE supply_requests SET status=?,employee_seen=0,manager_note=?,decided_at=?,decided_by=? WHERE id=? AND status=?', 'given', note || null, now, manager.id, id, 'pending']];
+    const stmts = [["UPDATE supply_requests SET status=?,employee_seen=0,approved_at=COALESCE(approved_at,?),manager_note=COALESCE(?,manager_note),decided_at=?,decided_by=? WHERE id=? AND status IN ('pending','approved')", 'given', now, note || null, now, manager.id, id]];
     // Every later statement only runs if the first one marked THIS request
     // given in this transaction (same decided_at), so a double click or a second
     // manager tab cannot take supplies off the shelf twice.
@@ -430,9 +489,10 @@ async function managerSide(req, res, manager) {
       stmts.push([`UPDATE supply_request_lines SET qty_given=? WHERE id=? AND ${mine}`, p.q, p.id, id, now]);
       if (p.q > 0) {
         stmts.push([`UPDATE supply_items SET quantity=quantity-?,updated_at=? WHERE id=? AND ${mine}`, p.q, now, p.item_id, id, now]);
-        stmts.push([`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,request_id,employee_id,created_at) SELECT id,name,?,quantity,?,?,?,? FROM supply_items WHERE id=? AND ${mine}`, -p.q, 'Given to employee', id, request.employee_id, now, p.item_id, id, now]);
+        stmts.push([`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,request_id,employee_id,created_at) SELECT id,name,?,quantity,?,?,?,? FROM supply_items WHERE id=? AND ${mine}`, -p.q, 'Delivered to employee', id, request.employee_id, now, p.item_id, id, now]);
       }
     }
+    for (const c of customPlan) stmts.push([`UPDATE supply_custom_lines SET qty_given=? WHERE id=? AND ${mine}`, c.q, c.id, id, now]);
     let out;
     try { out = await sqlBatch(stmts); }
     catch (e) {

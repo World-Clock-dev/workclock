@@ -163,7 +163,8 @@
     supSent:['Request sent. Your manager has been notified.','Pedido enviado. Se avisó a su gerente.'],
     supNoMatch:['No supplies match your search.','Ningún material coincide con su búsqueda.'],
     supNoItems:['No supplies are available to request yet.','Todavía no hay materiales para pedir.'],
-    supWaiting:['Waiting','En espera'],supGiven:['Given','Entregado'],supRejected:['Rejected','Rechazado'],supCancelled:['Cancelled','Cancelado'],
+    supWaiting:['Requested','Pedido'],supApproved:['Approved','Aprobado'],supGiven:['Delivered','Entregado'],
+    supCustomTitle:['Something not on the list?','¿Algo que no está en la lista?'],supCustomName:['What do you need?','¿Qué necesita?'],supCustomAdd:['Add','Agregar'],supCustomTag:['Not on the list','No está en la lista'],supRemove:['Remove','Quitar'],supRejected:['Rejected','Rechazado'],supCancelled:['Cancelled','Cancelado'],
     supCancel:['Cancel request','Cancelar pedido'],
     supCancelAsk:['Cancel this request?','¿Cancelar este pedido?'],
     supAsked:['asked {n}','pidió {n}'],supGot:['got {n}','recibió {n}'],
@@ -538,8 +539,8 @@
   }
 
   /* ---- Employee: request supplies ---- */
-  let supEmp={items:[],requests:[]};const supCart=new Map();
-  const supStatusText=st=>({pending:t('supWaiting'),given:t('supGiven'),rejected:t('supRejected'),cancelled:t('supCancelled')}[st]||st);
+  let supEmp={items:[],requests:[]};const supCart=new Map();let supCustom=[];
+  const supStatusText=st=>({pending:t('supWaiting'),approved:t('supApproved'),given:t('supGiven'),rejected:t('supRejected'),cancelled:t('supCancelled')}[st]||st);
   const supErr=e=>{const c=e.payload?.code;return c==='SUPPLY_EMPTY'?t('supPickSome'):c==='SUPPLY_TOO_MANY'?t('supTooMany'):c==='SUPPLY_GONE'?t('supGone'):c==='SUPPLY_QTY'?t('supQty'):c==='SUPPLY_HANDLED'?t('supHandled'):displayMessage(e.payload||e.message);};
   async function loadEmpSupplies(){try{supEmp=await api('/api/supplies?mine=1&seen=1');empCounts.supplies=0;setEmpCounts();for(const id of [...supCart.keys()])if(!supEmp.items.some(i=>String(i.id)===id))supCart.delete(id);renderEmpSupplies();}catch(e){if(e.status===401)return;$('empSupMsg').textContent=supErr(e);}}
   function renderEmpSupplies(){
@@ -552,16 +553,18 @@
     document.querySelectorAll('[data-sup-dec]').forEach(b=>b.onclick=()=>set(b.dataset.supDec,(supCart.get(b.dataset.supDec)||0)-1));
     document.querySelectorAll('[data-sup-inc]').forEach(b=>b.onclick=()=>set(b.dataset.supInc,(supCart.get(b.dataset.supInc)||0)+1));
     document.querySelectorAll('[data-sup-qty]').forEach(inp=>inp.onchange=()=>set(inp.dataset.supQty,inp.value));
-    const picked=supCart.size;
+    $('empSupCustomList').innerHTML=supCustom.map((c,i)=>`<span class="customChip"><b>${esc(c.name)}</b> × ${c.qty}<button type="button" data-sup-cdel="${i}" aria-label="${esc(t('supRemove'))}">×</button></span>`).join('');
+    document.querySelectorAll('[data-sup-cdel]').forEach(b=>b.onclick=()=>{supCustom.splice(Number(b.dataset.supCdel),1);renderEmpSupplies();});
+    const picked=supCart.size+supCustom.length;
     $('empSupSummary').textContent=picked?t('supPicked',{n:picked}):'';
     $('empSupSendBtn').disabled=!picked;
-    $('empSupMine').innerHTML=supEmp.requests.length?supEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(l.item_name)}</b> <span class="muted">· ${esc(t('supAsked',{n:l.qty_requested+' '+l.unit}))}${r.status==='given'?' · '+esc(t('supGot',{n:(l.qty_given??0)+' '+l.unit})):''}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-sup-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
+    $('empSupMine').innerHTML=supEmp.requests.length?supEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(l.item_name)}</b> <span class="muted">· ${esc(t('supAsked',{n:l.qty_requested+' '+l.unit}))}${r.status==='given'?' · '+esc(t('supGot',{n:(l.qty_given??0)+' '+l.unit})):''}</span></li>`).join('')}${(r.custom||[]).map(c=>`<li><b>${esc(c.name)}</b> <span class="customTag">${esc(t('supCustomTag'))}</span> <span class="muted">· ${esc(t('supAsked',{n:c.qty}))}${r.status==='given'?' · '+esc(t('supGot',{n:c.qty_given??0})):''}</span></li>`).join('')}</ul>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-sup-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
     document.querySelectorAll('[data-sup-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'cancel',id:Number(b.dataset.supCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpSupplies();});
   }
   async function sendEmpSupplies(){
-    if(!supCart.size)return $('empSupMsg').textContent=t('supPickSome');
+    if(!supCart.size&&!supCustom.length)return $('empSupMsg').textContent=t('supPickSome');
     const btn=$('empSupSendBtn');btn.disabled=true;$('empSupMsg').textContent='';
-    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'request',note:$('empSupNote').value.trim(),lines:[...supCart].map(([item_id,qty])=>({item_id:Number(item_id),qty}))})});supCart.clear();$('empSupNote').value='';$('empSupSearch').value='';toast(t('supSent'));$('empSupMsg').textContent=t('supSent');await loadEmpSupplies();}
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'request',note:$('empSupNote').value.trim(),lines:[...supCart].map(([item_id,qty])=>({item_id:Number(item_id),qty})),custom:supCustom})});supCart.clear();supCustom=[];$('empSupNote').value='';$('empSupSearch').value='';toast(t('supSent'));$('empSupMsg').textContent=t('supSent');await loadEmpSupplies();}
     catch(e){$('empSupMsg').textContent=supErr(e);if(e.payload?.code==='SUPPLY_GONE')loadEmpSupplies();}
     finally{btn.disabled=!supCart.size;}
   }
@@ -570,6 +573,7 @@
     tb.onclick=()=>{const open=body.classList.contains('hide');setSection(tb,body,open,t('supOpen'),t('supClose'));tb.dataset.i18n=open?'supClose':'supOpen';if(open)loadEmpSupplies();};
     $('empSupSearch').oninput=renderEmpSupplies;
     $('empSupSendBtn').onclick=sendEmpSupplies;
+    $('empSupCustomAdd').onclick=()=>{const name=$('empSupCustomName').value.trim().replace(/\s+/g,' '),qty=Math.floor(Number($('empSupCustomQty').value||1));if(!name)return $('empSupCustomName').focus();if(!(qty>=1&&qty<=999))return;if(supCustom.length>=10)return;supCustom.push({name:name.slice(0,80),qty});$('empSupCustomName').value='';$('empSupCustomQty').value='1';renderEmpSupplies();};
   }
 
 
@@ -1273,9 +1277,26 @@
     go('pendingApprovals','toggleShiftDetails','shiftDetailsBody');
   }
   /* ---- Manager: Tools & Supplies ---- */
+  /* Date bar: a month with ‹ › or custom from/to dates. range() gives [start, end). */
+  function makeDateBar(host,onChange){
+    const el=$(host);let mode='month',month=new Date(new Date().getFullYear(),new Date().getMonth(),1),from='',to='';
+    el.classList.add('dateBar');
+    el.innerHTML=`<div class="dbModes" role="tablist"><button type="button" class="dbMode on" data-db="month">Monthly</button><button type="button" class="dbMode" data-db="custom">Custom dates</button></div><div class="dbMonth"><button type="button" class="dbPrev" aria-label="Previous month">&lsaquo;</button><b class="dbLabel"></b><button type="button" class="dbNext" aria-label="Next month">&rsaquo;</button></div><div class="dbCustom hide"><label>From<input type="date" class="dbFrom"/></label><label>To<input type="date" class="dbTo"/></label><button type="button" class="mini primary dbApply">Show</button></div>`;
+    const q=c=>el.querySelector(c);
+    const paint=()=>{el.querySelectorAll('.dbMode').forEach(b=>b.classList.toggle('on',b.dataset.db===mode));q('.dbMonth').classList.toggle('hide',mode!=='month');q('.dbCustom').classList.toggle('hide',mode!=='custom');q('.dbLabel').textContent=month.toLocaleDateString([], {month:'long',year:'numeric'});};
+    q('.dbPrev').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);paint();onChange();};
+    q('.dbNext').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);paint();onChange();};
+    el.querySelectorAll('.dbMode').forEach(b=>b.onclick=()=>{mode=b.dataset.db;if(mode==='custom'&&!q('.dbFrom').value){q('.dbFrom').value=iso(month);const e=new Date(month.getFullYear(),month.getMonth()+1,0);q('.dbTo').value=iso(e);}paint();if(mode==='month')onChange();});
+    q('.dbApply').onclick=()=>{from=q('.dbFrom').value;to=q('.dbTo').value;if(!from||!to||to<from){toast('Choose a start date and an end date after it.','bad');return;}onChange();};
+    paint();
+    return{range(){if(mode==='custom'&&from&&to){const a=new Date(from+'T00:00:00'),z=new Date(to+'T00:00:00');z.setDate(z.getDate()+1);return [a,z];}return [new Date(month),new Date(month.getFullYear(),month.getMonth()+1,1)];},
+      label(){const [a,z]=this.range();const e=new Date(z);e.setDate(e.getDate()-1);return mode==='month'?month.toLocaleDateString([], {month:'long',year:'numeric'}):`${a.toLocaleDateString()} – ${e.toLocaleDateString()}`;}};
+  }
+  let supReqBar,supStockBar,supLogBar;
+
   let supData={items:[],requests:[],log:[],pending:0},supTab='pending',supKnownPending=null;
   const supWhen=v=>{const d=new Date(v);return Number.isFinite(d.getTime())?d.toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'—';};
-  const supStatus={pending:'Waiting',given:'Given',rejected:'Rejected',cancelled:'Cancelled by painter'};
+  const supStatus={pending:'Requested',approved:'Approved',given:'Delivered',rejected:'Rejected',cancelled:'Cancelled by painter'};
   function setSupBadge(n){
     document.querySelectorAll('[data-sup-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});
     if($('supCountPending'))$('supCountPending').textContent=n;
@@ -1292,23 +1313,31 @@
       document.title=document.title.replace(/^\(\d+\)\s*/,'');if(n+un)document.title=`(${n+un}) `+document.title;}catch{}
   }
   async function loadSupplies(){
-    try{supData=await api('/api/supplies');supKnownPending=Number(supData.pending||0);setSupBadge(supKnownPending);renderSupplies();}
+    try{const q=(k,bar)=>{const [a,z]=bar.range();return `${k}Start=${encodeURIComponent(a.toISOString())}&${k}End=${encodeURIComponent(z.toISOString())}`;};supData=await api(`/api/supplies?${q('req',supReqBar)}&${q('stock',supStockBar)}&${q('log',supLogBar)}`);supKnownPending=Number(supData.pending||0);setSupBadge(supKnownPending);renderSupplies();}
     catch(e){$('supReqList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
   }
   function renderSupplies(){
-    // Requests
+    // Requests: Requested -> Approved -> Delivered (or Rejected).
     document.querySelectorAll('[data-sup-tab]').forEach(b=>b.classList.toggle('on',b.dataset.supTab===supTab));
-    const reqs=supData.requests.filter(r=>supTab==='all'||r.status===supTab||(supTab==='rejected'&&r.status==='cancelled'));
-    const empty={pending:'No requests waiting. New ones show up here and on the Supplies link.',given:'Nothing given in the last 90 days.',rejected:'No rejected or cancelled requests.',all:'No requests yet.'}[supTab];
+    if($('supCountApproved'))$('supCountApproved').textContent=supData.approved||0;
+    const inRange=r=>{const [a,z]=supReqBar.range();const t=new Date(r.created_at);return t>=a&&t<z;};
+    const reqs=supData.requests.filter(r=>supTab==='all'?(['pending','approved'].includes(r.status)||inRange(r)):supTab==='rejected'?(['rejected','cancelled'].includes(r.status)&&inRange(r)):supTab==='given'?(r.status==='given'&&inRange(r)):r.status===supTab);
+    const empty={pending:'No new requests. New ones show up here and on the Supplies link.',approved:'Nothing approved and waiting to be delivered.',given:'Nothing delivered in these dates.',rejected:'No rejected or cancelled requests in these dates.',all:'No requests in these dates.'}[supTab];
     $('supReqList').innerHTML=reqs.map(r=>{
-      const pending=r.status==='pending';
-      const rows=r.lines.map(l=>{const shelf=l.on_shelf??0,short=pending&&l.qty_requested>shelf;
-        return `<tr><td><b>${esc(l.item_name)}</b></td><td>${l.qty_requested} <span class="muted">${esc(l.unit)}</span></td>`+(pending?`<td class="${short?'supShort':''}">${shelf} <span class="muted">${esc(l.unit)}</span>${short?'<div class="supShortTxt">Not enough</div>':''}</td><td><input class="supGiveQty" data-sup-line="${l.id}" data-sup-req="${r.id}" inputmode="numeric" type="number" min="0" max="${shelf}" value="${Math.min(l.qty_requested,shelf)}" aria-label="Give ${esc(l.item_name)}"/></td>`:`<td>${r.status==='given'?`<b>${l.qty_given??0}</b> <span class="muted">${esc(l.unit)}</span>`:'—'}</td>`)+`</tr>`;}).join('');
-      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="tableWrap"><table class="supLines"><thead><tr><th>Item</th><th>Asked for</th>${pending?'<th>In stock</th><th>Give</th>':'<th>Given</th>'}</tr></thead><tbody>${rows}</tbody></table></div>${pending?`<div class="supReqActions"><input class="supMgrNote" data-sup-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-sup-reject="${r.id}" type="button">Reject</button><button class="primary" data-sup-give="${r.id}" type="button">Mark as given</button></div><div class="muted small" data-sup-msg="${r.id}"></div>`:`<div class="muted small supDone">${r.status==='given'?'Given':r.status==='rejected'?'Rejected':'Cancelled'} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;
+      const open=r.status==='pending'||r.status==='approved';
+      const rows=r.lines.map(l=>{const shelf=l.on_shelf??0,short=open&&l.qty_requested>shelf;
+        return `<tr><td><b>${esc(l.item_name)}</b></td><td>${l.qty_requested} <span class="muted">${esc(l.unit)}</span></td>`+(open?`<td class="${short?'supShort':''}">${shelf} <span class="muted">${esc(l.unit)}</span>${short?'<div class="supShortTxt">Not enough</div>':''}</td><td><input class="supGiveQty" data-sup-line="${l.id}" data-sup-req="${r.id}" inputmode="numeric" type="number" min="0" max="${shelf}" value="${Math.min(l.qty_requested,shelf)}" aria-label="Deliver ${esc(l.item_name)}"/></td>`:`<td>${r.status==='given'?`<b>${l.qty_given??0}</b> <span class="muted">${esc(l.unit)}</span>`:'—'}</td>`)+`</tr>`;}).join('')
+       +(r.custom||[]).map(c=>`<tr class="supCustomRow"><td><b>${esc(c.name)}</b> <span class="customTag">Not on the list</span></td><td>${c.qty}</td>`+(open?`<td class="muted small">Not stocked</td><td><input class="supGiveQty" data-sup-custom="${c.id}" data-sup-creq="${r.id}" inputmode="numeric" type="number" min="0" value="${c.qty}" aria-label="Deliver ${esc(c.name)}"/></td>`:`<td>${r.status==='given'?`<b>${c.qty_given??0}</b>`:'—'}</td>`)+`</tr>`).join('');
+      const when=r.status==='approved'?` · approved ${esc(supWhen(r.approved_at))}`:'';
+      const actions=r.status==='pending'
+        ?`<button class="secondary" data-sup-reject="${r.id}" type="button">Reject</button><button class="secondary" data-sup-approve="${r.id}" type="button">Approve</button><button class="primary" data-sup-give="${r.id}" type="button">Mark delivered</button>`
+        :`<button class="secondary" data-sup-reject="${r.id}" type="button">Reject</button><button class="primary" data-sup-give="${r.id}" type="button">Mark delivered</button>`;
+      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}${when}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="tableWrap"><table class="supLines"><thead><tr><th>Item</th><th>Asked for</th>${open?'<th>In stock</th><th>Deliver</th>':'<th>Delivered</th>'}</tr></thead><tbody>${rows}</tbody></table></div>${open?`<div class="supReqActions"><input class="supMgrNote" data-sup-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/>${actions}</div><div class="muted small" data-sup-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(supStatus[r.status]||r.status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;
     }).join('')||`<div class="dashEmpty">${esc(empty)}</div>`;
     document.querySelectorAll('[data-sup-give]').forEach(b=>b.onclick=()=>supDecide(b.dataset.supGive,'given',b));
+    document.querySelectorAll('[data-sup-approve]').forEach(b=>b.onclick=()=>supDecide(b.dataset.supApprove,'approved',b));
     document.querySelectorAll('[data-sup-reject]').forEach(b=>b.onclick=()=>supDecide(b.dataset.supReject,'rejected',b));
-    // Stock
+    // Stock, with each item's amount at the start and end of the chosen dates.
     const cats=[...new Set(supData.items.map(i=>i.category))].sort();
     const cf=$('supCatFilter'),keep=cf.value;cf.innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');cf.value=cats.includes(keep)?keep:'';
     $('supCatList').innerHTML=cats.map(c=>`<option value="${esc(c)}"></option>`).join('');
@@ -1318,31 +1347,34 @@
     const lowN=supData.items.filter(isLow).length,outN=supData.items.filter(i=>i.active&&i.quantity===0).length;
     $('supStockSummary').innerHTML=`<span><b>${supData.items.filter(i=>i.active).length}</b> items</span><span class="${lowN?'warn':''}"><b>${lowN}</b> low</span><span class="${outN?'warn':''}"><b>${outN}</b> at zero</span>`;
     const shown=[...new Set(items.map(i=>i.category))];
-    $('supItemList').innerHTML=shown.map(c=>`<div class="supCat">${esc(c)}</div><div class="supItems">`+items.filter(i=>i.category===c).map(i=>`<div class="supItem${isLow(i)?' low':''}${i.quantity===0&&i.active?' zero':''}${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)}${i.full_qty?` · full ${i.full_qty} · ${supPct(i)}%`:''}${i.active?'':' · hidden from painters'}</span></div><div class="supQty"><b>${i.quantity}</b><span>${isLow(i)?'Low':i.quantity===0&&i.active?'None left':'in stock'}</span></div><div class="supItemBtns"><button class="mini secondary" data-sup-edit="${i.id}" type="button">Edit</button><button class="mini secondary supDel" data-sup-del="${i.id}" type="button" aria-label="Delete ${esc(i.name)}">Delete</button></div></div>`).join('')+`</div>`).join('')||`<div class="dashEmpty">No items match.</div>`;
+    $('supItemList').innerHTML=shown.map(c=>`<div class="supCat">${esc(c)}</div><div class="supItems">`+items.filter(i=>i.category===c).map(i=>{
+      const begin=i.begin_qty??0,end=i.end_qty??i.quantity;
+      return `<div class="supItem${isLow(i)?' low':''}${i.quantity===0&&i.active?' zero':''}${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)}${i.low_at?` · keep at least ${i.low_at}`:''}${i.full_qty?` · full ${i.full_qty} · ${supPct(i)}%`:''}${i.active?'':' · hidden from painters'}</span><span class="supPeriod">Start <b>${begin}</b> · <span class="pos">+${i.added||0}</span> · <span class="neg">−${i.removed||0}</span> · End <b>${end}</b></span></div><div class="supQty"><b>${i.quantity}</b><span>${isLow(i)?'Low':i.quantity===0&&i.active?'None left':'in stock now'}</span></div><div class="supItemBtns"><button class="mini secondary" data-sup-edit="${i.id}" type="button">Edit</button><button class="mini secondary supDel" data-sup-del="${i.id}" type="button" aria-label="Delete ${esc(i.name)}">Delete</button></div></div>`;}).join('')+`</div>`).join('')||`<div class="dashEmpty">No items match.</div>`;
     document.querySelectorAll('[data-sup-edit]').forEach(b=>b.onclick=()=>openSupItem(supData.items.find(i=>String(i.id)===b.dataset.supEdit)));
     document.querySelectorAll('[data-sup-del]').forEach(b=>b.onclick=()=>deleteSupItem(supData.items.find(i=>String(i.id)===b.dataset.supDel)));
     renderLowAlert(supData.low||[]);
     // History
-    $('supLogRows').innerHTML=supData.log.map(g=>`<tr><td>${esc(supWhen(g.created_at))}</td><td><b>${esc(g.item_name)}</b></td><td class="${g.change<0?'neg':'pos'}">${g.change>0?'+':''}${g.change}</td><td>${g.quantity_after}</td><td>${esc(g.reason)}${g.employee_name?` · ${esc(g.employee_name)}`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No changes yet.</td></tr>';
+    $('supLogRows').innerHTML=supData.log.map(g=>`<tr><td>${esc(supWhen(g.created_at))}</td><td><b>${esc(g.item_name)}</b></td><td class="${g.change<0?'neg':'pos'}">${g.change>0?'+':''}${g.change}</td><td>${g.quantity_after}</td><td>${esc(g.reason==='Given to employee'?'Delivered to employee':g.reason)}${g.employee_name?` · ${esc(g.employee_name)}`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No changes in these dates.</td></tr>';
   }
   async function supDecide(id,decision,btn){
     const msg=document.querySelector(`[data-sup-msg="${id}"]`),note=(document.querySelector(`[data-sup-note="${id}"]`)?.value||'').trim();
     const lines=[...document.querySelectorAll(`[data-sup-req="${id}"]`)].map(inp=>({id:Number(inp.dataset.supLine),qty:Number(inp.value||0)}));
+    const custom=[...document.querySelectorAll(`[data-sup-creq="${id}"]`)].map(inp=>({id:Number(inp.dataset.supCustom),qty:Number(inp.value||0)}));
     if(decision==='rejected'&&!confirm('Reject this request? The painter will see it as rejected'+(note?' with your note.':'.')))return;
-    if(decision==='given'&&lines.some(l=>!Number.isInteger(l.qty)||l.qty<0)){msg.textContent='Enter whole numbers to give (0 or more).';return;}
+    if(decision==='given'&&[...lines,...custom].some(l=>!Number.isInteger(l.qty)||l.qty<0)){msg.textContent='Enter whole numbers to deliver (0 or more).';return;}
     btn.disabled=true;msg.textContent='Saving…';
-    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'decide',id:Number(id),decision,note,lines})});toast(decision==='given'?'Marked as given. Stock updated.':'Request rejected.');await loadSupplies();}
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'decide',id:Number(id),decision,note,lines,custom})});toast(decision==='given'?'Marked as delivered. Stock updated.':decision==='approved'?'Approved. Mark it delivered when you hand it over.':'Request rejected.');await loadSupplies();}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
-  const supIsLow=i=>i.active&&i.full_qty>0&&i.quantity*5<i.full_qty;
+  const supIsLow=i=>!!i.active&&((i.full_qty>0&&i.quantity*5<i.full_qty)||(i.low_at>0&&i.quantity<i.low_at));
   const supPct=i=>i.full_qty?Math.round(i.quantity/i.full_qty*100):0;
   // Dashboard notice when any item is below 20% of its full stock.
   function renderLowAlert(low){
     const box=$('lowAlert');if(!box)return;
     box.classList.toggle('hide',!low.length);
     if(!low.length)return;
-    $('lowAlertTitle').textContent=low.length===1?'1 supply item is below 20%':`${low.length} supply items are below 20%`;
-    $('lowAlertList').innerHTML=low.slice(0,6).map(i=>`<span class="lowChip">${esc(i.name)} <b>${i.quantity}/${i.full_qty}</b></span>`).join('')+(low.length>6?`<span class="lowChip">+${low.length-6} more</span>`:'');
+    $('lowAlertTitle').textContent=low.length===1?'1 supply item is running low':`${low.length} supply items are running low`;
+    $('lowAlertList').innerHTML=low.slice(0,6).map(i=>`<span class="lowChip">${esc(i.name)} <b>${i.quantity}${i.full_qty?'/'+i.full_qty:''}</b>${i.low_at&&i.quantity<i.low_at?` (min ${i.low_at})`:''}</span>`).join('')+(low.length>6?`<span class="lowChip">+${low.length-6} more</span>`:'');
   }
   async function deleteSupItem(it){
     if(!it)return;
@@ -1351,7 +1383,7 @@
     catch(e){toast(displayMessage(e.payload||e.message),'bad');}
   }
   // Usage by painter, per month.
-  let usageMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),usageMode='given',usageRows=[];
+  let usageMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),usageMode='asked',usageRows=[];
   async function loadUsage(){
     const start=new Date(usageMonth),end=new Date(usageMonth.getFullYear(),usageMonth.getMonth()+1,1);
     $('usageMonth').textContent=start.toLocaleDateString([], {month:'long',year:'numeric'});
@@ -1366,7 +1398,7 @@
     const max=Math.max(1,...rows.map(r=>r[key]));
     const total=rows.reduce((a,r)=>a+r[key],0);
     $('usageChart').innerHTML=rows.length?`<div class="usageCols" role="list">${rows.map((r,i)=>`<div class="usageCol${i===0&&r[key]>0?' top':''}" role="listitem" aria-label="${esc(r.name)}: ${r[key]} items"><div class="usageName" title="${esc(r.name)}">${esc(r.name)}</div><div class="usageTrack"><div class="usageBar" style="height:${Math.max(r[key]?4:0,Math.round(r[key]/max*100))}%"><span>${r[key]}</span></div></div><div class="usageSub">${r.requests} request${r.requests===1?'':'s'}</div></div>`).join('')}</div>`:`<div class="dashEmpty">No supply requests this month.</div>`;
-    $('usageNote').textContent=rows.length?`${total} items ${usageMode==='given'?'given out':'asked for'} in total. Counted in units (rolls, pieces, packs, boxes).`:'';
+    $('usageNote').textContent=rows.length?`${total} items ${usageMode==='given'?'delivered':'asked for'} in total. Counted in units (rolls, pieces, packs, boxes).`:'';
   }
   // Uniforms
   const UNI_NAMES={tshirt_half:'T-shirt, half sleeve',tshirt_full:'T-shirt, full sleeve',trousers:'Trousers',jacket:'Jacket'};
@@ -1438,15 +1470,16 @@
     $('supItemTitle').textContent=isNew?'Add item':'Update item';
     $('supItemSub').textContent=isNew?'Painters will see it in their supplies list.':`Last changed ${supWhen(it.updated_at)}. Changing the quantity is recorded in Stock History.`;
     $('siName').value=it?.name||'';$('siCat').value=it?.category||($('supCatFilter').value||'');$('siUnit').value=it?.unit||'Piece';
-    $('siQty').value=it?it.quantity:'';$('siFull').value=it&&it.full_qty?it.full_qty:'';$('supItemDelete').classList.toggle('hide',isNew);$('siActive').value=!it||it.active?'1':'0';
+    $('siQty').value=it?it.quantity:'';$('siFull').value=it&&it.full_qty?it.full_qty:'';$('siMin').value=it&&it.low_at?it.low_at:'';$('supItemDelete').classList.toggle('hide',isNew);$('siActive').value=!it||it.active?'1':'0';
     $('supItemMsg').textContent='';$('supItemSave').textContent=isNew?'Add item':'Save';
     $('supItemPanel').classList.remove('hide');(isNew?$('siName'):$('siQty')).focus();
   }
   async function saveSupItem(){
     const id=$('supItemPanel').dataset.id,isNew=!id,msg=$('supItemMsg');
-    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),full_qty:$('siFull').value===''?'':Number($('siFull').value),active:$('siActive').value==='1'};
+    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),full_qty:$('siFull').value===''?'':Number($('siFull').value),low_at:Number($('siMin').value||0),active:$('siActive').value==='1'};
     if(!body.name)return msg.textContent='Enter an item name.';
     if(!Number.isInteger(body.quantity)||body.quantity<0)return msg.textContent='Quantity must be a whole number, 0 or more.';
+    if(!Number.isInteger(body.low_at)||body.low_at<0)return msg.textContent='Minimum to keep must be a whole number, 0 or more.';
     if(body.full_qty!==''&&(!Number.isInteger(body.full_qty)||body.full_qty<0))return msg.textContent='Full stock must be a whole number, 0 or more.';
     if(body.full_qty!==''&&body.full_qty>0&&body.quantity>body.full_qty)body.full_qty=body.quantity;
     if(!isNew)body.id=Number(id);
@@ -1455,6 +1488,7 @@
     catch(e){msg.textContent=displayMessage(e.payload||e.message);}
   }
   function initSupplies(){
+    supReqBar=makeDateBar('supReqDates',loadSupplies);supStockBar=makeDateBar('supStockDates',loadSupplies);supLogBar=makeDateBar('supLogDates',loadSupplies);
     document.querySelectorAll('[data-sup-tab]').forEach(b=>b.onclick=()=>{supTab=b.dataset.supTab;renderSupplies();});
     $('supRefresh').onclick=loadSupplies;
     ['supSearch','supCatFilter','supLowOnly'].forEach(id=>$(id).addEventListener('input',renderSupplies));
