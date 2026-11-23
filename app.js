@@ -206,6 +206,18 @@
     vacEligRule:['You need to complete your first full year to be eligible for paid vacation.','Debe completar su primer año completo para tener derecho a vacaciones pagadas.'],
     vacEligFrom:['You can use paid vacation from {d}.','Puede usar vacaciones pagadas a partir del {d}.'],vacEligYes:['You are eligible for paid vacation.','Ya tiene derecho a vacaciones pagadas.'],
     vacEligUnknown:['Your manager has not entered your start date yet.','Su gerente aún no ha ingresado su fecha de inicio.'],vacOpening:['includes {h} hours earned before WorkClock','incluye {h} horas ganadas antes de WorkClock'],
+    navPerf:['Performance','Desempeño'],perfTitle:['My Performance','Mi desempeño'],perfMonthly:['Monthly','Mensual'],perfYearly:['Yearly','Anual'],
+    perfHowTitle:['What makes up your score','Qué forma su puntaje'],
+    perfR1:['Manager evaluation: up to 30%.','Evaluación del gerente: hasta 30%.'],
+    perfR2:['Clocking in on time (first clock-in between 7:55 and 8:10 am): up to 20%.','Marcar la entrada a tiempo (primera entrada entre 7:55 y 8:10 am): hasta 20%.'],
+    perfR3:['Working 38.5 hours or more each week: up to 20%.','Trabajar 38.5 horas o más cada semana: hasta 20%.'],
+    perfR4:['Customer touch-ups or complaints in the month: 0–1 = 30%, 2 = 10%, 3 or more = 0%.','Retoques o quejas de clientes en el mes: 0–1 = 30%, 2 = 10%, 3 o más = 0%.'],
+    perfNoteTitle:['Why it matters','Por qué es importante'],
+    perfNote1:['Your performance percentage affects your importance as an employee in the company.','Su porcentaje de desempeño afecta su importancia como empleado en la compañía.'],
+    perfNote2:['It also affects any future bonus or yearly vacation the company offers. A perfect score is 85% and above.','También afecta cualquier bono futuro o vacaciones anuales que ofrezca la compañía. Un puntaje perfecto es 85% o más.'],
+    perfP1:['Manager evaluation','Evaluación del gerente'],perfP2:['On-time clock-in','Entrada a tiempo'],perfP3:['Weekly hours','Horas semanales'],perfP4:['Touch-ups / complaints','Retoques / quejas'],
+    perfDays:['{a} of {b} days on time','{a} de {b} días a tiempo'],perfWeeks:['{a} of {b} weeks with 38.5 h+','{a} de {b} semanas con 38.5 h+'],perfTouch:['{n} this month','{n} este mes'],
+    perfPending:['Not entered yet','Aún no ingresado'],perfNoWork:['No shifts in this period.','No hay turnos en este periodo.'],perfPerfect:['Perfect','Perfecto'],perfAvg:['Average of {n} months','Promedio de {n} meses'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -281,6 +293,7 @@
     if(employeeIdentity&&$('empUniItems'))renderEmpUniforms();
     if(employeeIdentity&&empPage()==='vacation')loadEmpVacation();
     if(employeeIdentity&&infoRec)renderEmpInfo(false);
+    if(employeeIdentity&&empPage()==='performance')loadEmpPerf();
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -674,8 +687,39 @@
     $('iLic').onchange=async()=>{const f=$('iLic').files[0];if(!f)return;try{infoLic=await shrinkImage(f);$('iLicImg').src=infoLic;$('iLicImg').classList.remove('hide');renderEmpInfo(false);}catch{toast('?','bad');}};
     $('iLicView').onclick=async()=>{try{const j=await api('/api/records?mine=1&license=1');if(j.image){$('iLicImg').src=j.image;$('iLicImg').classList.remove('hide');}}catch{}};
   }
+
+  /* ---- Employee: Performance ---- */
+  let ePerfMode='month',ePerfMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),ePerfYear=new Date().getFullYear();
+  const pctBar=(v,max)=>`<div class="perfMeter${v==null?'':v/max>=0.85?' great':v/max>=0.6?' mid':' low'}"><i style="width:${v==null?0:Math.round(v/max*100)}%"></i></div>`;
+  async function loadEmpPerf(){
+    document.querySelectorAll('[data-perf-mode]').forEach(b=>b.classList.toggle('on',b.dataset.perfMode===ePerfMode));
+    const now=new Date();
+    $('ePerfLabel').textContent=ePerfMode==='year'?String(ePerfYear):ePerfMonth.toLocaleDateString(locale(),{month:'long',year:'numeric'});
+    $('ePerfNext').disabled=ePerfMode==='year'?ePerfYear>=now.getFullYear():(ePerfMonth.getFullYear()===now.getFullYear()&&ePerfMonth.getMonth()===now.getMonth());
+    try{
+      if(ePerfMode==='year'){
+        const j=await api(`/api/performance?mine=1&year=${ePerfYear}`),me=j.me;
+        $('ePerfParts').innerHTML='';
+        $('ePerfScore').innerHTML=me&&me.average!=null?`<strong class="${me.average>=85?'great':''}">${me.average.toFixed(1)}%</strong>${me.average>=85?`<span class="perfTag">${esc(t('perfPerfect'))}</span>`:''}<small>${esc(t('perfAvg',{n:me.months_worked}))}</small>`:`<small>${esc(t('perfNoWork'))}</small>`;
+        $('ePerfYear').innerHTML=me?(j.months||[]).map(m=>{const v=me.months[m];return `<div class="perfYearItem"><span>${esc(new Date(m+'-15T12:00:00').toLocaleDateString(locale(),{month:'short'}))}</span>${pctBar(v,100)}<b>${v==null?'—':v.toFixed(0)+'%'}</b></div>`;}).join(''):'';
+      }else{
+        const mo=`${ePerfMonth.getFullYear()}-${String(ePerfMonth.getMonth()+1).padStart(2,'0')}`;
+        const j=await api(`/api/performance?mine=1&month=${mo}`),me=j.me;$('ePerfYear').innerHTML='';
+        if(!me||!me.worked){$('ePerfScore').innerHTML=`<small>${esc(t('perfNoWork'))}</small>`;$('ePerfParts').innerHTML='';return;}
+        $('ePerfScore').innerHTML=`<strong class="${me.total>=85?'great':''}">${me.total.toFixed(1)}%</strong>${me.total>=85?`<span class="perfTag">${esc(t('perfPerfect'))}</span>`:''}`;
+        const p=me.points,row=(name,v,max,sub)=>`<div class="perfPart"><div class="perfPartHead"><b>${esc(name)}</b><span>${v==null?esc(t('perfPending')):v.toFixed(1)+'%'} / ${max}%</span></div>${pctBar(v,max)}<small>${esc(sub)}</small></div>`;
+        $('ePerfParts').innerHTML=row(t('perfP1'),p.evaluation,30,'')+row(t('perfP2'),p.on_time,20,me.days_worked?t('perfDays',{a:me.days_on_time,b:me.days_worked}):'')+row(t('perfP3'),p.hours,20,me.weeks_worked?t('perfWeeks',{a:me.weeks_met,b:me.weeks_worked}):'')+row(t('perfP4'),p.touchups,30,me.touchups==null?'':t('perfTouch',{n:me.touchups}));
+      }
+      $('ePerfMsg').textContent='';
+    }catch(e){if(e.status!==401)$('ePerfMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function initEmpPerf(){
+    document.querySelectorAll('[data-perf-mode]').forEach(b=>b.onclick=()=>{ePerfMode=b.dataset.perfMode;loadEmpPerf();});
+    $('ePerfPrev').onclick=()=>{if(ePerfMode==='year')ePerfYear--;else ePerfMonth=new Date(ePerfMonth.getFullYear(),ePerfMonth.getMonth()-1,1);loadEmpPerf();};
+    $('ePerfNext').onclick=()=>{if(ePerfMode==='year')ePerfYear++;else ePerfMonth=new Date(ePerfMonth.getFullYear(),ePerfMonth.getMonth()+1,1);loadEmpPerf();};
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms','vacation','info'];
+  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','info'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -689,6 +733,7 @@
     if(pg==='uniforms')loadEmpUniforms();
     if(pg==='vacation')loadEmpVacation();
     if(pg==='info')loadEmpInfo();
+    if(pg==='performance')loadEmpPerf();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);
@@ -708,6 +753,7 @@
     initEmpSupplies();
     initEmpMenu();
     initEmpInfo();
+    initEmpPerf();
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
@@ -1362,12 +1408,51 @@
     $('rLicView').onclick=async()=>{try{const j=await api(`/api/records?id=${recCurrent.id}&license=1`);if(j.image){$('rLicImg').src=j.image;$('rLicImg').classList.remove('hide');$('rLicImg').scrollIntoView({block:'nearest'});}}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
     $('rLic').onchange=async()=>{const f=$('rLic').files[0];if(!f)return;try{recLicData=await shrinkImage(f);$('rLicImg').src=recLicData;$('rLicImg').classList.remove('hide');$('rLicState').textContent='New photo ready to save';}catch{toast('That file could not be read as a photo.','bad');}};
   }
+  /* ---- Manager: Performance ---- */
+  let perfBar,perfData=null;
+  const PERF_TZ=['America/New_York','America/Chicago','America/Denver','America/Phoenix','America/Los_Angeles','America/Anchorage','Pacific/Honolulu','America/Puerto_Rico','Asia/Karachi'];
+  const perfBarHtml=v=>v==null?'<span class="muted">—</span>':`<div class="perfMeter${v>=85?' great':v>=60?' mid':' low'}"><i style="width:${Math.max(0,Math.min(100,v))}%"></i></div><b>${Number(v).toFixed(1)}%</b>${v>=85?' <span class="perfTag">Perfect</span>':''}`;
+  async function loadPerf(){
+    const [a]=perfBar.range(),mode=perfBar.mode();
+    $('perfMonthWrap').classList.toggle('hide',mode==='year');$('perfYearWrap').classList.toggle('hide',mode!=='year');
+    try{
+      perfData=mode==='year'?await api(`/api/performance?year=${a.getFullYear()}`):await api(`/api/performance?month=${a.getFullYear()}-${String(a.getMonth()+1).padStart(2,'0')}`);
+      const sel=$('perfTz');if(!sel.options.length){const list=PERF_TZ.includes(perfData.tz)?PERF_TZ:[perfData.tz,...PERF_TZ];sel.innerHTML=list.map(z=>`<option>${esc(z)}</option>`).join('');}sel.value=perfData.tz;
+      mode==='year'?renderPerfYear():renderPerfMonth();
+    }catch(e){$('perfRows').innerHTML=`<tr><td colspan="6">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
+  }
+  function renderPerfMonth(){
+    const q=($('perfSearch').value||'').trim().toLowerCase();
+    const rows=(perfData.employees||[]).filter(e=>(e.employment_status!=='terminated'||e.worked)&&(!q||String(e.name).toLowerCase().includes(q)));
+    $('perfRows').innerHTML=rows.map(e=>{const p=e.points;return `<tr data-perf-row="${e.employee_id}"><td><b>${esc(e.name)}</b><div class="muted small">${esc(e.title||'')}${e.worked?'':' · no shifts this month'}</div></td>
+      <td><input class="perfIn" data-perf-eval="${e.employee_id}" type="number" min="0" max="30" step="1" inputmode="numeric" value="${e.evaluation??''}" placeholder="0–30"/></td>
+      <td>${e.days_worked?`<b>${p.on_time.toFixed(1)}%</b><div class="muted small">${e.days_on_time} of ${e.days_worked} days</div>`:'<span class="muted small">No days</span>'}</td>
+      <td>${e.weeks_worked?`<b>${p.hours.toFixed(1)}%</b><div class="muted small">${e.weeks_met} of ${e.weeks_worked} weeks</div>`:'<span class="muted small">No weeks</span>'}</td>
+      <td><input class="perfIn" data-perf-touch="${e.employee_id}" type="number" min="0" step="1" inputmode="numeric" value="${e.touchups??''}" placeholder="0"/><div class="muted small">${p.touchups==null?'not entered':p.touchups+'%'}</div></td>
+      <td class="perfTotal">${perfBarHtml(e.total)}${e.missing.length?`<div class="muted small">Waiting for ${e.missing.map(m=>m==='evaluation'?'evaluation':'touch-ups').join(' and ')}</div>`:''}</td></tr>`;}).join('')||'<tr><td colspan="6" class="muted">No employees.</td></tr>';
+    const save=async id=>{const ev=document.querySelector(`[data-perf-eval="${id}"]`).value,tc=document.querySelector(`[data-perf-touch="${id}"]`).value;const [a]=perfBar.range();
+      try{const j=await api('/api/performance',{method:'PATCH',body:JSON.stringify({employeeId:Number(id),month:`${a.getFullYear()}-${String(a.getMonth()+1).padStart(2,'0')}`,evaluation:ev,touchups:tc})});const i=perfData.employees.findIndex(x=>x.employee_id===id);if(i>=0)perfData.employees[i]=j.employee;renderPerfMonth();toast('Saved.');}
+      catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
+    document.querySelectorAll('[data-perf-eval]').forEach(i=>i.onchange=()=>save(i.dataset.perfEval));
+    document.querySelectorAll('[data-perf-touch]').forEach(i=>i.onchange=()=>save(i.dataset.perfTouch));
+  }
+  function renderPerfYear(){
+    const q=($('perfSearch').value||'').trim().toLowerCase(),months=perfData.months||[];
+    $('perfYearHead').innerHTML=`<tr><th>Employee</th>${months.map(m=>`<th>${new Date(m+'-15T12:00:00').toLocaleDateString([], {month:'short'})}</th>`).join('')}<th>Year</th></tr>`;
+    const rows=(perfData.employees||[]).filter(e=>(e.employment_status!=='terminated'||e.months_worked)&&(!q||String(e.name).toLowerCase().includes(q)));
+    $('perfYearRows').innerHTML=rows.map(e=>`<tr><td><b>${esc(e.name)}</b></td>${months.map(m=>{const v=e.months[m];return `<td class="${v==null?'muted':v>=85?'perfGood':v<60?'perfLow':''}">${v==null?'—':v.toFixed(0)+'%'}</td>`;}).join('')}<td class="perfTotal">${perfBarHtml(e.average)}</td></tr>`).join('')||`<tr><td colspan="${months.length+2}" class="muted">No data for this year yet.</td></tr>`;
+  }
+  function initPerf(){
+    perfBar=makeDateBar('perfDates',loadPerf,{year:true,noCustom:true});
+    $('perfSearch').oninput=()=>perfData&&(perfBar.mode()==='year'?renderPerfYear():renderPerfMonth());
+    $('perfTz').onchange=async()=>{try{await api('/api/performance',{method:'PATCH',body:JSON.stringify({timezone:$('perfTz').value})});toast('Time zone saved.');loadPerf();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
+  }
   /* ---- Manager: Tools & Supplies ---- */
   /* Date bar: a month with ‹ › or custom from/to dates. range() gives [start, end). */
   function makeDateBar(host,onChange,opts={}){
     const el=$(host);let mode=opts.initial||'month',month=new Date(new Date().getFullYear(),new Date().getMonth(),1),year=new Date().getFullYear(),from='',to='';
     el.classList.add('dateBar');
-    el.innerHTML=`<div class="dbModes" role="tablist"><button type="button" class="dbMode" data-db="month">Monthly</button>${opts.year?'<button type="button" class="dbMode" data-db="year">Yearly</button>':''}<button type="button" class="dbMode" data-db="custom">Custom dates</button></div><div class="dbMonth"><button type="button" class="dbPrev" aria-label="Previous month">&lsaquo;</button><b class="dbLabel"></b><button type="button" class="dbNext" aria-label="Next month">&rsaquo;</button></div><div class="dbCustom hide"><label>From<input type="date" class="dbFrom"/></label><label>To<input type="date" class="dbTo"/></label><button type="button" class="mini primary dbApply">Show</button></div>`;
+    el.innerHTML=`<div class="dbModes" role="tablist"><button type="button" class="dbMode" data-db="month">Monthly</button>${opts.year?'<button type="button" class="dbMode" data-db="year">Yearly</button>':''}${opts.noCustom?'':'<button type="button" class="dbMode" data-db="custom">Custom dates</button>'}</div><div class="dbMonth"><button type="button" class="dbPrev" aria-label="Previous month">&lsaquo;</button><b class="dbLabel"></b><button type="button" class="dbNext" aria-label="Next month">&rsaquo;</button></div><div class="dbCustom hide"><label>From<input type="date" class="dbFrom"/></label><label>To<input type="date" class="dbTo"/></label><button type="button" class="mini primary dbApply">Show</button></div>`;
     const q=c=>el.querySelector(c);
     const paint=()=>{el.querySelectorAll('.dbMode').forEach(b=>b.classList.toggle('on',b.dataset.db===mode));q('.dbMonth').classList.toggle('hide',mode==='custom');q('.dbCustom').classList.toggle('hide',mode!=='custom');q('.dbLabel').textContent=mode==='year'?String(year):month.toLocaleDateString([], {month:'long',year:'numeric'});};
     q('.dbPrev').onclick=()=>{if(mode==='year')year--;else month=new Date(month.getFullYear(),month.getMonth()-1,1);paint();onChange();};
@@ -1375,7 +1460,7 @@
     el.querySelectorAll('.dbMode').forEach(b=>b.onclick=()=>{mode=b.dataset.db;if(mode==='custom'&&!q('.dbFrom').value){q('.dbFrom').value=iso(month);const e=new Date(month.getFullYear(),month.getMonth()+1,0);q('.dbTo').value=iso(e);}paint();if(mode!=='custom')onChange();});
     q('.dbApply').onclick=()=>{from=q('.dbFrom').value;to=q('.dbTo').value;if(!from||!to||to<from){toast('Choose a start date and an end date after it.','bad');return;}onChange();};
     paint();
-    return{range(){if(mode==='custom'&&from&&to){const a=new Date(from+'T00:00:00'),z=new Date(to+'T00:00:00');z.setDate(z.getDate()+1);return [a,z];}if(mode==='year')return [new Date(year,0,1),new Date(year+1,0,1)];return [new Date(month),new Date(month.getFullYear(),month.getMonth()+1,1)];},
+    return{mode:()=>mode,range(){if(mode==='custom'&&from&&to){const a=new Date(from+'T00:00:00'),z=new Date(to+'T00:00:00');z.setDate(z.getDate()+1);return [a,z];}if(mode==='year')return [new Date(year,0,1),new Date(year+1,0,1)];return [new Date(month),new Date(month.getFullYear(),month.getMonth()+1,1)];},
       label(){const [a,z]=this.range();const e=new Date(z);e.setDate(e.getDate()-1);return mode==='month'?month.toLocaleDateString([], {month:'long',year:'numeric'}):mode==='year'?String(year):`${a.toLocaleDateString()} – ${e.toLocaleDateString()}`;}};
   }
   let supReqBar,supStockBar,supLogBar;
@@ -1682,6 +1767,7 @@
     if(pg==='uniforms')loadUniforms();
     if(pg==='vacations')loadVacations();
     if(pg==='employees')loadRecords();
+    if(pg==='performance')loadPerf();
     document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
@@ -1741,6 +1827,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     $('epPin').oninput=()=>{$('epPin').value=$('epPin').value.replace(/\D/g,'').slice(0,4);};
     initSupplies();
     initRecords();
+    initPerf();
     initMgrNav();
     initManagerMotion();
     $('clockInCancel').onclick=closeClockInEdit;

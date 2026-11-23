@@ -923,3 +923,31 @@ table.uniHistTable{min-width:600px}
 #empInfoDot{background:#f59e0b}
 @media(max-width:640px){.recList .empRow{grid-template-columns:38px minmax(0,1fr) auto;}.recList .empRow .statusBadge,.recList .empRow .chev{display:none}.recMissing{grid-column:2/-1;text-align:left}}
 @media(max-width:1500px){.mgrTopNav{display:none}.mgrBurger{display:flex}body.mgr .managerHeader .mgrHeadRight{margin-left:auto}body.mgr .managerHeader #logoutBtn{display:none}}
+
+/* ---- Round 4: performance ---- */
+.ruleGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin:6px 0 12px}
+.ruleBox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+.ruleBox b{color:var(--text);font-size:14px}
+table.perfTable{min-width:760px}
+.perfTable td{vertical-align:top;white-space:normal}
+.perfTable th:first-child,.perfTable td:first-child{position:sticky;left:0;background:#fff;z-index:2;box-shadow:1px 0 0 var(--line);min-width:150px}
+.perfTable th:first-child{background:#fafafa}
+.perfIn{width:80px;margin:0;padding:8px}
+.perfMeter{height:8px;border-radius:999px;background:#f1f1f3;overflow:hidden;margin:4px 0;min-width:90px}
+.perfMeter i{display:block;height:100%;background:#9ca3af;border-radius:999px}
+.perfMeter.great i{background:#16a34a}.perfMeter.mid i{background:#f59e0b}.perfMeter.low i{background:#ef4444}
+.perfTag{font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;background:#ecfdf5;color:#047857;border-radius:6px;padding:2px 6px;margin-left:4px}
+.perfGood{color:#047857;font-weight:900}.perfLow{color:#b91c1c;font-weight:800}
+.perfYear td{text-align:center}.perfYear td:first-child,.perfYear td:last-child{text-align:left}
+.perfNav{margin:10px 0}
+.perfScore{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+.perfScore strong{font-size:44px;letter-spacing:-.02em}.perfScore strong.great{color:#047857}
+.perfParts{display:flex;flex-direction:column;gap:10px}
+.perfPart{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.perfPartHead{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.perfPart small{color:var(--muted);font-weight:700}
+.perfYearList{display:flex;flex-direction:column;gap:6px}
+.perfYearItem{display:grid;grid-template-columns:48px 1fr 52px;gap:8px;align-items:center;font-size:14px}
+.perfRules{margin:6px 0 12px;padding-left:20px;font-size:14px;line-height:1.6}
+.perfImportant{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:10px 12px;font-size:14px}
+.perfImportant p{margin:4px 0 0}
