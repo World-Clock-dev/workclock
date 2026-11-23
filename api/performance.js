@@ -4,13 +4,15 @@ import { effectiveShiftPay } from './_time.js';
 /* Employee performance, 100% from four rules (per month; a year is the
    average of the months worked):
    1. Manager evaluation: entered by the manager, 0-30%.
-   2. On-time clock-in: first clock-in of the day between 7:55 and 8:10 am
-      (company time zone). Share of days on time x 20%.
-   3. Weekly hours: a week with 38.5 or more paid hours meets the target.
+   2. On-time clock-in: first clock-in of the day at 8:10 am or earlier
+      (company time zone; arriving early counts as on time). Share of days on time x 20%.
+   3. Weekly hours: a week with 38.5 or more paid hours (over 40 too) meets the target.
       Share of weeks worked that meet it x 20%. Weeks belong to the month
       their Monday falls in.
    4. Customer touch-ups / complaints: entered by the manager.
       0-1 = 30%, 2 = 10%, 3 or more = 0%.
+   Parts not entered yet by the manager (evaluation, touch-ups) are left out:
+   the score is the share of the points possible so far and is marked not final.
    85% and above is "perfect". */
 
 const SCHEMA = [
@@ -26,7 +28,7 @@ const SCHEMA = [
 let ready = false;
 async function ensure() { if (ready) return; await sqlBatch(SCHEMA.map(s => [s])); ready = true; }
 
-export const RULES = { evaluationMax: 30, onTimeMax: 20, hoursMax: 20, touchupMax: 30, onTimeFrom: '07:55', onTimeTo: '08:10', weeklyHours: 38.5, perfect: 85 };
+export const RULES = { evaluationMax: 30, onTimeMax: 20, hoursMax: 20, touchupMax: 30, onTimeTo: '08:10', weeklyHours: 38.5, perfect: 85 };
 const touchupPoints = n => n == null ? null : n <= 1 ? 30 : n === 2 ? 10 : 0;
 
 async function timeZone() {
@@ -53,7 +55,7 @@ async function monthScores(month, onlyId) {
     FROM shifts s WHERE s.clock_in>=${from} AND s.clock_in<${to} ORDER BY s.clock_in`;
   const inputs = await sql`SELECT employee_id,evaluation,touchups,note,updated_at FROM performance_inputs WHERE month=${month}`;
   const inBy = new Map(inputs.map(i => [String(i.employee_id), i]));
-  const [fromMin, toMin] = [RULES.onTimeFrom, RULES.onTimeTo].map(t => { const [h, mm] = t.split(':').map(Number); return h * 60 + mm; });
+  const toMin = (([h, mm]) => h * 60 + mm)(RULES.onTimeTo.split(':').map(Number));
   const out = [];
   for (const e of emps) {
     const mine = shifts.filter(s => String(s.employee_id) === String(e.id));
@@ -63,7 +65,7 @@ async function monthScores(month, onlyId) {
       if (p.date.slice(0, 7) === month && !firstByDay.has(p.date)) firstByDay.set(p.date, p.minutes);
       if (s.clock_out) { const wk = mondayOf(p.date); weekHours.set(wk, (weekHours.get(wk) || 0) + effectiveShiftPay(s, minimum)); }
     }
-    const days = [...firstByDay.values()], onTime = days.filter(v => v >= fromMin && v <= toMin).length;
+    const days = [...firstByDay.values()], onTime = days.filter(v => v <= toMin).length;
     const weeks = [...weekHours.entries()].filter(([wk, h]) => wk.slice(0, 7) === month && h >= 0.01);
     const weeksMet = weeks.filter(([, h]) => h >= RULES.weeklyHours).length;
     const inp = inBy.get(String(e.id)) || {};
@@ -73,14 +75,17 @@ async function monthScores(month, onlyId) {
     const hoursPts = weeks.length ? weeksMet / weeks.length * RULES.hoursMax : null;
     const touchPts = touchupPoints(touchups);
     const worked = days.length > 0 || weeks.length > 0;
-    const total = (evaluation || 0) + (onTimePts || 0) + (hoursPts || 0) + (touchPts || 0);
+    // Only parts that have a value count; the score is points earned / points possible.
+    const scored = [[evaluation, RULES.evaluationMax], [onTimePts, RULES.onTimeMax], [hoursPts, RULES.hoursMax], [touchPts, RULES.touchupMax]].filter(([v]) => v != null);
+    const earned = scored.reduce((a, [v]) => a + v, 0), possible = scored.reduce((a, [, m]) => a + m, 0);
+    const total = possible ? earned / possible * 100 : null;
     const r1 = v => v == null ? null : Math.round(v * 10) / 10;
     out.push({ employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, month, worked,
       evaluation, touchups, note: inp.note || '', days_worked: days.length, days_on_time: onTime, weeks_worked: weeks.length, weeks_met: weeksMet,
       week_hours: weeks.map(([wk, h]) => ({ week: wk, hours: Math.round(h * 100) / 100 })),
       points: { evaluation: r1(evaluation), on_time: r1(onTimePts), hours: r1(hoursPts), touchups: touchPts },
       missing: [evaluation == null && 'evaluation', touchups == null && 'touchups'].filter(Boolean),
-      total: r1(total) });
+      total: r1(total), earned: r1(earned), possible, final: evaluation != null && touchups != null });
   }
   return { tz, rules: RULES, employees: out };
 }
@@ -93,9 +98,9 @@ async function yearScores(year, onlyId) {
   let tz = null;
   for (const mo of months) {
     const r = await monthScores(mo, onlyId); tz = r.tz;
-    for (const e of r.employees) { (per[e.employee_id] ||= { employee_id: e.employee_id, name: e.name, title: e.title, employment_status: e.employment_status, months: {} }).months[mo] = e.worked ? e.total : null; }
+    for (const e of r.employees) { const p = (per[e.employee_id] ||= { employee_id: e.employee_id, name: e.name, title: e.title, employment_status: e.employment_status, months: {}, notFinal: [] }); p.months[mo] = e.worked && e.total != null ? e.total : null; if (e.worked && !e.final) p.notFinal.push(mo); }
   }
-  const rows = Object.values(per).map(p => { const vals = Object.values(p.months).filter(v => v != null); return { ...p, average: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null, months_worked: vals.length }; });
+  const rows = Object.values(per).map(p => { const vals = Object.values(p.months).filter(v => v != null); return { ...p, average: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null, months_worked: vals.length, final: !p.notFinal.length }; });
   return { tz, rules: RULES, months, employees: rows };
 }
 
