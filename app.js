@@ -12,7 +12,10 @@
   const dur = ms => { let s=Math.floor(Math.max(0,ms)/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);s%=60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
   const hours = x => Math.max(0, (new Date(x.clock_out || Date.now()) - new Date(x.clock_in)) / 3600000);
   const esc = s => String(s ?? '').replace(/[&<>\"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#92;'}[m] || m));
+  const fmtYmd=d=>d?new Date(d+'T12:00:00').toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'}):'';
 
+  /* Photos (licence): shrink to at most 1600 px as JPEG before upload. */
+  const shrinkImage=(file,max=1600,q=0.82)=>new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{const k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',q));};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('bad image'));};img.src=url;});
   /* Uniform item icons (simple line drawings). */
   const UNI_SVG=d=>`<svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${d}</svg>`;
   const UNI_ICONS={
@@ -190,6 +193,19 @@
     vacHours:['hours','horas'],vacDays:['about {d} days of 8 hours','aprox. {d} días de 8 horas'],vacFrom:['from {h} paid hours','de {h} horas pagadas'],
     vacNote:['Hours are counted from your paid shifts once you clock out. To take vacation, talk to your manager; they record it here.','Las horas se cuentan de sus turnos pagados al marcar la salida. Para tomar vacaciones, hable con su gerente; él lo registra aquí.'],
     supUpdated:['Your manager answered a supply request.','Su gerente respondió un pedido de materiales.'],uniUpdated:['Your manager answered a uniform request.','Su gerente respondió un pedido de uniforme.'],
+    navInfo:['My Info','Mis datos'],infoTitle:['My Info','Mis datos'],
+    infoHelp:['Please fill in your details. Only you and your manager can see them. Your SSN and licence photo are stored encrypted.','Por favor complete sus datos. Solo usted y su gerente pueden verlos. Su SSN y la foto de su licencia se guardan cifrados.'],
+    infoPersonal:['Personal','Personal'],infoFull:['Full name','Nombre completo'],infoDob:['Date of birth','Fecha de nacimiento'],infoAddr:['Address','Dirección'],infoPhone:['Phone','Teléfono'],infoEmail:['Email','Correo electrónico'],
+    infoSsn:['Social Security Number (SSN)','Número de Seguro Social (SSN)'],infoSsnPh:['9 digits','9 dígitos'],infoSsnOn:['On file: {m}. Type a new one only to change it.','Guardado: {m}. Escriba uno nuevo solo para cambiarlo.'],infoSsnNone:['Not entered yet','Aún no ingresado'],
+    infoLic:["Photo of your driver's licence",'Foto de su licencia de conducir'],infoLicOn:['On file. Take a new photo only to replace it.','Guardada. Tome una nueva foto solo para reemplazarla.'],infoLicNone:['No photo yet','Aún no hay foto'],infoLicNew:['New photo ready. Press Save.','Nueva foto lista. Presione Guardar.'],infoView:['View','Ver'],
+    infoEmergency:['Emergency contact','Contacto de emergencia'],infoEmName:['Name','Nombre'],infoEmRel:['Relation to you','Parentesco'],infoEmRelPh:['e.g. Wife, Brother','p. ej. Esposa, Hermano'],
+    infoJob:['Job','Trabajo'],infoStatus:['Job status','Estado de trabajo'],infoStart:['Start date','Fecha de inicio'],infoStartNone:['Set by your manager','Lo registra su gerente'],
+    infoSave:['Save my info','Guardar mis datos'],infoSaved:['Your info was saved.','Sus datos se guardaron.'],infoSsnBad:['The SSN must have 9 digits.','El SSN debe tener 9 dígitos.'],
+    infoMissing:['Still missing: {list}','Falta: {list}'],
+    infoF_full_name:['full name','nombre'],infoF_dob:['date of birth','fecha de nacimiento'],infoF_address:['address','dirección'],infoF_phone:['phone','teléfono'],infoF_ssn_last4:['SSN','SSN'],infoF_emergency_name:['emergency contact','contacto de emergencia'],infoF_emergency_phone:['emergency phone','teléfono de emergencia'],infoF_emergency_relation:['relation','parentesco'],infoF_license:['licence photo','foto de licencia'],
+    vacEligRule:['You need to complete your first full year to be eligible for paid vacation.','Debe completar su primer año completo para tener derecho a vacaciones pagadas.'],
+    vacEligFrom:['You can use paid vacation from {d}.','Puede usar vacaciones pagadas a partir del {d}.'],vacEligYes:['You are eligible for paid vacation.','Ya tiene derecho a vacaciones pagadas.'],
+    vacEligUnknown:['Your manager has not entered your start date yet.','Su gerente aún no ha ingresado su fecha de inicio.'],vacOpening:['includes {h} hours earned before WorkClock','incluye {h} horas ganadas antes de WorkClock'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -264,6 +280,7 @@
     if(employeeIdentity&&$('empSupItems'))renderEmpSupplies();
     if(employeeIdentity&&$('empUniItems'))renderEmpUniforms();
     if(employeeIdentity&&empPage()==='vacation')loadEmpVacation();
+    if(employeeIdentity&&infoRec)renderEmpInfo(false);
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -605,7 +622,7 @@
   const empCounts={supplies:0,uniforms:0};let empCountsKnown=null,empPollTimer=null;
   function setEmpCounts(){
     [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
-    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms));
+    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms)&&!(infoRec?.missing?.length));
   }
   async function pollEmpCounts(){
     if(managerMode||!employeeIdentity)return;
@@ -618,17 +635,47 @@
       empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;setEmpCounts();
     }catch{}
   }
-  function startEmpPoll(){pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
+  function startEmpPoll(){api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
   async function loadEmpVacation(){
     try{const v=(await api('/api/supplies?mine=1&vacation=1')).vacation||{year_paid_hours:0,year_earned:0,all_earned:0,used_hours:0,balance:0};
       const h=x=>`${Number(x).toFixed(2)} ${t('vacHours')}`;
       $('vBal').textContent=h(v.balance);$('vBalDays').textContent=t('vacDays',{d:(Math.max(0,v.balance)/8).toFixed(1)});
       $('vYear').textContent=h(v.year_earned);$('vYearHrs').textContent=t('vacFrom',{h:Number(v.year_paid_hours).toFixed(2)});
       $('vAll').textContent=h(v.all_earned);$('vUsed').textContent=h(v.used_hours);$('vacMsg').textContent='';
+      $('vacElig').innerHTML=`<b>${esc(t('vacEligRule'))}</b><br>${esc(v.start_date?(v.eligible?t('vacEligYes'):t('vacEligFrom',{d:fmtYmd(v.eligible_from)})):t('vacEligUnknown'))}${v.opening_hours?`<br><span class="small">${esc(t('vacOpening',{h:Number(v.opening_hours).toFixed(2)}))}</span>`:''}`;
+      $('vacElig').classList.toggle('ok',!!v.eligible);
     }catch(e){if(e.status!==401)$('vacMsg').textContent=displayMessage(e.payload||e.message);}
   }
+
+  /* ---- Employee: My Info ---- */
+  let infoRec=null,infoLic=null;
+  async function loadEmpInfo(){
+    try{const j=await api('/api/records?mine=1');infoRec=j.record;infoRec._status=j.status;renderEmpInfo(true);}catch(e){if(e.status!==401)$('infoMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function renderEmpInfo(fill){
+    const r=infoRec;if(!r)return;
+    if(fill){const v=(id,x)=>{$(id).value=x??'';};v('iFull',r.full_name||employeeIdentity?.name);v('iDob',r.dob);v('iAddr',r.address);v('iPhone',r.phone);v('iEmail',r.email);v('iEmName',r.emergency_name);v('iEmPhone',r.emergency_phone);v('iEmRel',r.emergency_relation);v('iSsn','');v('iLic','');infoLic=null;$('iLicImg').classList.add('hide');}
+    $('iSsnShown').textContent=r.ssn_masked?t('infoSsnOn',{m:r.ssn_masked}):t('infoSsnNone');
+    $('iLicState').textContent=infoLic?t('infoLicNew'):r.has_license?t('infoLicOn'):t('infoLicNone');$('iLicView').classList.toggle('hide',!r.has_license||!!infoLic);
+    $('iStatus').value=statusText(r._status||'active');$('iStart').value=r.start_date?fmtYmd(r.start_date):t('infoStartNone');
+    const miss=r.missing||[];$('infoMissing').classList.toggle('hide',!miss.length);$('infoMissing').textContent=miss.length?t('infoMissing',{list:miss.map(k=>t('infoF_'+k)).join(', ')}):'';
+    $('empInfoDot').classList.toggle('hide',!miss.length);$('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms)&&!miss.length);
+  }
+  async function saveEmpInfo(){
+    const body={action:'mine',full_name:$('iFull').value,dob:$('iDob').value,address:$('iAddr').value,phone:$('iPhone').value,email:$('iEmail').value,emergency_name:$('iEmName').value,emergency_phone:$('iEmPhone').value,emergency_relation:$('iEmRel').value};
+    if($('iSsn').value.trim()){if($('iSsn').value.replace(/\D/g,'').length!==9)return $('infoMsg').textContent=t('infoSsnBad');body.ssn=$('iSsn').value;}
+    if(infoLic)body.license=infoLic;
+    const btn=$('infoSave');btn.disabled=true;$('infoMsg').textContent='…';
+    try{const j=await api('/api/records?mine=1',{method:'PATCH',body:JSON.stringify(body)});infoRec={...j.record,_status:infoRec?._status};renderEmpInfo(true);$('infoMsg').textContent=t('infoSaved');toast(t('infoSaved'));}
+    catch(e){$('infoMsg').textContent=displayMessage(e.payload||e.message);}finally{btn.disabled=false;}
+  }
+  function initEmpInfo(){
+    $('infoSave').onclick=saveEmpInfo;
+    $('iLic').onchange=async()=>{const f=$('iLic').files[0];if(!f)return;try{infoLic=await shrinkImage(f);$('iLicImg').src=infoLic;$('iLicImg').classList.remove('hide');renderEmpInfo(false);}catch{toast('?','bad');}};
+    $('iLicView').onclick=async()=>{try{const j=await api('/api/records?mine=1&license=1');if(j.image){$('iLicImg').src=j.image;$('iLicImg').classList.remove('hide');}}catch{}};
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms','vacation'];
+  const EMP_PAGES=['clock','supplies','uniforms','vacation','info'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -641,6 +688,7 @@
     if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
     if(pg==='uniforms')loadEmpUniforms();
     if(pg==='vacation')loadEmpVacation();
+    if(pg==='info')loadEmpInfo();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);
@@ -659,6 +707,7 @@
     initEmployeeReport();
     initEmpSupplies();
     initEmpMenu();
+    initEmpInfo();
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
@@ -1276,21 +1325,58 @@
     go('liveClockIns','toggleShiftDetails','shiftDetailsBody');
     go('pendingApprovals','toggleShiftDetails','shiftDetailsBody');
   }
+  /* ---- Manager: Employee Records ---- */
+  let recRows=[],recCurrent=null,recLicData=null;
+  const REC_LABEL={full_name:'name',dob:'birth date',address:'address',phone:'phone',ssn_last4:'SSN',emergency_name:'emergency contact',emergency_phone:'emergency phone',emergency_relation:'relation',license:'licence photo'};
+  async function loadRecords(){try{recRows=(await api('/api/records')).employees||[];renderRecords();}catch(e){$('recList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
+  function renderRecords(){
+    const q=($('recSearch').value||'').trim().toLowerCase(),miss=$('recMissing').checked,term=$('recShowTerm').checked;
+    const rows=recRows.filter(e=>(term||e.employment_status!=='terminated')&&(!q||String(e.name).toLowerCase().includes(q))&&(!miss||e.record.missing.length));
+    $('recList').innerHTML=rows.map(e=>{const r=e.record,st=e.employment_status||'active';return `<button class="empRow status-${st}" data-rec="${e.id}" type="button"><span class="avatar">${esc(initials(e.name))}</span><span class="empMain"><b>${esc(e.name)}</b><span>${esc(e.title||'')}${r.start_date?` · started ${esc(fmtYmd(r.start_date))}`:''}</span></span><span class="statusBadge ${st}">${esc(statusText(st))}</span>${r.missing.length?`<span class="recMissing">Missing: ${esc(r.missing.map(k=>REC_LABEL[k]||k).join(', '))}</span>`:'<span class="recDone">Complete</span>'}<svg aria-hidden="true" class="chev" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`;}).join('')||'<div class="dashEmpty">No employees match.</div>';
+    document.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>openRecord(recRows.find(e=>String(e.id)===b.dataset.rec)));
+  }
+  function openRecord(e){
+    recCurrent=e;recLicData=null;const r=e.record;
+    $('recTitle').textContent=e.name;$('recSub').textContent=r.updated_at?`Last updated ${supWhen(r.updated_at)} by ${r.updated_by||'—'}.`:'No details yet. The employee can fill them in under My Info.';
+    const v=(id,val)=>{$(id).value=val??'';};
+    v('rFull',r.full_name||e.name);v('rDob',r.dob);v('rAddr',r.address);v('rPhone',r.phone);v('rEmail',r.email||e.email);v('rEmName',r.emergency_name);v('rEmPhone',r.emergency_phone);v('rEmRel',r.emergency_relation);
+    v('rStart',r.start_date);v('rTermDate',r.termination_date);v('rTermReason',r.termination_reason);v('rOpening',r.vacation_opening_hours||'');v('rSsn','');v('rLic','');
+    $('rStatus').value=statusText(e.employment_status||'active');
+    $('rSsnShown').textContent=r.ssn_masked||'Not entered';$('rSsnReveal').classList.toggle('hide',!r.ssn_masked);
+    $('rLicState').textContent=r.has_license?`On file (${supWhen(r.license_updated_at)})`:'None';$('rLicView').classList.toggle('hide',!r.has_license);
+    $('rLicImg').classList.add('hide');$('rLicImg').removeAttribute('src');$('recMsg').textContent='';
+    $('recPanel').classList.remove('hide');
+  }
+  async function saveRecord(){
+    const body={employeeId:Number(recCurrent.id),full_name:$('rFull').value,dob:$('rDob').value,address:$('rAddr').value,phone:$('rPhone').value,email:$('rEmail').value,emergency_name:$('rEmName').value,emergency_phone:$('rEmPhone').value,emergency_relation:$('rEmRel').value,start_date:$('rStart').value,termination_date:$('rTermDate').value,termination_reason:$('rTermReason').value,vacation_opening_hours:$('rOpening').value||0};
+    if($('rSsn').value.trim()){if($('rSsn').value.replace(/\D/g,'').length!==9)return $('recMsg').textContent='The SSN must have 9 digits.';body.ssn=$('rSsn').value;}
+    if(recLicData)body.license=recLicData;
+    $('recMsg').textContent='Saving…';
+    try{await api('/api/records',{method:'PATCH',body:JSON.stringify(body)});$('recPanel').classList.add('hide');toast('Record saved.');await loadRecords();}
+    catch(e){$('recMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function initRecords(){
+    $('recSearch').oninput=renderRecords;$('recMissing').onchange=renderRecords;$('recShowTerm').onchange=renderRecords;
+    $('recCancel').onclick=()=>$('recPanel').classList.add('hide');$('recSave').onclick=saveRecord;
+    $('rSsnReveal').onclick=async()=>{try{const j=await api(`/api/records?id=${recCurrent.id}&ssn=1`);$('rSsnShown').textContent=j.ssn||'Not entered';$('rSsnReveal').classList.add('hide');}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
+    $('rLicView').onclick=async()=>{try{const j=await api(`/api/records?id=${recCurrent.id}&license=1`);if(j.image){$('rLicImg').src=j.image;$('rLicImg').classList.remove('hide');$('rLicImg').scrollIntoView({block:'nearest'});}}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
+    $('rLic').onchange=async()=>{const f=$('rLic').files[0];if(!f)return;try{recLicData=await shrinkImage(f);$('rLicImg').src=recLicData;$('rLicImg').classList.remove('hide');$('rLicState').textContent='New photo ready to save';}catch{toast('That file could not be read as a photo.','bad');}};
+  }
   /* ---- Manager: Tools & Supplies ---- */
   /* Date bar: a month with ‹ › or custom from/to dates. range() gives [start, end). */
-  function makeDateBar(host,onChange){
-    const el=$(host);let mode='month',month=new Date(new Date().getFullYear(),new Date().getMonth(),1),from='',to='';
+  function makeDateBar(host,onChange,opts={}){
+    const el=$(host);let mode=opts.initial||'month',month=new Date(new Date().getFullYear(),new Date().getMonth(),1),year=new Date().getFullYear(),from='',to='';
     el.classList.add('dateBar');
-    el.innerHTML=`<div class="dbModes" role="tablist"><button type="button" class="dbMode on" data-db="month">Monthly</button><button type="button" class="dbMode" data-db="custom">Custom dates</button></div><div class="dbMonth"><button type="button" class="dbPrev" aria-label="Previous month">&lsaquo;</button><b class="dbLabel"></b><button type="button" class="dbNext" aria-label="Next month">&rsaquo;</button></div><div class="dbCustom hide"><label>From<input type="date" class="dbFrom"/></label><label>To<input type="date" class="dbTo"/></label><button type="button" class="mini primary dbApply">Show</button></div>`;
+    el.innerHTML=`<div class="dbModes" role="tablist"><button type="button" class="dbMode" data-db="month">Monthly</button>${opts.year?'<button type="button" class="dbMode" data-db="year">Yearly</button>':''}<button type="button" class="dbMode" data-db="custom">Custom dates</button></div><div class="dbMonth"><button type="button" class="dbPrev" aria-label="Previous month">&lsaquo;</button><b class="dbLabel"></b><button type="button" class="dbNext" aria-label="Next month">&rsaquo;</button></div><div class="dbCustom hide"><label>From<input type="date" class="dbFrom"/></label><label>To<input type="date" class="dbTo"/></label><button type="button" class="mini primary dbApply">Show</button></div>`;
     const q=c=>el.querySelector(c);
-    const paint=()=>{el.querySelectorAll('.dbMode').forEach(b=>b.classList.toggle('on',b.dataset.db===mode));q('.dbMonth').classList.toggle('hide',mode!=='month');q('.dbCustom').classList.toggle('hide',mode!=='custom');q('.dbLabel').textContent=month.toLocaleDateString([], {month:'long',year:'numeric'});};
-    q('.dbPrev').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);paint();onChange();};
-    q('.dbNext').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);paint();onChange();};
-    el.querySelectorAll('.dbMode').forEach(b=>b.onclick=()=>{mode=b.dataset.db;if(mode==='custom'&&!q('.dbFrom').value){q('.dbFrom').value=iso(month);const e=new Date(month.getFullYear(),month.getMonth()+1,0);q('.dbTo').value=iso(e);}paint();if(mode==='month')onChange();});
+    const paint=()=>{el.querySelectorAll('.dbMode').forEach(b=>b.classList.toggle('on',b.dataset.db===mode));q('.dbMonth').classList.toggle('hide',mode==='custom');q('.dbCustom').classList.toggle('hide',mode!=='custom');q('.dbLabel').textContent=mode==='year'?String(year):month.toLocaleDateString([], {month:'long',year:'numeric'});};
+    q('.dbPrev').onclick=()=>{if(mode==='year')year--;else month=new Date(month.getFullYear(),month.getMonth()-1,1);paint();onChange();};
+    q('.dbNext').onclick=()=>{if(mode==='year')year++;else month=new Date(month.getFullYear(),month.getMonth()+1,1);paint();onChange();};
+    el.querySelectorAll('.dbMode').forEach(b=>b.onclick=()=>{mode=b.dataset.db;if(mode==='custom'&&!q('.dbFrom').value){q('.dbFrom').value=iso(month);const e=new Date(month.getFullYear(),month.getMonth()+1,0);q('.dbTo').value=iso(e);}paint();if(mode!=='custom')onChange();});
     q('.dbApply').onclick=()=>{from=q('.dbFrom').value;to=q('.dbTo').value;if(!from||!to||to<from){toast('Choose a start date and an end date after it.','bad');return;}onChange();};
     paint();
-    return{range(){if(mode==='custom'&&from&&to){const a=new Date(from+'T00:00:00'),z=new Date(to+'T00:00:00');z.setDate(z.getDate()+1);return [a,z];}return [new Date(month),new Date(month.getFullYear(),month.getMonth()+1,1)];},
-      label(){const [a,z]=this.range();const e=new Date(z);e.setDate(e.getDate()-1);return mode==='month'?month.toLocaleDateString([], {month:'long',year:'numeric'}):`${a.toLocaleDateString()} – ${e.toLocaleDateString()}`;}};
+    return{range(){if(mode==='custom'&&from&&to){const a=new Date(from+'T00:00:00'),z=new Date(to+'T00:00:00');z.setDate(z.getDate()+1);return [a,z];}if(mode==='year')return [new Date(year,0,1),new Date(year+1,0,1)];return [new Date(month),new Date(month.getFullYear(),month.getMonth()+1,1)];},
+      label(){const [a,z]=this.range();const e=new Date(z);e.setDate(e.getDate()-1);return mode==='month'?month.toLocaleDateString([], {month:'long',year:'numeric'}):mode==='year'?String(year):`${a.toLocaleDateString()} – ${e.toLocaleDateString()}`;}};
   }
   let supReqBar,supStockBar,supLogBar;
 
@@ -1483,17 +1569,26 @@
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
   // Vacations
-  let vacYear=new Date().getFullYear(),vacRows=[];
+  let vacRows=[],vacBar,vacHistBar;
   async function loadVacations(){
-    $('vacYear').textContent=vacYear;$('vacYearH').textContent=vacYear;$('vacYearH2').textContent=vacYear;$('vacNext').disabled=vacYear>=new Date().getFullYear();
-    try{vacRows=(await api(`/api/manager?view=vacations&year=${vacYear}`)).employees||[];renderVacations();}
-    catch(e){$('vacRows').innerHTML=`<tr><td colspan="7">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
+    const [a,z]=vacBar.range();document.querySelectorAll('.vacRangeH').forEach(el=>el.textContent=`(${vacBar.label()})`);
+    try{vacRows=(await api(`/api/manager?view=vacations&start=${encodeURIComponent(a.toISOString())}&end=${encodeURIComponent(z.toISOString())}`)).employees||[];renderVacations();}
+    catch(e){$('vacRows').innerHTML=`<tr><td colspan="8">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
+    loadVacHistory();
+  }
+  async function loadVacHistory(){
+    const [a,z]=vacHistBar.range();
+    try{const h=(await api(`/api/manager?view=vacation_history_all&start=${encodeURIComponent(a.toISOString())}&end=${encodeURIComponent(z.toISOString())}`)).history||[];
+      const tot=h.reduce((x,r)=>x+Number(r.hours||0),0);
+      $('vacHistSum').innerHTML=`<span><b>${h.length}</b> entries</span><span><b>${tot.toFixed(2)}</b> hours taken</span><span><b>${new Set(h.map(r=>r.employee_id)).size}</b> employees</span>`;
+      $('vacHistRows').innerHTML=h.map(r=>`<tr><td><b>${esc(r.employee_name)}</b></td><td>${esc(fmtYmd(r.taken_on))}</td><td><b>${Number(r.hours).toFixed(2)} h</b></td><td>${esc(r.note||'')}</td><td class="muted small">${esc(supWhen(r.created_at))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No vacation taken in these dates.</td></tr>';
+    }catch(e){$('vacHistRows').innerHTML=`<tr><td colspan="5">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
   }
   const hd=h=>{const d=Math.round(Number(h)/8*10)/10;return `${Number(h).toFixed(2)} h<small>${(Object.is(d,-0)?0:d).toFixed(1)} days (8 h)</small>`;};
   function renderVacations(){
     const q=($('vacSearch').value||'').trim().toLowerCase(),all=$('vacShowAll').checked;
     const rows=vacRows.filter(r=>(all||r.employment_status!=='terminated')&&(!q||String(r.name).toLowerCase().includes(q)));
-    $('vacRows').innerHTML=rows.map(r=>`<tr><td><b>${esc(r.name)}</b>${r.employment_status!=='active'?` <span class="statusBadge ${r.employment_status}">${esc(statusText(r.employment_status))}</span>`:''}<div class="muted small">${esc(r.title||'')}</div></td><td>${Number(r.year_paid_hours).toFixed(2)}</td><td class="vacNum">${hd(r.year_earned)}</td><td class="vacNum">${hd(r.all_earned)}</td><td class="vacNum">${hd(r.used_hours)}</td><td class="vacNum vacBal${r.balance<0?' neg':''}">${hd(r.balance)}</td><td><button class="mini secondary" data-vac-rec="${r.employee_id}" type="button">Record taken</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No employees match.</td></tr>';
+    $('vacRows').innerHTML=rows.map(r=>`<tr><td><b>${esc(r.name)}</b>${r.employment_status!=='active'?` <span class="statusBadge ${r.employment_status}">${esc(statusText(r.employment_status))}</span>`:''}<div class="muted small">${esc(r.title||'')}</div></td><td>${r.start_date?`${esc(fmtYmd(r.start_date))}<small class="${r.eligible?'eligOk':'eligNo'}">${r.eligible?'Eligible':'Eligible from '+esc(fmtYmd(r.eligible_from))}</small>`:'<span class="muted small">Not set</span>'}</td><td>${Number(r.range_paid_hours).toFixed(2)}</td><td class="vacNum">${hd(r.range_earned)}</td><td class="vacNum">${hd(r.all_earned)}${r.opening_hours?`<small>incl. ${Number(r.opening_hours).toFixed(2)} h before WorkClock</small>`:''}</td><td class="vacNum">${hd(r.used_hours)}</td><td class="vacNum vacBal${r.balance<0?' neg':''}">${hd(r.balance)}</td><td><button class="mini secondary" data-vac-rec="${r.employee_id}" type="button">Record taken</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No employees match.</td></tr>';
     document.querySelectorAll('[data-vac-rec]').forEach(b=>b.onclick=()=>openVacPanel(vacRows.find(r=>r.employee_id===b.dataset.vacRec)));
   }
   async function openVacPanel(r){
@@ -1506,6 +1601,7 @@
   async function saveVac(){
     const id=$('vacPanel').dataset.id,hours=Number($('vacHours').value),day=$('vacDate').value,msg=$('vacPanelMsg');
     if(!(hours>0))return msg.textContent='Enter the hours taken.';if(!day)return msg.textContent='Choose the date.';
+    {const r=vacRows.find(x=>x.employee_id===id);if(r&&!r.eligible&&!confirm(r.start_date?`${r.name} is not eligible for paid vacation until ${fmtYmd(r.eligible_from)} (first full year). Record it anyway?`:`${r.name} has no start date in Employees, so eligibility can't be checked. Record it anyway?`))return;}
     if(!confirm(`Record ${hours} vacation hours for ${(vacRows.find(r=>r.employee_id===id)||{}).name}? This cannot be undone from the app.`))return;
     msg.textContent='Saving…';
     try{await api('/api/manager',{method:'POST',body:JSON.stringify({action:'vacation_used',employeeId:Number(id),hours,takenOn:day,note:$('vacNoteIn').value.trim()})});$('vacPanel').classList.add('hide');toast('Vacation recorded.');await loadVacations();}
@@ -1558,7 +1654,7 @@
     $('uniGiveBtn').onclick=openUniGive;$('ugCancel').onclick=()=>$('uniGivePanel').classList.add('hide');$('ugSave').onclick=saveUniGive;
     const tu=$('toggleUniLog'),bu=$('uniLogBody');tu.onclick=()=>setSection(tu,bu,bu.classList.contains('hide'));
     $('uniPriceSave').onclick=saveUniPrices;
-    $('vacPrev').onclick=()=>{vacYear--;loadVacations();};$('vacNext').onclick=()=>{vacYear++;loadVacations();};
+    vacBar=makeDateBar('vacDates',loadVacations,{year:true,initial:'year'});vacHistBar=makeDateBar('vacHistDates',loadVacHistory,{year:true,initial:'year'});
     $('vacSearch').oninput=renderVacations;$('vacShowAll').onchange=renderVacations;
     $('vacCancel').onclick=()=>$('vacPanel').classList.add('hide');$('vacSave').onclick=saveVac;
     $('vacPanel').onclick=e=>{if(e.target===$('vacPanel'))$('vacPanel').classList.add('hide');};
@@ -1567,7 +1663,7 @@
   // Section menu: Dashboard, Employees, Supplies, Settings. Each section shows
   // its own cards (tagged data-page) in the original layout; the address keeps
   // the section (#/employees) so refresh and the back button stay put.
-  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance'];
+  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance','employees'];
   function setDrawer(open){
     const d=$('mgrDrawer'),s=$('mgrScrim'),b=$('mgrBurger');if(!d)return;
     d.classList.toggle('open',open);s.classList.toggle('hide',!open);b.setAttribute('aria-expanded',String(open));
@@ -1580,12 +1676,13 @@
     document.querySelectorAll('#managerApp [data-route]').forEach(a=>{const on=a.dataset.route===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // Close anything left open on the previous section.
     document.querySelectorAll('.weekCal').forEach(c=>c.classList.add('hide'));
-    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel','uniStockPanel','uniGivePanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
+    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel','uniStockPanel','uniGivePanel','recPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
     const open=(btn,body)=>{if($(body)&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);};
     if(pg==='supplies'){loadSupplies();loadUsage();}
     if(pg==='uniforms')loadUniforms();
     if(pg==='vacations')loadVacations();
-    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
+    if(pg==='employees')loadRecords();
+    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
   function initMgrNav(){
@@ -1643,6 +1740,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     $('empPanel').onclick=e=>{if(e.target===$('empPanel'))closeEmpPanel();};
     $('epPin').oninput=()=>{$('epPin').value=$('epPin').value.replace(/\D/g,'').slice(0,4);};
     initSupplies();
+    initRecords();
     initMgrNav();
     initManagerMotion();
     $('clockInCancel').onclick=closeClockInEdit;

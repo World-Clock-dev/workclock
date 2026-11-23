@@ -61,35 +61,59 @@ export async function bankShiftsBefore(cutoffIso) {
   return shifts.length;
 }
 
-/* Per employee: paid hours and vacation earned in `year`, plus all-time
-   earned, used and remaining. Open shifts are not counted until they close. */
-export async function vacationSummary(year) {
+/* Eligibility: paid vacation can be used after the first full year,
+   counted from the job start date in Employee Records. */
+export function eligibleFrom(startDate) {
+  if (!startDate) return null;
+  const d = new Date(startDate + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/* Per employee: paid hours and vacation earned between start and end (ISO),
+   plus all-time earned (including hours entered as earned before WorkClock),
+   taken, remaining, start date and eligibility. Open shifts count once closed. */
+export async function vacationSummary(startIso, endIso) {
   await ensureVacationTables();
   const minimum = await settingNumber('project_completed_min_paid_hours', 8);
   const employees = await sql`SELECT id,name,title,employment_status FROM employees ORDER BY CASE employment_status WHEN 'active' THEN 0 WHEN 'vacation' THEN 1 ELSE 2 END, name`;
   const shifts = await sql([`SELECT ${SHIFT_COLS} FROM shifts s WHERE s.clock_out IS NOT NULL`]);
   const bank = await sql`SELECT employee_id,year,paid_hours FROM vacation_bank`;
   const used = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used GROUP BY employee_id`;
-  const usedYear = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE substr(taken_on,1,4)=${String(year)} GROUP BY employee_id`;
-  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, year_paid_hours: 0, all_paid_hours: 0, used_hours: 0, year_used_hours: 0 }]));
+  const usedRange = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE taken_on>=${startIso.slice(0, 10)} AND taken_on<${endIso.slice(0, 10)} GROUP BY employee_id`;
+  let recs = [];
+  try { recs = await sql`SELECT employee_id,start_date,vacation_opening_hours FROM employee_records`; } catch { recs = []; }
+  const recBy = new Map(recs.map(r => [String(r.employee_id), r]));
+  const s0 = new Date(startIso).getTime(), e0 = new Date(endIso).getTime();
+  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, range_paid_hours: 0, all_paid_hours: 0, used_hours: 0, range_used_hours: 0 }]));
   for (const sh of shifts) {
     const r = row.get(String(sh.employee_id)); if (!r) continue;
-    const paid = effectiveShiftPay(sh, minimum);
+    const paid = effectiveShiftPay(sh, minimum), t = new Date(sh.clock_in).getTime();
     r.all_paid_hours += paid;
-    if (new Date(sh.clock_in).getUTCFullYear() === year) r.year_paid_hours += paid;
+    if (t >= s0 && t < e0) r.range_paid_hours += paid;
   }
   for (const b of bank) {
     const r = row.get(String(b.employee_id)); if (!r) continue;
     r.all_paid_hours += Number(b.paid_hours || 0);
-    if (Number(b.year) === year) r.year_paid_hours += Number(b.paid_hours || 0);
+    const y0 = Date.UTC(Number(b.year), 0, 1), y1 = Date.UTC(Number(b.year) + 1, 0, 1);
+    if (y0 >= s0 && y1 <= e0) r.range_paid_hours += Number(b.paid_hours || 0);
   }
   for (const u of used) { const r = row.get(String(u.employee_id)); if (r) r.used_hours = Number(u.hours || 0); }
-  for (const u of usedYear) { const r = row.get(String(u.employee_id)); if (r) r.year_used_hours = Number(u.hours || 0); }
-  const round = v => Math.round(v * 100) / 100;
+  for (const u of usedRange) { const r = row.get(String(u.employee_id)); if (r) r.range_used_hours = Number(u.hours || 0); }
+  const round = v => Math.round(v * 100) / 100, today = new Date().toISOString().slice(0, 10);
   return [...row.values()].map(r => {
-    const yearEarned = r.year_paid_hours * VACATION_PER_HOUR, allEarned = r.all_paid_hours * VACATION_PER_HOUR;
-    return { ...r, year_paid_hours: round(r.year_paid_hours), all_paid_hours: round(r.all_paid_hours), year_earned: round(yearEarned), all_earned: round(allEarned), used_hours: round(r.used_hours), year_used_hours: round(r.year_used_hours), balance: round(allEarned - r.used_hours) };
+    const rec = recBy.get(r.employee_id) || {}, opening = Number(rec.vacation_opening_hours || 0);
+    const rangeEarned = r.range_paid_hours * VACATION_PER_HOUR, allEarned = r.all_paid_hours * VACATION_PER_HOUR + opening;
+    const from = eligibleFrom(rec.start_date || null);
+    return { ...r, range_paid_hours: round(r.range_paid_hours), all_paid_hours: round(r.all_paid_hours), range_earned: round(rangeEarned), opening_hours: round(opening), all_earned: round(allEarned),
+      used_hours: round(r.used_hours), range_used_hours: round(r.range_used_hours), balance: round(allEarned - r.used_hours),
+      start_date: rec.start_date || null, eligible_from: from, eligible: !!from && from <= today };
   });
+}
+
+export async function vacationHistoryAll(startIso, endIso) {
+  await ensureVacationTables();
+  return sql`SELECT v.id,v.employee_id,e.name AS employee_name,v.hours,v.taken_on,v.note,v.created_at FROM vacation_used v JOIN employees e ON e.id=v.employee_id
+    WHERE v.taken_on>=${startIso.slice(0, 10)} AND v.taken_on<${endIso.slice(0, 10)} ORDER BY v.taken_on DESC, v.id DESC LIMIT 1000`;
 }
 
 export async function vacationHistory(employeeId) {

@@ -247,8 +247,8 @@ async function employeeSide(req, res, emp) {
     }
     if (u.searchParams.get('vacation')) {
       const year = new Date().getUTCFullYear();
-      const mine = (await vacationSummary(year)).find(r => String(r.employee_id) === String(emp.id)) || null;
-      return json(res, 200, { year, vacation: mine && { year_paid_hours: mine.year_paid_hours, year_earned: mine.year_earned, all_earned: mine.all_earned, used_hours: mine.used_hours, balance: mine.balance } });
+      const mine = (await vacationSummary(new Date(Date.UTC(year, 0, 1)).toISOString(), new Date(Date.UTC(year + 1, 0, 1)).toISOString())).find(r => String(r.employee_id) === String(emp.id)) || null;
+      return json(res, 200, { year, vacation: mine && { year_paid_hours: mine.range_paid_hours, year_earned: mine.range_earned, all_earned: mine.all_earned, opening_hours: mine.opening_hours, used_hours: mine.used_hours, balance: mine.balance, start_date: mine.start_date, eligible_from: mine.eligible_from, eligible: mine.eligible } });
     }
     if (u.searchParams.get('deductions')) {
       const start = u.searchParams.get('start'), end = u.searchParams.get('end');

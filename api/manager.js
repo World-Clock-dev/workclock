@@ -1,5 +1,5 @@
 import { sql, json, requireManager, requireSameOrigin, settingNumber, audit } from './_db.js';
-import { vacationSummary, vacationHistory, recordVacationUsed } from './_vacation.js';
+import { vacationSummary, vacationHistory, vacationHistoryAll, recordVacationUsed } from './_vacation.js';
 import { allocatePaidHours, normalizeDayStarts, hoursBetween, effectiveShiftPay } from './_time.js';
 
 function getRange(req){
@@ -62,9 +62,14 @@ export default async function handler(req,res){
     }
     if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
     if(url.searchParams.get('view')==='vacations'){
-      const year=Number(url.searchParams.get('year'))||new Date().getUTCFullYear();
-      if(year<2000||year>2100)return json(res,400,{error:'Invalid year.'});
-      return json(res,200,{year,rate:{vacation_hours:40,per_paid_hours:2080},employees:await vacationSummary(year)});
+      const a=url.searchParams.get('start'),z=url.searchParams.get('end');
+      if(!a||!z||Number.isNaN(Date.parse(a))||Number.isNaN(Date.parse(z)))return json(res,400,{error:'Valid start and end are required.'});
+      return json(res,200,{rate:{vacation_hours:40,per_paid_hours:2080},employees:await vacationSummary(new Date(a).toISOString(),new Date(z).toISOString())});
+    }
+    if(url.searchParams.get('view')==='vacation_history_all'){
+      const a=url.searchParams.get('start'),z=url.searchParams.get('end');
+      if(!a||!z||Number.isNaN(Date.parse(a))||Number.isNaN(Date.parse(z)))return json(res,400,{error:'Valid start and end are required.'});
+      return json(res,200,{history:await vacationHistoryAll(new Date(a).toISOString(),new Date(z).toISOString())});
     }
     if(url.searchParams.get('view')==='vacation_history'){
       const id=Number(url.searchParams.get('employeeId'));if(!Number.isInteger(id)||id<=0)return json(res,400,{error:'Choose an employee.'});
