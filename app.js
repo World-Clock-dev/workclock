@@ -181,7 +181,7 @@
     uniSize:['Size','Talla'],uniEach:['${p} each','${p} cada una'],
     uniTotal:['Total: ${t}','Total: ${t}'],
     uniDeductNote:['The cost is taken off your pay in the week your manager gives you the items.','El costo se descuenta de su pago la semana en que su gerente le entrega las prendas.'],
-    uniCost:['Cost ${t}','Costo ${t}'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
+    uniCost:['Cost ${t}','Costo ${t}'],uniFree:['Free from the company: nothing deducted','Gratis de la compañía: no se descuenta nada'],uniQty:['How many','Cuántas'],uniPickSize:['Choose a size for {item}.','Elija una talla para {item}.'],
     uniPickSome:['Choose at least one item and its size.','Elija al menos una prenda y su talla.'],uniTooMany:['You already have uniform requests waiting.','Ya tiene pedidos de uniforme en espera.'],
     uniDeduction:['UNIFORM DEDUCTION','DESCUENTO DE UNIFORME'],weekPay:['WEEK PAY','PAGO DE LA SEMANA'],
     navVacation:['Vacation','Vacaciones'],vacTitle:['My Vacation','Mis vacaciones'],
@@ -589,7 +589,7 @@
     document.querySelectorAll('[data-uni-dec]').forEach(b=>b.onclick=()=>{const p=uniPick[b.dataset.uniDec];p.qty=Math.max(0,p.qty-1);renderEmpUniforms();});
     const n=UNI_KEYS.filter(k=>uniPick[k].qty).length,sum=UNI_KEYS.reduce((a,k)=>a+uniPick[k].qty*uniPrice(k),0);
     $('empUniSummary').innerHTML=n?`${esc(t('supPicked',{n}))} · <b>${esc(t('uniTotal',{t:sum.toFixed(2)}))}</b>`:'';$('empUniSendBtn').disabled=!n;
-    $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty} · $${Number(l.amount||0).toFixed(2)}</span></li>`).join('')}</ul>${r.status!=='rejected'&&r.status!=='cancelled'?`<div class="small"><b>${esc(t('uniCost',{t:Number(r.total||0).toFixed(2)}))}</b></div>`:''}${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
+    $('empUniMine').innerHTML=uniEmp.requests.length?uniEmp.requests.map(r=>`<div class="supMine st-${r.status}"><div class="supMineHead"><span class="supBadge ${r.status}">${esc(supStatusText(r.status))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleString(locale(),{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</span></div><ul>${r.lines.map(l=>`<li><b>${esc(t('uni_'+l.item))}</b> <span class="muted">· ${esc(l.size)} × ${l.qty} · $${Number(l.amount||0).toFixed(2)}</span></li>`).join('')}</ul>${r.status==='given'&&r.free?`<div class="small uniFreeNote"><b>${esc(t('uniFree'))}</b></div>`:r.status!=='rejected'&&r.status!=='cancelled'?`<div class="small"><b>${esc(t('uniCost',{t:Number(r.total||0).toFixed(2)}))}</b></div>`:''}${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('supMgrNote'))}</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-uni-cancel="${r.id}" type="button">${esc(t('supCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('supNoneMine'))}</div>`;
     document.querySelectorAll('[data-uni-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('supCancelAsk')))return;try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_cancel',id:Number(b.dataset.uniCancel)})});}catch(e){toast(supErr(e),'bad');}loadEmpUniforms();});
   }
   async function sendEmpUniforms(){
@@ -1405,19 +1405,64 @@
   const UNI_SIZES=['XS','S','M','L','XL','XXL','3XL'];
   let uniData={requests:[]},uniTab='pending',uniKnownPending=null;
   function setUniBadge(n){document.querySelectorAll('[data-uni-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});if($('uniCountPending'))$('uniCountPending').textContent=n;}
+  let uniReqBar,uniInvBar,uniFreeBar,uniBuyBar,uniStockCell=null;
+  const uniItemsText=r=>r.lines.map(l=>`${l.qty} × ${esc(UNI_NAMES[l.item]||l.item)} ${esc(l.size)}`).join(', ');
   async function loadUniforms(){
-    try{uniData=await api('/api/supplies?uniforms=1');uniKnownPending=uniData.requests.filter(r=>r.status==='pending').length;setUniBadge(uniKnownPending);renderUniforms();renderUniPrices();}
+    const q=(k,bar)=>{const [a,z]=bar.range();return `${k}Start=${encodeURIComponent(a.toISOString())}&${k}End=${encodeURIComponent(z.toISOString())}`;};
+    try{uniData=await api(`/api/supplies?uniforms=1&${q('req',uniReqBar)}&${q('inv',uniInvBar)}&${q('free',uniFreeBar)}&${q('buy',uniBuyBar)}`);uniKnownPending=uniData.requests.filter(r=>r.status==='pending').length;setUniBadge(uniKnownPending);renderUniforms();renderUniPrices();}
     catch(e){$('uniReqList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
   }
   function renderUniforms(){
     document.querySelectorAll('[data-uni-tab]').forEach(b=>b.classList.toggle('on',b.dataset.uniTab===uniTab));
-    const reqs=uniData.requests.filter(r=>uniTab==='all'||r.status===uniTab||(uniTab==='rejected'&&r.status==='cancelled'));
-    $('uniReqList').innerHTML=reqs.map(r=>{const pending=r.status==='pending';
-      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}</div></div></div><span class="supBadge ${r.status}">${esc(supStatus[r.status]||r.status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="uniLines">${r.lines.map(l=>`<div class="uniLine"><span class="uniIcon">${UNI_ICONS[l.item]||''}</span><b>${esc(UNI_NAMES[l.item]||l.item)}</b><span class="uniSize">${esc(l.size)}</span><span class="muted">× ${l.qty}</span><span class="uniAmt">$${Number(l.amount||0).toFixed(2)}</span></div>`).join('')}<div class="uniTotal">Total to deduct: <b>$${Number(r.total||0).toFixed(2)}</b>${pending?' <span class="muted small">· deducted the week you mark it Given</span>':''}</div></div>${pending?`<div class="supReqActions"><input class="supMgrNote" data-uni-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-uni-reject="${r.id}" type="button">Reject</button><button class="primary" data-uni-give="${r.id}" type="button">Mark as given</button></div><div class="muted small" data-uni-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(supStatus[r.status]||r.status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${uniTab==='pending'?'No uniform requests waiting.':'Nothing here.'}</div>`;
-    document.querySelectorAll('[data-uni-give]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniGive,'given',b));
+    $('uniCountApproved').textContent=uniData.requests.filter(r=>r.status==='approved').length;
+    const [ra,rz]=uniReqBar.range(),inR=r=>{const t=new Date(r.created_at);return t>=ra&&t<rz;};
+    const reqs=uniData.requests.filter(r=>uniTab==='all'?(['pending','approved'].includes(r.status)||inR(r)):uniTab==='rejected'?(['rejected','cancelled'].includes(r.status)&&inR(r)):uniTab==='given'?(r.status==='given'&&inR(r)):r.status===uniTab);
+    const inv=uniData.inventory||{};
+    $('uniReqList').innerHTML=reqs.map(r=>{const open=r.status==='pending'||r.status==='approved';
+      const lines=r.lines.map(l=>{const have=inv[l.item]?.[l.size]?.qty??0,short=open&&l.qty>have;return `<div class="uniLine"><span class="uniIcon">${UNI_ICONS[l.item]||''}</span><b>${esc(UNI_NAMES[l.item]||l.item)}</b><span class="uniSize">${esc(l.size)}</span><span class="muted">× ${l.qty}</span>${open?`<span class="uniHave${short?' short':''}">${have} in stock</span>`:''}<span class="uniAmt">$${Number(l.amount||0).toFixed(2)}</span></div>`;}).join('');
+      const status=r.status==='given'?(r.free?'Delivered · free':'Delivered · bought'):(supStatus[r.status]||r.status);
+      const actions=`${r.status==='pending'?`<button class="secondary" data-uni-approve="${r.id}" type="button">Approve</button>`:''}<button class="secondary" data-uni-reject="${r.id}" type="button">Reject</button><button class="secondary" data-uni-free="${r.id}" type="button">Deliver free</button><button class="primary" data-uni-give="${r.id}" type="button">Deliver: employee buys</button>`;
+      return `<article class="supReq st-${r.status}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">${esc(r.employee_title||'')}${r.employee_title?' · ':''}asked ${esc(supWhen(r.created_at))}${r.status==='approved'?` · approved ${esc(supWhen(r.approved_at))}`:''}</div></div></div><span class="supBadge ${r.status}">${esc(status)}</span></div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}<div class="uniLines">${lines}<div class="uniTotal">${r.status==='given'&&r.free?'Free from the company (value':'Total to deduct:'} <b>$${Number(r.total||0).toFixed(2)}</b>${r.status==='given'&&r.free?')':''}${open?' <span class="muted small">· deducted the week you deliver it, unless free</span>':''}</div></div>${open?`<div class="supReqActions"><input class="supMgrNote" data-uni-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/>${actions}</div><div class="muted small" data-uni-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(status)} ${esc(supWhen(r.decided_at))}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${uniTab==='pending'?'No new uniform requests.':'Nothing here for these dates.'}</div>`;
+    document.querySelectorAll('[data-uni-approve]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniApprove,'approved',b));
+    document.querySelectorAll('[data-uni-give]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniGive,'given',b,false));
+    document.querySelectorAll('[data-uni-free]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniFree,'given',b,true));
     document.querySelectorAll('[data-uni-reject]').forEach(b=>b.onclick=()=>uniDecide(b.dataset.uniReject,'rejected',b));
-    const tally={};uniData.requests.filter(r=>r.status==='pending').forEach(r=>r.lines.forEach(l=>{tally[l.item]=tally[l.item]||{};tally[l.item][l.size]=(tally[l.item][l.size]||0)+l.qty;}));
+    // Sizes needed by the open requests
+    const tally={};uniData.requests.filter(r=>r.status==='pending'||r.status==='approved').forEach(r=>r.lines.forEach(l=>{tally[l.item]=tally[l.item]||{};tally[l.item][l.size]=(tally[l.item][l.size]||0)+l.qty;}));
     $('uniSizeRows').innerHTML=Object.keys(UNI_NAMES).map(k=>{const t=tally[k]||{},tot=Object.values(t).reduce((a,b)=>a+b,0);return `<tr><td><span class="uniIcon sm">${UNI_ICONS[k]}</span><b>${esc(UNI_NAMES[k])}</b></td>${UNI_SIZES.map(z=>`<td class="${t[z]?'has':''}">${t[z]||'—'}</td>`).join('')}<td><b>${tot||'—'}</b></td></tr>`;}).join('');
+    // Inventory grid
+    $('uniInvRows').innerHTML=Object.keys(UNI_NAMES).map(k=>{const row=inv[k]||{};let tq=0,tb=0,ta=0,tr=0,te=0;
+      const cells=UNI_SIZES.map(z=>{const c=row[z]||{qty:0,begin:0,end:null,added:0,removed:0};tq+=c.qty;tb+=c.begin||0;ta+=c.added||0;tr+=c.removed||0;te+=(c.end??c.qty);return `<td><button type="button" class="invCell${c.qty?'':' zero'}" data-inv="${k}|${z}" aria-label="${esc(UNI_NAMES[k])} ${z}: ${c.qty}">${c.qty}</button></td>`;}).join('');
+      return `<tr><td><span class="uniIcon sm">${UNI_ICONS[k]}</span><b>${esc(UNI_NAMES[k])}</b><div class="supPeriod">Start <b>${tb}</b> · <span class="pos">+${ta}</span> · <span class="neg">−${tr}</span> · End <b>${te}</b></div></td>${cells}<td><b>${tq}</b></td></tr>`;}).join('');
+    document.querySelectorAll('[data-inv]').forEach(b=>b.onclick=()=>openUniStock(...b.dataset.inv.split('|')));
+    $('uniLogRows').innerHTML=(uniData.inventoryLog||[]).map(g=>`<tr><td>${esc(supWhen(g.created_at))}</td><td><b>${esc(UNI_NAMES[g.item]||g.item)}</b></td><td>${esc(g.size)}</td><td class="${g.change<0?'neg':'pos'}">${g.change>0?'+':''}${g.change}</td><td>${g.qty_after}</td><td>${esc(g.reason)}${g.employee_name?` · ${esc(g.employee_name)}`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">No changes in these dates.</td></tr>';
+    // Free and bought history
+    const hist=(rows,el,sumEl,word)=>{const tot=rows.reduce((a,r)=>a+Number(r.total||0),0),pieces=rows.reduce((a,r)=>a+r.lines.reduce((x,l)=>x+l.qty,0),0);
+      $(sumEl).innerHTML=`<span><b>${rows.length}</b> deliveries</span><span><b>${pieces}</b> pieces</span><span><b>$${tot.toFixed(2)}</b> ${word}</span>`;
+      $(el).innerHTML=rows.map(r=>`<tr><td><b>${esc(r.employee_name)}</b></td><td>${esc(supWhen(r.decided_at))}</td><td>${uniItemsText(r)}${r.manager_note?`<div class="muted small">“${esc(r.manager_note)}”</div>`:''}</td><td><b>$${Number(r.total||0).toFixed(2)}</b></td></tr>`).join('')||'<tr><td colspan="4" class="muted">Nothing in these dates.</td></tr>';};
+    hist(uniData.freeGiven||[],'uniFreeRows','uniFreeSum','value given free');
+    hist(uniData.bought||[],'uniBuyRows','uniBuySum','deducted from pay');
+  }
+  function openUniStock(item,size){
+    const c=uniData.inventory?.[item]?.[size]||{qty:0};uniStockCell=[item,size];
+    $('uniStockTitle').textContent=`${UNI_NAMES[item]} · ${size}`;$('uniStockSub').textContent=`${c.qty} in stock now.`;
+    $('usMode').value='add';$('usQtyLbl').textContent='How many arrived';$('usQty').value='';$('usMsg').textContent='';
+    $('uniStockPanel').classList.remove('hide');$('usQty').focus();
+  }
+  async function saveUniStock(){
+    const n=Number($('usQty').value);if(!Number.isInteger(n)||n<0)return $('usMsg').textContent='Enter a whole number, 0 or more.';
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_stock',item:uniStockCell[0],size:uniStockCell[1],qty:n,add:$('usMode').value==='add'})});$('uniStockPanel').classList.add('hide');toast('Uniform stock updated.');await loadUniforms();}
+    catch(e){$('usMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function openUniGive(){
+    $('ugEmp').innerHTML=(managerPeople||[]).filter(p=>(p.employment_status||'active')!=='terminated').map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    $('ugQty').value='1';$('ugNote').value='';$('ugFree').value='1';$('ugMsg').textContent='';$('uniGivePanel').classList.remove('hide');
+  }
+  async function saveUniGive(){
+    const qty=Number($('ugQty').value);if(!Number.isInteger(qty)||qty<1||qty>20)return $('ugMsg').textContent='How many must be 1 to 20.';
+    $('ugMsg').textContent='Saving…';
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_give',employeeId:Number($('ugEmp').value),free:$('ugFree').value==='1',note:$('ugNote').value.trim(),lines:[{item:$('ugItem').value,size:$('ugSize').value,qty}]})});$('uniGivePanel').classList.add('hide');toast($('ugFree').value==='1'?'Free uniform recorded.':'Uniform recorded; it will be deducted from this week\'s pay.');await loadUniforms();loadWeeklyPaidHours().catch(()=>{});}
+    catch(e){$('ugMsg').textContent=displayMessage(e.payload||e.message);}
   }
   function renderUniPrices(){
     const pr=uniData.prices||{};
@@ -1429,11 +1474,12 @@
     try{const j=await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_prices',prices})});uniData.prices=j.prices;renderUniPrices();$('uniPriceMsg').textContent='Prices saved. New requests use these prices.';toast('Uniform prices saved.');}
     catch(e){$('uniPriceMsg').textContent=displayMessage(e.payload||e.message);}
   }
-  async function uniDecide(id,decision,btn){
+  async function uniDecide(id,decision,btn,free=false){
     const msg=document.querySelector(`[data-uni-msg="${id}"]`),note=(document.querySelector(`[data-uni-note="${id}"]`)?.value||'').trim();
     if(decision==='rejected'&&!confirm('Reject this uniform request?'))return;
+    if(decision==='given'&&free&&!confirm('Deliver as FREE from the company? Nothing will be deducted from pay.'))return;
     btn.disabled=true;msg.textContent='Saving…';
-    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_decide',id:Number(id),decision,note})});toast(decision==='given'?'Marked as given. The cost now shows as a deduction on this week\'s Weekly Paid Hours.':'Uniform request rejected.');await loadUniforms();loadWeeklyPaidHours().catch(()=>{});}
+    try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'uniform_decide',id:Number(id),decision,note,free})});toast(decision==='given'?(free?'Delivered free from the company.':'Delivered. The cost shows as a deduction on this week\'s Weekly Paid Hours.'):decision==='approved'?'Approved. Mark it delivered when you hand it over.':'Uniform request rejected.');await loadUniforms();loadWeeklyPaidHours().catch(()=>{});}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
   // Vacations
@@ -1505,7 +1551,12 @@
     $('usageNext').onclick=()=>{usageMonth=new Date(usageMonth.getFullYear(),usageMonth.getMonth()+1,1);loadUsage();};
     document.querySelectorAll('[data-usage-mode]').forEach(b=>b.onclick=()=>{usageMode=b.dataset.usageMode;renderUsage();});
     document.querySelectorAll('[data-uni-tab]').forEach(b=>b.onclick=()=>{uniTab=b.dataset.uniTab;renderUniforms();});
+    uniReqBar=makeDateBar('uniReqDates',loadUniforms);uniInvBar=makeDateBar('uniInvDates',loadUniforms);uniFreeBar=makeDateBar('uniFreeDates',loadUniforms);uniBuyBar=makeDateBar('uniBuyDates',loadUniforms);
     $('uniRefresh').onclick=loadUniforms;
+    $('usCancel').onclick=()=>$('uniStockPanel').classList.add('hide');$('usSave').onclick=saveUniStock;
+    $('usMode').onchange=()=>{$('usQtyLbl').textContent=$('usMode').value==='add'?'How many arrived':'Exact number on the shelf';};
+    $('uniGiveBtn').onclick=openUniGive;$('ugCancel').onclick=()=>$('uniGivePanel').classList.add('hide');$('ugSave').onclick=saveUniGive;
+    const tu=$('toggleUniLog'),bu=$('uniLogBody');tu.onclick=()=>setSection(tu,bu,bu.classList.contains('hide'));
     $('uniPriceSave').onclick=saveUniPrices;
     $('vacPrev').onclick=()=>{vacYear--;loadVacations();};$('vacNext').onclick=()=>{vacYear++;loadVacations();};
     $('vacSearch').oninput=renderVacations;$('vacShowAll').onchange=renderVacations;
@@ -1529,7 +1580,7 @@
     document.querySelectorAll('#managerApp [data-route]').forEach(a=>{const on=a.dataset.route===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // Close anything left open on the previous section.
     document.querySelectorAll('.weekCal').forEach(c=>c.classList.add('hide'));
-    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
+    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel','uniStockPanel','uniGivePanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
     const open=(btn,body)=>{if($(body)&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);};
     if(pg==='supplies'){loadSupplies();loadUsage();}
     if(pg==='uniforms')loadUniforms();

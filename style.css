@@ -890,3 +890,17 @@ body.mgr .lowAlertBtn,body.mgr .lowAlertBtn:hover{color:#fff}
 .vacTable th:first-child,.vacTable td:first-child,.uniSizeTable th:first-child,.uniSizeTable td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:1px 0 0 var(--line)}
 .vacTable th:first-child,.uniSizeTable th:first-child{background:#fafafa}
 .vacTable td:first-child{min-width:150px}
+
+/* ---- Round 2: uniforms ---- */
+.uniHave{font-size:12px;font-weight:800;color:#047857;background:#ecfdf5;border-radius:6px;padding:2px 7px}
+.uniHave.short{color:#b91c1c;background:#fef2f2}
+.invCell{min-width:46px;height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;font-weight:900;font-size:15px;color:var(--text)}
+.invCell:hover{border-color:var(--orange,#f97316)}
+.invCell.zero{color:#b91c1c;background:#fffafa}
+table.uniInvTable{min-width:720px}
+.uniInvTable td:first-child{min-width:170px}
+table.uniHistTable{min-width:600px}
+.uniHistTable th:first-child,.uniHistTable td:first-child{position:sticky;left:0;background:#fff;z-index:2;box-shadow:1px 0 0 var(--line)}
+.uniHistTable th:first-child{background:#fafafa}
+.uniHistTable td{white-space:normal;vertical-align:top}
+.uniFreeNote{color:#047857}
