@@ -16,6 +16,22 @@
 
   /* Photos (licence): shrink to at most 1600 px as JPEG before upload. */
   const shrinkImage=(file,max=1600,q=0.82)=>new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{const k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',q));};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('bad image'));};img.src=url;});
+  /* Month calendar of projects. Weeks start Monday. */
+  const PROJ_COLORS=['#f97316','#2563eb','#16a34a','#9333ea','#db2777','#0891b2','#ca8a04','#dc2626'];
+  function renderProjCal(el,month,projects,onPick,loc){
+    const first=new Date(month.getFullYear(),month.getMonth(),1),start=new Date(first);start.setDate(1-((first.getDay()+6)%7));
+    const dows=[...Array(7)].map((_,i)=>{const d=new Date(2024,0,1+i);return d.toLocaleDateString(loc||[], {weekday:'short'});});
+    const today=iso(new Date());let html=`<div class="calHead">${dows.map(d=>`<span>${esc(d)}</span>`).join('')}</div><div class="calGrid">`;
+    for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const k=iso(d),out=d.getMonth()!==month.getMonth();
+      if(i===35&&out)break;
+      const on=projects.filter(p=>p.start_date<=k&&p.end_date>=k);
+      html+=`<div class="calDay${out?' out':''}${k===today?' today':''}"><span class="calNum">${d.getDate()}</span>${on.slice(0,3).map(p=>`<button type="button" class="calChip" data-proj="${p.id}" style="background:${PROJ_COLORS[Number(p.id)%PROJ_COLORS.length]}" title="${esc(p.name)}">${esc(p.name)}</button>`).join('')}${on.length>3?`<span class="calMore">+${on.length-3}</span>`:''}</div>`;}
+    el.innerHTML=html+'</div>';
+    el.querySelectorAll('[data-proj]').forEach(b=>b.onclick=()=>onPick(projects.find(p=>String(p.id)===b.dataset.proj)));
+  }
+  const mapsLink=a=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a)}`;
+  const fileSize=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+  const readAsDataURL=f=>new Promise((ok,bad)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=bad;r.readAsDataURL(f);});
   /* Uniform item icons (simple line drawings). */
   const UNI_SVG=d=>`<svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">${d}</svg>`;
   const UNI_ICONS={
@@ -218,6 +234,13 @@
     perfP1:['Manager evaluation','Evaluación del gerente'],perfP2:['On-time clock-in','Entrada a tiempo'],perfP3:['Weekly hours','Horas semanales'],perfP4:['Touch-ups / complaints','Retoques / quejas'],
     perfDays:['{a} of {b} days on time','{a} de {b} días a tiempo'],perfWeeks:['{a} of {b} weeks with 38.5 h+','{a} de {b} semanas con 38.5 h+'],perfTouch:['{n} this month','{n} este mes'],
     perfPending:['Not entered yet','Aún no ingresado'],perfNoWork:['No shifts in this period.','No hay turnos en este periodo.'],perfPerfect:['Perfect','Perfecto'],perfAvg:['Average of {n} months','Promedio de {n} meses'],
+    navProj:['My Projects','Mis proyectos'],navVeh:['My Vehicle','Mi vehículo'],navRes:['Job Resources','Recursos de trabajo'],
+    projTitle:['My Projects','Mis proyectos'],projHelp:['Jobs you are assigned to, with the address and start and finish days.','Trabajos asignados a usted, con la dirección y los días de inicio y fin.'],
+    projCrew:['Crew','Equipo'],projNone:['No one else yet','Nadie más todavía'],projEmpty:['No projects for you this month.','No tiene proyectos este mes.'],
+    vehTitle:['My Vehicle','Mi vehículo'],vehNone:['No vehicle is assigned to you.','No tiene un vehículo asignado.'],
+    vPlate:['Plate','Placa'],vVin:['VIN','VIN'],vDriver:['Driver','Conductor'],vNone:['Not assigned','Sin asignar'],vMnt:['Maintenance history','Historial de mantenimiento'],vNoMnt:['No maintenance recorded yet.','Aún no hay mantenimiento registrado.'],vDate:['Date','Fecha'],vWhat:['What was done','Qué se hizo'],vMiles:['Mileage','Millaje'],vCost:['Cost','Costo'],vNotes:['Notes','Notas'],
+    resTitle:['Job Resources','Recursos de trabajo'],resHelp:['These documents explain the job and how we work. Tap one to open it.','Estos documentos explican el trabajo y cómo trabajamos. Toque uno para abrirlo.'],resEmpty:['No documents yet.','Aún no hay documentos.'],resOpen:['Open','Abrir'],
+    resK_handbook:['Employee Handbook','Manual del empleado'],resK_sop:['Standard Operating Procedure (SOP)','Procedimiento operativo estándar (SOP)'],resK_other:['Document','Documento'],
     menu:['Menu','Menú'],close:['Close','Cerrar'],navClock:['Time Clock','Reloj'],navSupplies:['Supplies','Materiales']
   };
   const DOWS = {en:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],es:['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']};
@@ -294,6 +317,9 @@
     if(employeeIdentity&&empPage()==='vacation')loadEmpVacation();
     if(employeeIdentity&&infoRec)renderEmpInfo(false);
     if(employeeIdentity&&empPage()==='performance')loadEmpPerf();
+    if(employeeIdentity&&empPage()==='projects')loadEmpProjects();
+    if(employeeIdentity&&empPage()==='vehicle')loadEmpVehicle();
+    if(employeeIdentity&&empPage()==='resources')loadEmpResources();
     else{
       const lbl=$('empWeekLabel');
       if(lbl&&$('weekDate')?.value)lbl.textContent=weekLabel(ws(new Date($('weekDate').value+'T12:00:00')));
@@ -648,7 +674,7 @@
       empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;setEmpCounts();
     }catch{}
   }
-  function startEmpPoll(){api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
+  function startEmpPoll(){api('/api/company?area=menu').then(j=>$('empVehLink').classList.toggle('hide',!j.hasVehicle)).catch(()=>{});api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
   async function loadEmpVacation(){
     try{const v=(await api('/api/supplies?mine=1&vacation=1')).vacation||{year_paid_hours:0,year_earned:0,all_earned:0,used_hours:0,balance:0};
       const h=x=>`${Number(x).toFixed(2)} ${t('vacHours')}`;
@@ -718,8 +744,33 @@
     $('ePerfPrev').onclick=()=>{if(ePerfMode==='year')ePerfYear--;else ePerfMonth=new Date(ePerfMonth.getFullYear(),ePerfMonth.getMonth()-1,1);loadEmpPerf();};
     $('ePerfNext').onclick=()=>{if(ePerfMode==='year')ePerfYear++;else ePerfMonth=new Date(ePerfMonth.getFullYear(),ePerfMonth.getMonth()+1,1);loadEmpPerf();};
   }
+
+  /* ---- Employee: Projects, Vehicle, Resources ---- */
+  let eProjMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),eProjRows=[];
+  async function loadEmpProjects(){
+    $('eProjMonth').textContent=eProjMonth.toLocaleDateString(locale(),{month:'long',year:'numeric'});
+    const s=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth(),1),e=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()+1,0);
+    try{eProjRows=(await api(`/api/company?area=projects&start=${iso(new Date(s.getTime()-7*864e5))}&end=${iso(new Date(e.getTime()+7*864e5))}`)).projects||[];}catch{eProjRows=[];}
+    const L=k=>({crew:t('projCrew'),none:t('projNone'),map:'Map'}[k]);
+    const show=p=>{const el=document.querySelector(`#eProjList [data-p="${p.id}"]`);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1200);}};
+    renderProjCal($('eProjCal'),eProjMonth,eProjRows,show,locale());
+    const inMonth=eProjRows.filter(p=>p.start_date<=iso(e)&&p.end_date>=iso(s));
+    $('eProjList').innerHTML=inMonth.map(p=>`<div data-p="${p.id}">${projectRow(p,false,L)}</div>`).join('')||`<div class="dashEmpty">${esc(t('projEmpty'))}</div>`;
+  }
+  async function loadEmpVehicle(){
+    try{const v=(await api('/api/company?area=vehicles')).vehicles||[];const L=k=>t({plate:'vPlate',vin:'vVin',driver:'vDriver',none:'vNone',mnt:'vMnt',noMnt:'vNoMnt',date:'vDate',what:'vWhat',miles:'vMiles',cost:'vCost',notes:'vNotes'}[k]);
+      $('eVehList').innerHTML=v.map(x=>vehicleCard(x,false,L)).join('')||`<div class="dashEmpty">${esc(t('vehNone'))}</div>`;}catch{}
+  }
+  async function loadEmpResources(){
+    try{const r=(await api('/api/company?area=resources')).resources||[];
+      $('eResList').innerHTML=r.map(x=>`<a class="resRow resLink" href="/api/company?file=${x.id}" target="_blank" rel="noopener"><span class="resIcon">PDF</span><div class="resMain"><b>${esc(x.title)}</b><span class="muted small">${esc(t('resK_'+x.kind))} · ${fileSize(x.size)}</span></div><span class="mini secondary">${esc(t('resOpen'))}</span></a>`).join('')||`<div class="dashEmpty">${esc(t('resEmpty'))}</div>`;}catch{}
+  }
+  function initEmpCompany(){
+    $('eProjPrev').onclick=()=>{eProjMonth=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()-1,1);loadEmpProjects();};
+    $('eProjNext').onclick=()=>{eProjMonth=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()+1,1);loadEmpProjects();};
+  }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','info'];
+  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','projects','vehicle','resources','info'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
@@ -734,6 +785,9 @@
     if(pg==='vacation')loadEmpVacation();
     if(pg==='info')loadEmpInfo();
     if(pg==='performance')loadEmpPerf();
+    if(pg==='projects')loadEmpProjects();
+    if(pg==='vehicle')loadEmpVehicle();
+    if(pg==='resources')loadEmpResources();
     // The map was hidden while away; let Leaflet re-measure it.
     if(pg==='clock')setTimeout(()=>window.dispatchEvent(new Event('resize')),50);
     setEmpDrawer(false);window.scrollTo(0,0);
@@ -754,6 +808,7 @@
     initEmpMenu();
     initEmpInfo();
     initEmpPerf();
+    initEmpCompany();
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
     $('employeePin').addEventListener('keydown',e=>{if(e.key==='Enter')$('employeeLoginBtn').click();});
@@ -1447,6 +1502,83 @@
     $('perfSearch').oninput=()=>perfData&&(perfBar.mode()==='year'?renderPerfYear():renderPerfMonth());
     $('perfTz').onchange=async()=>{try{await api('/api/performance',{method:'PATCH',body:JSON.stringify({timezone:$('perfTz').value})});toast('Time zone saved.');loadPerf();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
   }
+  /* ---- Manager: Resources, Vehicles, Projects ---- */
+  const RES_KIND={handbook:'Employee Handbook',sop:'SOP',other:'Other'};
+  let resRows=[],vehRows=[],vehCurrent=null,projRows=[],projMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),projCurrent=null;
+  async function loadResources(){try{resRows=(await api('/api/company?area=resources')).resources||[];renderResources();}catch(e){$('resList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
+  function renderResources(){
+    $('resList').innerHTML=resRows.map(r=>`<div class="resRow"><span class="resIcon">PDF</span><div class="resMain"><b>${esc(r.title)}</b><span class="muted small">${esc(RES_KIND[r.kind]||r.kind)} · ${esc(r.filename)} · ${fileSize(r.size)} · updated ${esc(supWhen(r.updated_at))}</span></div><a class="mini secondary resOpen" href="/api/company?file=${r.id}" target="_blank" rel="noopener">Open</a><label class="mini secondary resReplace">Replace<input type="file" accept="application/pdf" data-res-replace="${r.id}" hidden/></label><button class="mini secondary supDel" data-res-del="${r.id}" type="button">Delete</button></div>`).join('')||'<div class="dashEmpty">No documents yet. Upload the Employee Handbook and the SOP above.</div>';
+    document.querySelectorAll('[data-res-del]').forEach(b=>b.onclick=async()=>{const r=resRows.find(x=>String(x.id)===b.dataset.resDel);if(!confirm(`Delete "${r.title}"? Employees will no longer see it.`))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_delete',id:Number(r.id)})});toast('Document deleted.');loadResources();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
+    document.querySelectorAll('[data-res-replace]').forEach(inp=>inp.onchange=async()=>{const f=inp.files[0];if(!f)return;const r=resRows.find(x=>String(x.id)===inp.dataset.resReplace);await uploadPdf(f,r.title,r.kind,Number(r.id));});
+  }
+  async function uploadPdf(f,title,kind,id){
+    if(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name))return toast('Choose a PDF file.','bad');
+    if(f.size>8*1048576)return toast('The PDF is too large (8 MB at most).','bad');
+    $('resMsg').textContent='Uploading…';
+    try{let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:application/pdf;');await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id,title,kind,filename:f.name,data})});$('resMsg').textContent='';toast(id?'Document replaced.':'Document uploaded.');$('resFile').value='';$('resTitle').value='';loadResources();}
+    catch(e){$('resMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  async function loadVehicles(){try{vehRows=(await api('/api/company?area=vehicles')).vehicles||[];renderVehicles($('vehList'),vehRows,true);}catch(e){$('vehList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
+  function vehicleCard(v,manage,L){
+    const T=L||(k=>({plate:'Plate',vin:'VIN',driver:'Driver',none:'Not assigned',mnt:'Maintenance history',noMnt:'No maintenance recorded yet.',date:'Date',what:'What was done',miles:'Mileage',cost:'Cost',notes:'Notes'}[k]));
+    return `<article class="vehCard"><div class="vehHead"><span class="vehIcon">${'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v4a1 1 0 0 1-1 1h-1M3 13v4a1 1 0 0 0 1 1h1M3 13h18"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>'}</span><div class="vehMain"><b>${esc([v.year,v.make,v.model].filter(Boolean).join(' '))}</b><span class="muted small">${esc(T('plate'))}: <b>${esc(v.plate||'—')}</b> · ${esc(T('vin'))}: ${esc(v.vin||'—')}</span><span class="small">${esc(T('driver'))}: <b>${esc(v.employee_name||T('none'))}</b></span>${v.notes?`<span class="muted small">${esc(v.notes)}</span>`:''}</div>${manage?`<div class="supItemBtns"><button class="mini secondary" data-veh-edit="${v.id}" type="button">Edit</button><button class="mini secondary" data-veh-mnt="${v.id}" type="button">+ Maintenance</button></div>`:''}</div>
+      <div class="recSection">${esc(T('mnt'))}</div>${v.maintenance.length?`<div class="tableWrap"><table class="mntTable"><thead><tr><th>${esc(T('date'))}</th><th>${esc(T('what'))}</th><th>${esc(T('miles'))}</th>${manage?`<th>${esc(T('cost'))}</th>`:''}<th>${esc(T('notes'))}</th>${manage?'<th></th>':''}</tr></thead><tbody>${v.maintenance.map(m=>`<tr><td>${esc(fmtYmd(m.date))}</td><td><b>${esc(m.type)}</b></td><td>${m.mileage!=null?Number(m.mileage).toLocaleString():'—'}</td>${manage?`<td>${m.cost!=null?'$'+Number(m.cost).toFixed(2):'—'}</td>`:''}<td>${esc(m.notes||'')}</td>${manage?`<td><button class="mini secondary supDel" data-mnt-del="${m.id}" type="button">Delete</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:`<div class="muted small">${esc(T('noMnt'))}</div>`}</article>`;
+  }
+  function renderVehicles(el,rows,manage){
+    el.innerHTML=rows.map(v=>vehicleCard(v,manage)).join('')||'<div class="dashEmpty">No vehicles yet. Add one with + Add vehicle.</div>';
+    if(!manage)return;
+    el.querySelectorAll('[data-veh-edit]').forEach(b=>b.onclick=()=>openVehicle(vehRows.find(v=>String(v.id)===b.dataset.vehEdit)));
+    el.querySelectorAll('[data-veh-mnt]').forEach(b=>b.onclick=()=>{vehCurrent=vehRows.find(v=>String(v.id)===b.dataset.vehMnt);$('mntSub').textContent=[vehCurrent.year,vehCurrent.make,vehCurrent.model].filter(Boolean).join(' ');$('mDate').value=iso(new Date());['mType','mMiles','mCost','mNotes'].forEach(i=>$(i).value='');$('mntMsg').textContent='';$('mntPanel').classList.remove('hide');});
+    el.querySelectorAll('[data-mnt-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this maintenance entry?'))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'maintenance_delete',id:Number(b.dataset.mntDel)})});loadVehicles();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
+  }
+  function openVehicle(v){
+    vehCurrent=v||null;$('vehTitle').textContent=v?'Edit vehicle':'Add vehicle';
+    $('vhEmp').innerHTML='<option value="">Not assigned</option>'+(managerPeople||[]).filter(p=>(p.employment_status||'active')!=='terminated').map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+    $('vhYear').value=v?.year??'';$('vhMake').value=v?.make||'';$('vhModel').value=v?.model||'';$('vhPlate').value=v?.plate||'';$('vhVin').value=v?.vin||'';$('vhNotes').value=v?.notes||'';$('vhEmp').value=v?.employee_id?String(v.employee_id):'';
+    $('vehRemove').classList.toggle('hide',!v);$('vehMsg').textContent='';$('vehPanel').classList.remove('hide');
+  }
+  async function saveVehicle(){
+    $('vehMsg').textContent='Saving…';
+    try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'vehicle_save',id:vehCurrent?Number(vehCurrent.id):null,year:$('vhYear').value.trim(),make:$('vhMake').value,model:$('vhModel').value,plate:$('vhPlate').value,vin:$('vhVin').value.replace(/\s/g,''),employeeId:$('vhEmp').value||null,notes:$('vhNotes').value})});$('vehPanel').classList.add('hide');toast('Vehicle saved.');loadVehicles();}
+    catch(e){$('vehMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  async function loadProjects(){
+    $('projMonth').textContent=projMonth.toLocaleDateString([], {month:'long',year:'numeric'});
+    const s=new Date(projMonth.getFullYear(),projMonth.getMonth(),1),e=new Date(projMonth.getFullYear(),projMonth.getMonth()+1,0);
+    try{projRows=(await api(`/api/company?area=projects&start=${iso(new Date(s.getTime()-7*864e5))}&end=${iso(new Date(e.getTime()+7*864e5))}`)).projects||[];}catch(err){projRows=[];toast(displayMessage(err.payload||err.message),'bad');}
+    renderProjCal($('projCal'),projMonth,projRows,openProject);
+    const inMonth=projRows.filter(p=>p.start_date<=iso(e)&&p.end_date>=iso(s));
+    $('projList').innerHTML=inMonth.map(p=>projectRow(p,true)).join('')||'<div class="dashEmpty">No projects this month.</div>';
+    $('projList').querySelectorAll('[data-proj-open]').forEach(b=>b.onclick=()=>openProject(projRows.find(p=>String(p.id)===b.dataset.projOpen)));
+  }
+  function projectRow(p,manage,L){
+    const T=L||(k=>({crew:'Crew',none:'No one assigned yet',map:'Map'}[k]));
+    return `<div class="projRow"><span class="projDot" style="background:${PROJ_COLORS[Number(p.id)%PROJ_COLORS.length]}"></span><div class="projMain"><b>${esc(p.name)}</b><span class="small">${esc(fmtYmd(p.start_date))} → ${esc(fmtYmd(p.end_date))}</span><a class="small" href="${mapsLink(p.address)}" target="_blank" rel="noopener">${esc(p.address)}</a><span class="muted small">${esc(T('crew'))}: ${p.employees.length?esc(p.employees.map(x=>x.name).join(', ')):esc(T('none'))}</span>${p.notes?`<span class="muted small">${esc(p.notes)}</span>`:''}</div>${manage?`<button class="mini secondary" data-proj-open="${p.id}" type="button">Edit</button>`:''}</div>`;
+  }
+  function openProject(p){
+    projCurrent=p||null;$('projTitle').textContent=p?'Edit project':'New project';
+    $('pName').value=p?.name||'';$('pAddr').value=p?.address||'';$('pStart').value=p?.start_date||iso(new Date());$('pEnd').value=p?.end_date||iso(new Date());$('pNotes').value=p?.notes||'';
+    const chosen=new Set((p?.employees||[]).map(x=>String(x.id)));
+    $('pEmps').innerHTML=(managerPeople||[]).filter(x=>(x.employment_status||'active')!=='terminated'||chosen.has(String(x.id))).map(x=>`<label class="pEmp"><input type="checkbox" value="${x.id}"${chosen.has(String(x.id))?' checked':''}/> ${esc(x.name)}</label>`).join('')||'<span class="muted small">No employees.</span>';
+    $('projDelete').classList.toggle('hide',!p);$('projMsg').textContent='';$('projPanel').classList.remove('hide');
+  }
+  async function saveProject(){
+    $('projMsg').textContent='Saving…';
+    try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'project_save',id:projCurrent?Number(projCurrent.id):null,name:$('pName').value,address:$('pAddr').value,start_date:$('pStart').value,end_date:$('pEnd').value,notes:$('pNotes').value,employees:[...$('pEmps').querySelectorAll('input:checked')].map(i=>Number(i.value))})});$('projPanel').classList.add('hide');toast('Project saved.');loadProjects();}
+    catch(e){$('projMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function initCompany(){
+    $('resUploadBtn').onclick=()=>{const f=$('resFile').files[0],title=$('resTitle').value.trim()||(f&&f.name.replace(/\.pdf$/i,''));if(!f)return $('resMsg').textContent='Choose a PDF file.';uploadPdf(f,title,$('resKind').value,null);};
+    $('vehAddBtn').onclick=()=>openVehicle(null);$('vehCancel').onclick=()=>$('vehPanel').classList.add('hide');$('vehSave').onclick=saveVehicle;
+    $('vehRemove').onclick=async()=>{if(!confirm('Remove this vehicle? Its maintenance history is kept in the database.'))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'vehicle_remove',id:Number(vehCurrent.id)})});$('vehPanel').classList.add('hide');loadVehicles();}catch(e){$('vehMsg').textContent=displayMessage(e.payload||e.message);}};
+    $('mntCancel').onclick=()=>$('mntPanel').classList.add('hide');
+    $('mntSave').onclick=async()=>{try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'maintenance_add',vehicleId:Number(vehCurrent.id),date:$('mDate').value,type:$('mType').value,mileage:$('mMiles').value.replace(/[,\s]/g,''),cost:$('mCost').value,notes:$('mNotes').value})});$('mntPanel').classList.add('hide');toast('Maintenance added.');loadVehicles();}catch(e){$('mntMsg').textContent=displayMessage(e.payload||e.message);}};
+    $('projAddBtn').onclick=()=>openProject(null);$('projCancel').onclick=()=>$('projPanel').classList.add('hide');$('projSave').onclick=saveProject;
+    $('projDelete').onclick=async()=>{if(!confirm(`Delete "${projCurrent.name}"?`))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'project_delete',id:Number(projCurrent.id)})});$('projPanel').classList.add('hide');loadProjects();}catch(e){$('projMsg').textContent=displayMessage(e.payload||e.message);}};
+    $('projPrev').onclick=()=>{projMonth=new Date(projMonth.getFullYear(),projMonth.getMonth()-1,1);loadProjects();};
+    $('projNext').onclick=()=>{projMonth=new Date(projMonth.getFullYear(),projMonth.getMonth()+1,1);loadProjects();};
+    $('projToday').onclick=()=>{projMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);loadProjects();};
+  }
   /* ---- Manager: Tools & Supplies ---- */
   /* Date bar: a month with ‹ › or custom from/to dates. range() gives [start, end). */
   function makeDateBar(host,onChange,opts={}){
@@ -1748,7 +1880,7 @@
   // Section menu: Dashboard, Employees, Supplies, Settings. Each section shows
   // its own cards (tagged data-page) in the original layout; the address keeps
   // the section (#/employees) so refresh and the back button stay put.
-  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance','employees'];
+  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance','employees','resources','vehicles','projects'];
   function setDrawer(open){
     const d=$('mgrDrawer'),s=$('mgrScrim'),b=$('mgrBurger');if(!d)return;
     d.classList.toggle('open',open);s.classList.toggle('hide',!open);b.setAttribute('aria-expanded',String(open));
@@ -1761,14 +1893,17 @@
     document.querySelectorAll('#managerApp [data-route]').forEach(a=>{const on=a.dataset.route===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // Close anything left open on the previous section.
     document.querySelectorAll('.weekCal').forEach(c=>c.classList.add('hide'));
-    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel','uniStockPanel','uniGivePanel','recPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
+    ['clockInEdit','customReview','empPanel','supItemPanel','vacPanel','uniStockPanel','uniGivePanel','recPanel','vehPanel','mntPanel','projPanel'].forEach(id=>{const m=$(id);if(m)m.classList.add('hide');});
     const open=(btn,body)=>{if($(body)&&$(body).classList.contains('hide'))setSection($(btn),$(body),true);};
     if(pg==='supplies'){loadSupplies();loadUsage();}
     if(pg==='uniforms')loadUniforms();
     if(pg==='vacations')loadVacations();
     if(pg==='employees')loadRecords();
     if(pg==='performance')loadPerf();
-    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
+    if(pg==='resources')loadResources();
+    if(pg==='vehicles')loadVehicles();
+    if(pg==='projects')loadProjects();
+    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees',resources:'Job Resources',vehicles:'Vehicles',projects:'Projects'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
   function initMgrNav(){
@@ -1828,6 +1963,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     initSupplies();
     initRecords();
     initPerf();
+    initCompany();
     initMgrNav();
     initManagerMotion();
     $('clockInCancel').onclick=closeClockInEdit;

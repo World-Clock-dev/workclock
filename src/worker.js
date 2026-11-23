@@ -25,6 +25,7 @@ import settings from '../api/settings.js';
 import supplies from '../api/supplies.js';
 import records from '../api/records.js';
 import performance from '../api/performance.js';
+import company from '../api/company.js';
 
 export const ROUTES = {
   'clock-in': clockIn,
@@ -42,6 +43,7 @@ export const ROUTES = {
   'supplies': supplies,
   'records': records,
   'performance': performance,
+  'company': company,
 };
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };

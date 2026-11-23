@@ -951,3 +951,38 @@ table.perfTable{min-width:760px}
 .perfRules{margin:6px 0 12px;padding-left:20px;font-size:14px;line-height:1.6}
 .perfImportant{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:10px 12px;font-size:14px}
 .perfImportant p{margin:4px 0 0}
+
+/* ---- Round 5: resources, vehicles, projects ---- */
+.resUpload{border:1px dashed var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.resList,.vehList,.projList{display:flex;flex-direction:column;gap:8px}
+.resRow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--text);text-decoration:none;flex-wrap:wrap}
+.resIcon{width:40px;height:44px;border-radius:8px;background:#fef2f2;color:#b91c1c;display:grid;place-items:center;font-weight:900;font-size:12px;flex:0 0 auto}
+.resMain{flex:1;min-width:160px;display:flex;flex-direction:column}
+.resOpen,.resReplace{text-decoration:none;display:inline-flex;align-items:center;cursor:pointer;margin:0}
+.resLink:hover{border-color:var(--primary)}
+.vehCard{border:1px solid var(--line);border-radius:14px;padding:12px}
+.vehHead{display:flex;gap:12px;align-items:flex-start}
+.vehIcon{width:44px;height:44px;border-radius:12px;background:#eff6ff;color:#1d4ed8;display:grid;place-items:center;flex:0 0 auto}
+.vehIcon svg{width:24px;height:24px}
+.vehMain{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+table.mntTable{min-width:520px}.mntTable td{white-space:normal}
+.calNav{margin:6px 0 10px;flex-wrap:wrap}
+.projCal{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.calHead,.calGrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.calHead span{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px;background:#fafafa;text-align:center}
+.calDay{min-height:84px;border-top:1px solid var(--line);border-left:1px solid var(--line);padding:4px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.calDay:nth-child(7n+1){border-left:0}
+.calDay.out{background:#fafafa;color:#a1a1aa}
+.calDay.today .calNum{background:var(--primary);color:#fff;border-radius:999px;padding:0 6px}
+.calNum{font-size:12px;font-weight:800;align-self:flex-start}
+.calChip{display:block;width:100%;text-align:left;color:#fff;font-size:11px;font-weight:800;border-radius:6px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calMore{font-size:11px;color:var(--muted);font-weight:800}
+.projRow{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:6px}
+.projRow.flash,.flash .projRow{box-shadow:0 0 0 3px rgba(37,99,235,.35)}
+.projDot{width:12px;height:12px;border-radius:50%;margin-top:4px;flex:0 0 auto}
+.projMain{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.projMain a{word-break:break-word}
+.pEmps{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
+.pEmp{display:flex;align-items:center;gap:8px;margin:0;font-weight:700;border:1px solid var(--line);border-radius:10px;padding:8px}
+.pEmp input{width:auto;margin:0}
+@media(max-width:640px){.calDay{min-height:58px;padding:2px}.calChip{font-size:9px;padding:1px 3px}.calHead span{font-size:9px;padding:4px 0}}
