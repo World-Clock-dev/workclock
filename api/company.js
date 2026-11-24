@@ -24,6 +24,9 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS attachments (
      id INTEGER PRIMARY KEY AUTOINCREMENT, owner_type TEXT NOT NULL, owner_id INTEGER NOT NULL,
      filename TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, chunks INTEGER NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS vehicle_incidents (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, vehicle_id INTEGER NOT NULL REFERENCES vehicles(id), date TEXT NOT NULL,
+     notes TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attachments_owner ON attachments(owner_type, owner_id)`,
   `CREATE TABLE IF NOT EXISTS attachment_chunks (attachment_id INTEGER NOT NULL REFERENCES attachments(id), idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (attachment_id, idx))`
 ];
@@ -39,11 +42,31 @@ async function ensure() {
   ready = true;
 }
 // Columns added by later rounds (vehicles, incidents, projects).
-const EXTRA_COLS = [];
+const EXTRA_COLS = [
+  ['vehicles', 'odometer_purchase', 'INTEGER'],
+  ['vehicles', 'reg_date', 'TEXT'], ['vehicles', 'reg_expires', 'TEXT'],          // full dates
+  ['vehicles', 'insp_month', 'TEXT'], ['vehicles', 'insp_expires', 'TEXT'],       // YYYY-MM (month and year only)
+  ['projects', 'work_order_url', 'TEXT'],
+  ['project_employees', 'start_date', 'TEXT'], ['project_employees', 'end_date', 'TEXT']
+];
 
 const MAX_PDF = 8 * 1024 * 1024, CHUNK = 900_000;
 const txt = (v, max) => { const s = String(v ?? '').trim().replace(/\s+/g, ' '); return s.length <= max ? s : null; };
 const day = v => { const s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null; };
+const month = v => { const s = String(v || '').trim(); return /^\d{4}-(0[1-9]|1[0-2])$/.test(s) ? s : null; };
+// Registration: alert 1 month before the date. Inspection (month/year): it runs to the end of that month.
+function vehicleAlerts(v, today = new Date()) {
+  const out = [], t0 = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const check = (label, dateStr, shown) => {
+    if (!dateStr) return;
+    const d = Date.parse(dateStr + 'T00:00:00Z'); if (Number.isNaN(d)) return;
+    const oneMonthBefore = new Date(d); oneMonthBefore.setUTCMonth(oneMonthBefore.getUTCMonth() - 1);
+    if (t0 >= oneMonthBefore.getTime()) out.push({ kind: label, date: shown, expired: t0 > d, days: Math.round((d - t0) / 86400000) });
+  };
+  check('registration', v.reg_expires, v.reg_expires);
+  if (v.insp_expires) { const [y, m] = v.insp_expires.split('-').map(Number); check('inspection', new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10), v.insp_expires); }
+  return out;
+}
 const idOf = v => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
 // File types that can be uploaded. PDFs and pictures open in the browser; the rest download.
@@ -96,7 +119,11 @@ async function vehiclesFor(where) {
     ? await sql`SELECT v.*,e.name AS employee_name FROM vehicles v LEFT JOIN employees e ON e.id=v.employee_id WHERE v.active=1 ORDER BY v.year DESC,v.make`
     : await sql`SELECT v.*,e.name AS employee_name FROM vehicles v LEFT JOIN employees e ON e.id=v.employee_id WHERE v.active=1 AND v.employee_id=${where} ORDER BY v.year DESC`;
   const m = await sql`SELECT * FROM vehicle_maintenance ORDER BY date DESC, id DESC`;
-  return v.map(x => ({ ...x, maintenance: m.filter(r => String(r.vehicle_id) === String(x.id)) }));
+  // Accident / incident notes are for the manager only.
+  const inc = where === 'all' ? await sql`SELECT * FROM vehicle_incidents ORDER BY date DESC, id DESC` : [];
+  const files = await attachmentsFor('incident', inc.map(i => Number(i.id)));
+  return v.map(x => ({ ...x, alerts: vehicleAlerts(x), maintenance: m.filter(r => String(r.vehicle_id) === String(x.id)),
+    incidents: where === 'all' ? inc.filter(i => String(i.vehicle_id) === String(x.id)).map(i => ({ ...i, files: files.filter(f => String(f.owner_id) === String(i.id)) })) : undefined }));
 }
 
 async function projectsFor(start, end, employeeId) {
@@ -115,6 +142,17 @@ export default async function handler(req, res) {
     if (!manager && !emp) return json(res, 401, { error: 'Login required.' });
     const file = idOf(u.searchParams.get('file'));
     if (req.method === 'GET' && file) return sendPdf(res, file);
+    const att = idOf(u.searchParams.get('attachment'));
+    if (req.method === 'GET' && att) {
+      const a = (await sql`SELECT * FROM attachments WHERE id=${att}`)[0];
+      if (!a) return json(res, 404, { error: 'Not found.' });
+      if (!manager) {
+        const allowed = a.owner_type === 'project' && (await sql`SELECT 1 FROM project_employees WHERE project_id=${a.owner_id} AND employee_id=${emp.id}`).length;
+        if (!allowed) return json(res, 403, { error: 'Not allowed.' });
+      }
+      const parts = await sql`SELECT data FROM attachment_chunks WHERE attachment_id=${att} ORDER BY idx`;
+      return sendBytes(res, parts.map(p => p.data).join(''), a.mime, a.filename);
+    }
     const area = u.searchParams.get('area') || b.area;
     const range = () => { const s = day(u.searchParams.get('start')) || '0000-01-01', e = day(u.searchParams.get('end')) || '9999-12-31'; return [s, e]; };
 
@@ -133,6 +171,10 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       if (area === 'resources') return json(res, 200, { resources: await listResources() });
       if (area === 'vehicles') return json(res, 200, { vehicles: await vehiclesFor('all') });
+      if (area === 'vehicle_alerts') {
+        const v = await sql`SELECT id,year,make,model,plate,reg_expires,insp_expires FROM vehicles WHERE active=1`;
+        return json(res, 200, { alerts: v.flatMap(x => vehicleAlerts(x).map(a => ({ ...a, vehicle_id: x.id, vehicle: [x.year, x.make, x.model].filter(Boolean).join(' '), plate: x.plate }))) });
+      }
       if (area === 'projects') { const [s, e] = range(); return json(res, 200, { projects: await projectsFor(s, e, null) }); }
       return json(res, 400, { error: 'Unknown area.' });
     }
@@ -179,8 +221,16 @@ export default async function handler(req, res) {
       if (make === null || model === null || vin === null || plate === null || notes === null) return json(res, 400, { error: 'One of the fields is too long.' });
       if (vin && !/^[A-HJ-NPR-Z0-9]{11,17}$/.test(vin)) return json(res, 400, { error: 'The VIN should be 17 letters and numbers (no I, O or Q).' });
       const empId = b.employeeId ? idOf(b.employeeId) : null;
-      if (id) await sql`UPDATE vehicles SET year=${year},make=${make},model=${model},vin=${vin || null},plate=${plate || null},employee_id=${empId},notes=${notes || null},updated_at=${now} WHERE id=${id}`;
-      else await sql`INSERT INTO vehicles(year,make,model,vin,plate,employee_id,notes,active,created_at,updated_at) VALUES(${year},${make},${model},${vin || null},${plate || null},${empId},${notes || null},1,${now},${now})`;
+      const odo = b.odometerPurchase === '' || b.odometerPurchase == null ? null : Number(b.odometerPurchase);
+      if (odo != null && (!Number.isInteger(odo) || odo < 0 || odo > 2000000)) return json(res, 400, { error: 'The odometer at purchase must be a whole number of miles.' });
+      const regDate = b.regDate ? day(b.regDate) : null, regExp = b.regExpires ? day(b.regExpires) : null;
+      const inspMonth = b.inspMonth ? month(b.inspMonth) : null, inspExp = b.inspExpires ? month(b.inspExpires) : null;
+      if ((b.regDate && !regDate) || (b.regExpires && !regExp)) return json(res, 400, { error: 'Enter the registration dates as full dates.' });
+      if ((b.inspMonth && !inspMonth) || (b.inspExpires && !inspExp)) return json(res, 400, { error: 'Enter the inspection dates as month and year.' });
+      if (regDate && regExp && regExp < regDate) return json(res, 400, { error: 'The registration expires before its date. Check the dates.' });
+      if (inspMonth && inspExp && inspExp < inspMonth) return json(res, 400, { error: 'The inspection expires before its date. Check the dates.' });
+      if (id) await sql`UPDATE vehicles SET year=${year},make=${make},model=${model},vin=${vin || null},plate=${plate || null},employee_id=${empId},notes=${notes || null},odometer_purchase=${odo},reg_date=${regDate},reg_expires=${regExp},insp_month=${inspMonth},insp_expires=${inspExp},updated_at=${now} WHERE id=${id}`;
+      else await sql`INSERT INTO vehicles(year,make,model,vin,plate,employee_id,notes,odometer_purchase,reg_date,reg_expires,insp_month,insp_expires,active,created_at,updated_at) VALUES(${year},${make},${model},${vin || null},${plate || null},${empId},${notes || null},${odo},${regDate},${regExp},${inspMonth},${inspExp},1,${now},${now})`;
       await audit('manager', manager.id, id ? 'vehicle_updated' : 'vehicle_added', { id, make, model, employee_id: empId });
       return json(res, 200, { ok: true });
     }
@@ -198,6 +248,33 @@ export default async function handler(req, res) {
       if (cost != null && (!Number.isFinite(cost) || cost < 0)) return json(res, 400, { error: 'Cost must be 0 or more.' });
       await sql`INSERT INTO vehicle_maintenance(vehicle_id,date,type,mileage,cost,notes,created_at) VALUES(${vid},${d},${type},${mileage},${cost},${notes || null},${now})`;
       await audit('manager', manager.id, 'vehicle_maintenance_added', { vehicle_id: vid, date: d, type });
+      return json(res, 200, { ok: true });
+    }
+    if (b.action === 'incident_add') {
+      const vid = idOf(b.vehicleId), d = day(b.date), notes = txt(String(b.notes || '').replace(/\s+/g, ' '), 2000);
+      if (!vid || !d) return json(res, 400, { error: 'Choose the date of the accident or incident.' });
+      if (!notes) return json(res, 400, { error: notes === null ? 'The notes must be 2,000 characters or fewer.' : 'Write what happened.' });
+      const files = Array.isArray(b.files) ? b.files.slice(0, 11) : [];
+      if (files.length > 10) return json(res, 400, { error: 'Up to 10 photos or files per entry.' });
+      const ups = [];
+      for (const f of files) { const up = readUpload(f.data, 6 * 1048576); if (up.error) return json(res, 400, { error: `${String(f.name || 'File')}: ${up.error}` }); ups.push([txt(f.name, 150) || 'file', up]); }
+      if (!(await sql`SELECT 1 FROM vehicles WHERE id=${vid}`).length) return json(res, 404, { error: 'Vehicle not found.' });
+      const iid = Number((await sql`INSERT INTO vehicle_incidents(vehicle_id,date,notes,created_at) VALUES(${vid},${d},${notes},${now}) RETURNING id`)[0].id);
+      for (const [name, up] of ups) await saveAttachment('incident', iid, name, up);
+      await audit('manager', manager.id, 'vehicle_incident_added', { vehicle_id: vid, id: iid, files: ups.length });
+      return json(res, 200, { ok: true, id: iid });
+    }
+    if (b.action === 'incident_file_add') {
+      const iid = idOf(b.id); if (!iid || !(await sql`SELECT 1 FROM vehicle_incidents WHERE id=${iid}`).length) return json(res, 404, { error: 'Entry not found.' });
+      const up = readUpload(b.data, 6 * 1048576); if (up.error) return json(res, 400, { error: up.error });
+      await saveAttachment('incident', iid, txt(b.name, 150) || 'file', up);
+      return json(res, 200, { ok: true });
+    }
+    if (b.action === 'incident_delete') {
+      const iid = idOf(b.id); if (!iid) return json(res, 400, { error: 'Choose an entry.' });
+      await deleteAttachments('incident', iid);
+      await sql`DELETE FROM vehicle_incidents WHERE id=${iid}`;
+      await audit('manager', manager.id, 'vehicle_incident_deleted', { id: iid });
       return json(res, 200, { ok: true });
     }
     if (b.action === 'maintenance_delete') {
