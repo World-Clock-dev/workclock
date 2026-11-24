@@ -4,10 +4,11 @@ import { effectiveShiftPay } from './_time.js';
 /* Employee performance, 100% from four rules (per month; a year is the
    average of the months worked):
    1. Manager evaluation: entered by the manager, 0-30%.
+   5. Absent without notice (entered by the manager): 0 = 20%, 1 or more = 0%.
    2. On-time clock-in: first clock-in of the day at 8:10 am or earlier
-      (company time zone; arriving early counts as on time). Share of days on time x 20%.
+      (company time zone; arriving early counts as on time). Share of days on time x 10%.
    3. Weekly hours: a week with 38.5 or more paid hours (over 40 too) meets the target.
-      Share of weeks worked that meet it x 20%. Weeks belong to the month
+      Share of weeks worked that meet it x 10%. Weeks belong to the month
       their Monday falls in.
    4. Customer touch-ups / complaints: entered by the manager.
       0-1 = 30%, 2 = 10%, 3 or more = 0%.
@@ -20,16 +21,24 @@ const SCHEMA = [
      employee_id INTEGER NOT NULL REFERENCES employees(id),
      month TEXT NOT NULL,
      evaluation REAL,
+     absences INTEGER,
      touchups INTEGER,
      note TEXT,
      updated_at TEXT NOT NULL,
      PRIMARY KEY (employee_id, month))`
 ];
 let ready = false;
-async function ensure() { if (ready) return; await sqlBatch(SCHEMA.map(s => [s])); ready = true; }
+async function ensure() {
+  if (ready) return;
+  await sqlBatch(SCHEMA.map(s => [s]));
+  const cols = (await sql`SELECT name FROM pragma_table_info('performance_inputs')`).map(c => c.name);
+  if (!cols.includes('absences')) await sql`ALTER TABLE performance_inputs ADD COLUMN absences INTEGER`;
+  ready = true;
+}
 
-export const RULES = { evaluationMax: 30, onTimeMax: 20, hoursMax: 20, touchupMax: 30, onTimeTo: '08:10', weeklyHours: 38.5, perfect: 85 };
+export const RULES = { evaluationMax: 30, onTimeMax: 10, hoursMax: 10, touchupMax: 30, absenceMax: 20, onTimeTo: '08:10', weeklyHours: 38.5, perfect: 85 };
 const touchupPoints = n => n == null ? null : n <= 1 ? 30 : n === 2 ? 10 : 0;
+const absencePoints = n => n == null ? null : n === 0 ? 20 : 0;
 
 async function timeZone() {
   const r = (await sql`SELECT value FROM app_settings WHERE key='company_timezone'`)[0];
@@ -53,7 +62,7 @@ async function monthScores(month, onlyId) {
   const shifts = await sql`SELECT s.id,s.employee_id,s.clock_in,s.clock_out,s.clock_out_note,s.manager_review_status,s.manager_custom_paid_hours,
       (SELECT mf.paid_hours FROM manager_force_clockouts mf WHERE mf.shift_id=s.id ORDER BY mf.created_at DESC LIMIT 1) AS manager_force_paid_hours
     FROM shifts s WHERE s.clock_in>=${from} AND s.clock_in<${to} ORDER BY s.clock_in`;
-  const inputs = await sql`SELECT employee_id,evaluation,touchups,note,updated_at FROM performance_inputs WHERE month=${month}`;
+  const inputs = await sql`SELECT employee_id,evaluation,touchups,absences,note,updated_at FROM performance_inputs WHERE month=${month}`;
   const inBy = new Map(inputs.map(i => [String(i.employee_id), i]));
   const toMin = (([h, mm]) => h * 60 + mm)(RULES.onTimeTo.split(':').map(Number));
   const out = [];
@@ -74,18 +83,20 @@ async function monthScores(month, onlyId) {
     const onTimePts = days.length ? onTime / days.length * RULES.onTimeMax : null;
     const hoursPts = weeks.length ? weeksMet / weeks.length * RULES.hoursMax : null;
     const touchPts = touchupPoints(touchups);
+    const absences = inp.absences == null ? null : Number(inp.absences);
+    const absPts = absencePoints(absences);
     const worked = days.length > 0 || weeks.length > 0;
     // Only parts that have a value count; the score is points earned / points possible.
-    const scored = [[evaluation, RULES.evaluationMax], [onTimePts, RULES.onTimeMax], [hoursPts, RULES.hoursMax], [touchPts, RULES.touchupMax]].filter(([v]) => v != null);
+    const scored = [[evaluation, RULES.evaluationMax], [onTimePts, RULES.onTimeMax], [hoursPts, RULES.hoursMax], [touchPts, RULES.touchupMax], [absPts, RULES.absenceMax]].filter(([v]) => v != null);
     const earned = scored.reduce((a, [v]) => a + v, 0), possible = scored.reduce((a, [, m]) => a + m, 0);
     const total = possible ? earned / possible * 100 : null;
     const r1 = v => v == null ? null : Math.round(v * 10) / 10;
     out.push({ employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, month, worked,
       evaluation, touchups, note: inp.note || '', days_worked: days.length, days_on_time: onTime, weeks_worked: weeks.length, weeks_met: weeksMet,
       week_hours: weeks.map(([wk, h]) => ({ week: wk, hours: Math.round(h * 100) / 100 })),
-      points: { evaluation: r1(evaluation), on_time: r1(onTimePts), hours: r1(hoursPts), touchups: touchPts },
-      missing: [evaluation == null && 'evaluation', touchups == null && 'touchups'].filter(Boolean),
-      total: r1(total), earned: r1(earned), possible, final: evaluation != null && touchups != null });
+      points: { evaluation: r1(evaluation), on_time: r1(onTimePts), hours: r1(hoursPts), touchups: touchPts, absences: absPts },
+      missing: [evaluation == null && 'evaluation', touchups == null && 'touchups', absences == null && 'absences'].filter(Boolean), absences,
+      total: r1(total), earned: r1(earned), possible, final: evaluation != null && touchups != null && absences != null });
   }
   return { tz, rules: RULES, employees: out };
 }
@@ -138,9 +149,11 @@ export default async function handler(req, res) {
       if (evaluation != null && (!Number.isFinite(evaluation) || evaluation < 0 || evaluation > 30)) return json(res, 400, { error: 'Manager evaluation must be from 0 to 30.' });
       let touchups = b.touchups === '' || b.touchups == null ? null : Number(b.touchups);
       if (touchups != null && (!Number.isInteger(touchups) || touchups < 0 || touchups > 100)) return json(res, 400, { error: 'Touch-ups must be a whole number, 0 or more.' });
+      let absences = b.absences === '' || b.absences == null ? null : Number(b.absences);
+      if (absences != null && (!Number.isInteger(absences) || absences < 0 || absences > 31)) return json(res, 400, { error: 'Absences must be a whole number, 0 or more.' });
       const note = String(b.note || '').trim().slice(0, 300) || null;
-      await sql`INSERT INTO performance_inputs(employee_id,month,evaluation,touchups,note,updated_at) VALUES(${id},${b.month},${evaluation},${touchups},${note},${nowIso()})
-        ON CONFLICT(employee_id,month) DO UPDATE SET evaluation=excluded.evaluation,touchups=excluded.touchups,note=excluded.note,updated_at=excluded.updated_at`;
+      await sql`INSERT INTO performance_inputs(employee_id,month,evaluation,touchups,absences,note,updated_at) VALUES(${id},${b.month},${evaluation},${touchups},${absences},${note},${nowIso()})
+        ON CONFLICT(employee_id,month) DO UPDATE SET evaluation=excluded.evaluation,touchups=excluded.touchups,absences=excluded.absences,note=excluded.note,updated_at=excluded.updated_at`;
       await audit('manager', manager.id, 'performance_input', { employee_id: id, month: b.month, evaluation, touchups });
       const r = await monthScores(b.month, id);
       return json(res, 200, { ok: true, employee: r.employees[0] });
