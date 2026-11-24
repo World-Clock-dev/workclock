@@ -1034,3 +1034,12 @@ body.mgr .helpItem .helpHead{background:#fff}
 .kindTag.free{background:#dcfce7;color:#166534}.kindTag.paid{background:#e0e7ff;color:#3730a3}
 .uniLimitTable td,.uniLimitTable th{vertical-align:middle}
 .uniLimitIn{width:80px}
+
+.pCrew{display:flex;flex-direction:column;gap:6px}
+.pCrewRow{display:grid;grid-template-columns:minmax(140px,1fr) auto auto;gap:8px;align-items:end;border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px}
+.pCrewRow .pCrewDate{font-size:11px;font-weight:700;color:#64748b;display:flex;flex-direction:column;gap:2px;opacity:.45;pointer-events:none}
+.pCrewRow.on{border-color:#fdba74;background:#fff7ed}.pCrewRow.on .pCrewDate{opacity:1;pointer-events:auto}
+.pCrewRow .pCrewDate input{padding:6px 8px;font-size:13px;min-width:0}
+@media (max-width:520px){.pCrewRow{grid-template-columns:1fr 1fr}.pCrewRow .pEmp{grid-column:1/-1}}
+.crewDays{color:#64748b;font-size:11px}
+.chipX{border:0;background:none;font-weight:900;cursor:pointer;padding:0 2px;color:#991b1b}

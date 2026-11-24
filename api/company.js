@@ -128,10 +128,14 @@ async function vehiclesFor(where) {
 
 async function projectsFor(start, end, employeeId) {
   const rows = employeeId
-    ? await sql`SELECT p.* FROM projects p JOIN project_employees pe ON pe.project_id=p.id WHERE pe.employee_id=${employeeId} AND p.start_date<=${end} AND p.end_date>=${start} ORDER BY p.start_date`
+    // A painter sees a project only on the days they are assigned to it.
+    ? await sql`SELECT p.*,COALESCE(pe.start_date,p.start_date) AS my_start,COALESCE(pe.end_date,p.end_date) AS my_end FROM projects p JOIN project_employees pe ON pe.project_id=p.id
+        WHERE pe.employee_id=${employeeId} AND COALESCE(pe.start_date,p.start_date)<=${end} AND COALESCE(pe.end_date,p.end_date)>=${start} ORDER BY my_start`
     : await sql`SELECT * FROM projects WHERE start_date<=${end} AND end_date>=${start} ORDER BY start_date`;
-  const crew = await sql`SELECT pe.project_id,e.id,e.name FROM project_employees pe JOIN employees e ON e.id=pe.employee_id ORDER BY e.name`;
-  return rows.map(p => ({ ...p, employees: crew.filter(c => String(c.project_id) === String(p.id)).map(c => ({ id: String(c.id), name: c.name })) }));
+  const crew = await sql`SELECT pe.project_id,pe.start_date,pe.end_date,e.id,e.name FROM project_employees pe JOIN employees e ON e.id=pe.employee_id ORDER BY e.name`;
+  const files = await attachmentsFor('project', rows.map(p => Number(p.id)));
+  return rows.map(p => ({ ...p, files: files.filter(f => String(f.owner_id) === String(p.id)),
+    employees: crew.filter(c => String(c.project_id) === String(p.id)).map(c => ({ id: String(c.id), name: c.name, start_date: c.start_date || null, end_date: c.end_date || null })) }));
 }
 
 export default async function handler(req, res) {
@@ -289,16 +293,44 @@ export default async function handler(req, res) {
       if (!name || !address) return json(res, 400, { error: 'Enter the project name and address.' });
       if (!s || !e || e < s) return json(res, 400, { error: 'Choose a start day and a finish day on or after it.' });
       if (notes === null) return json(res, 400, { error: 'Notes are too long.' });
-      const emps = [...new Set((Array.isArray(b.employees) ? b.employees : []).map(idOf).filter(Boolean))];
+      let woUrl = String(b.work_order_url || '').trim();
+      if (woUrl && !/^https?:\/\//i.test(woUrl)) woUrl = 'https://' + woUrl;
+      if (woUrl && (woUrl.length > 500 || !/^https?:\/\/[^\s<>"]+\.[^\s<>"]+$/i.test(woUrl))) return json(res, 400, { error: 'The work order link does not look like a web address.' });
+      // Each crew member works from-to inside the project; empty dates = the whole project.
+      const crew = new Map();
+      for (const x of Array.isArray(b.employees) ? b.employees : []) {
+        const eid = idOf(typeof x === 'object' && x ? x.id : x); if (!eid) continue;
+        const from = x && x.start_date ? day(x.start_date) : null, to = x && x.end_date ? day(x.end_date) : null;
+        if ((x && x.start_date && !from) || (x && x.end_date && !to)) return json(res, 400, { error: 'Check the dates of the people assigned.' });
+        const f = from && from !== s ? from : null, t = to && to !== e ? to : null;
+        if ((f || s) < s || (t || e) > e || (f || s) > (t || e)) return json(res, 400, { error: 'Each person’s dates must be inside the project dates, and the first day on or before the last day.' });
+        crew.set(eid, [f, t]);
+      }
       let pid = id;
-      if (pid) await sql`UPDATE projects SET name=${name},address=${address},start_date=${s},end_date=${e},notes=${notes || null},updated_at=${now} WHERE id=${pid}`;
-      else pid = Number((await sql`INSERT INTO projects(name,address,start_date,end_date,notes,created_at,updated_at) VALUES(${name},${address},${s},${e},${notes || null},${now},${now}) RETURNING id`)[0].id);
-      await sqlBatch([['DELETE FROM project_employees WHERE project_id=?', pid], ...emps.map(x => ['INSERT OR IGNORE INTO project_employees(project_id,employee_id) VALUES(?,?)', pid, x])]);
+      if (pid) await sql`UPDATE projects SET name=${name},address=${address},start_date=${s},end_date=${e},notes=${notes || null},work_order_url=${woUrl || null},updated_at=${now} WHERE id=${pid}`;
+      else pid = Number((await sql`INSERT INTO projects(name,address,start_date,end_date,notes,work_order_url,created_at,updated_at) VALUES(${name},${address},${s},${e},${notes || null},${woUrl || null},${now},${now}) RETURNING id`)[0].id);
+      await sqlBatch([['DELETE FROM project_employees WHERE project_id=?', pid], ...[...crew].map(([x, [f, t]]) => ['INSERT OR IGNORE INTO project_employees(project_id,employee_id,start_date,end_date) VALUES(?,?,?,?)', pid, x, f, t])]);
+      const emps = [...crew.keys()];
       await audit('manager', manager.id, id ? 'project_updated' : 'project_added', { id: pid, name, employees: emps.length });
       return json(res, 200, { ok: true, id: pid });
     }
+    if (b.action === 'project_file_add') {
+      const pid = idOf(b.id); if (!pid || !(await sql`SELECT 1 FROM projects WHERE id=${pid}`).length) return json(res, 404, { error: 'Project not found.' });
+      if ((await sql`SELECT count(*) AS n FROM attachments WHERE owner_type='project' AND owner_id=${pid}`)[0].n >= 10) return json(res, 400, { error: 'Up to 10 files per project.' });
+      const up = readUpload(b.data); if (up.error) return json(res, 400, { error: up.error });
+      const fid = await saveAttachment('project', pid, txt(b.name, 150) || 'work-order', up);
+      await audit('manager', manager.id, 'project_file_added', { project_id: pid, id: fid });
+      return json(res, 200, { ok: true, id: fid });
+    }
+    if (b.action === 'attachment_delete') {
+      const aid = idOf(b.id); if (!aid) return json(res, 400, { error: 'Choose a file.' });
+      await sqlBatch([['DELETE FROM attachment_chunks WHERE attachment_id=?', aid], ['DELETE FROM attachments WHERE id=?', aid]]);
+      await audit('manager', manager.id, 'attachment_deleted', { id: aid });
+      return json(res, 200, { ok: true });
+    }
     if (b.action === 'project_delete') {
       const id = idOf(b.id); if (!id) return json(res, 400, { error: 'Choose a project.' });
+      await deleteAttachments('project', id);
       await sqlBatch([['DELETE FROM project_employees WHERE project_id=?', id], ['DELETE FROM projects WHERE id=?', id]]);
       await audit('manager', manager.id, 'project_deleted', { id });
       return json(res, 200, { ok: true });
