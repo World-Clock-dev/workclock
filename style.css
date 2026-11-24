@@ -1026,3 +1026,11 @@ body.mgr .helpItem .helpHead{background:#fff}
 .incFiles{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .incFiles img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0}
 .fileChip{display:inline-block;background:#f1f5f9;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;color:#0f172a;text-decoration:none}
+
+.uniKindTabs{margin:8px 0 4px;display:flex;width:max-content;max-width:100%}
+.uniKindHint{color:#475569;margin:4px 0 10px}
+.uniPriceTag.none{color:#b91c1c}
+.kindTag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:6px}
+.kindTag.free{background:#dcfce7;color:#166534}.kindTag.paid{background:#e0e7ff;color:#3730a3}
+.uniLimitTable td,.uniLimitTable th{vertical-align:middle}
+.uniLimitIn{width:80px}

@@ -135,6 +135,8 @@ async function ensureTables() {
     if (!c.includes('employee_seen')) mig.push([`ALTER TABLE ${t} ADD COLUMN employee_seen INTEGER NOT NULL DEFAULT 1`]);
     if (!c.includes('approved_at')) mig.push([`ALTER TABLE ${t} ADD COLUMN approved_at TEXT`]);
     if (t === 'uniform_requests' && !c.includes('free')) mig.push(['ALTER TABLE uniform_requests ADD COLUMN free INTEGER NOT NULL DEFAULT 0']);
+    // kind: what the painter asked for, 'free' or 'paid' (NULL on requests sent before this choice existed).
+    if (t === 'uniform_requests' && !c.includes('kind')) mig.push(['ALTER TABLE uniform_requests ADD COLUMN kind TEXT']);
   }
   if (mig.length) await sqlBatch(mig);
   // A deleted item's name can be used again.
@@ -192,6 +194,37 @@ async function uniformPrices() {
   const rows = await sql`SELECT key,value FROM app_settings WHERE key LIKE 'uniform_price_%'`;
   const map = Object.fromEntries(rows.map(r => [r.key.slice('uniform_price_'.length), Number(r.value)]));
   return Object.fromEntries(UNIFORM_ITEMS.map(k => [k, Number.isFinite(map[k]) ? map[k] : DEFAULT_UNIFORM_PRICE]));
+}
+/* Free uniforms: each painter may get up to N of each item free per month or per year
+   (app_settings uniform_free_limit_<item>, uniform_free_period). Default 1 per year. */
+async function freeRules() {
+  const rows = await sql`SELECT key,value FROM app_settings WHERE key LIKE 'uniform_free_%'`;
+  const m = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  const period = m.uniform_free_period === 'month' ? 'month' : 'year';
+  const limits = Object.fromEntries(UNIFORM_ITEMS.map(k => { const v = Number(m['uniform_free_limit_' + k]); return [k, Number.isInteger(v) && v >= 0 ? v : 1]; }));
+  return { period, limits };
+}
+function periodStart(period, d = new Date()) {
+  return new Date(Date.UTC(d.getUTCFullYear(), period === 'month' ? d.getUTCMonth() : 0, 1)).toISOString();
+}
+// Free pieces of each item this painter has already asked for or received in the current period.
+async function freeUsed(employeeId, period, exceptRequest = 0) {
+  const rows = await sql`SELECT l.item,sum(l.qty) AS n FROM uniform_request_lines l JOIN uniform_requests r ON r.id=l.request_id
+    WHERE r.employee_id=${employeeId} AND r.id<>${exceptRequest} AND r.created_at>=${periodStart(period)}
+      AND ((r.status IN ('pending','approved') AND r.kind='free') OR (r.status='given' AND r.free=1)) GROUP BY l.item`;
+  const out = Object.fromEntries(UNIFORM_ITEMS.map(k => [k, 0]));
+  for (const r of rows) out[r.item] = Number(r.n || 0);
+  return out;
+}
+const UNI_LABEL = { tshirt_half: 'T-shirt, half sleeve', tshirt_full: 'T-shirt, full sleeve', trousers: 'Trousers', jacket: 'Jacket' };
+async function freeLimitError(employeeId, lines, exceptRequest = 0) {
+  const { period, limits } = await freeRules(), used = await freeUsed(employeeId, period, exceptRequest), want = {};
+  for (const l of lines) want[l.item] = (want[l.item] || 0) + Number(l.qty);
+  for (const [item, q] of Object.entries(want)) {
+    const left = Math.max(0, limits[item] - used[item]);
+    if (q > left) return { error: `Free limit reached for ${UNI_LABEL[item] || item}: ${left} free left this ${period}. Send it as a paid request instead.`, code: 'UNIFORM_FREE_LIMIT', item, left };
+  }
+  return null;
 }
 const money = v => Math.round(Number(v) * 100) / 100;
 const lineAmount = (l, prices) => money(Number(l.qty) * (l.unit_price != null ? Number(l.unit_price) : prices[l.item] ?? DEFAULT_UNIFORM_PRICE));
@@ -264,8 +297,10 @@ async function employeeSide(req, res, emp) {
       else await sql`UPDATE supply_requests SET employee_seen=1 WHERE employee_id=${emp.id} AND employee_seen=0`;
     }
     if (u.searchParams.get('uniforms')) {
-      const ur = await sql`SELECT id,status,note,manager_note,created_at,decided_at,approved_at,free FROM uniform_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
-      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur) });
+      const ur = await sql`SELECT id,status,kind,note,manager_note,created_at,decided_at,approved_at,free FROM uniform_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
+      const rules = await freeRules(), used = await freeUsed(emp.id, rules.period);
+      const freeLeft = Object.fromEntries(UNIFORM_ITEMS.map(k => [k, Math.max(0, rules.limits[k] - used[k])]));
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), freePeriod: rules.period, freeLimits: rules.limits, freeLeft, requests: await withUniformLines(ur) });
     }
     const items = await sql`SELECT id,name,category,unit FROM supply_items WHERE active=1 AND deleted_at IS NULL ORDER BY category,name`;
     const requests = await sql`SELECT id,status,note,manager_note,created_at,decided_at,approved_at FROM supply_requests WHERE employee_id=${emp.id} ORDER BY created_at DESC LIMIT 30`;
@@ -318,10 +353,13 @@ async function employeeSide(req, res, emp) {
       if (!UNIFORM_ITEMS.includes(l.item) || !UNIFORM_SIZES.includes(l.size) || !qty) return json(res, 400, { error: 'Choose an item, a size and a quantity from 1 to 20.', code: 'UNIFORM_BAD' });
       clean.push([l.item, l.size, qty]);
     }
+    const kind = b.kind === 'free' ? 'free' : b.kind === 'paid' ? 'paid' : null;
+    if (!kind) return json(res, 400, { error: 'Choose Free or Paid.', code: 'UNIFORM_KIND' });
     const open = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND status='pending'`;
     if (open[0].n >= 3) return json(res, 400, { error: 'You already have uniform requests waiting.', code: 'UNIFORM_TOO_MANY' });
+    if (kind === 'free') { const lim = await freeLimitError(emp.id, clean.map(([item, size, qty]) => ({ item, qty }))); if (lim) return json(res, 400, lim); }
     const prices = await uniformPrices();
-    const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,note,created_at) VALUES(${emp.id},'pending',${note || null},${nowIso()}) RETURNING id`)[0].id);
+    const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,kind,note,created_at) VALUES(${emp.id},'pending',${kind},${note || null},${nowIso()}) RETURNING id`)[0].id);
     await sqlBatch(clean.map(([item, size, qty]) => ['INSERT INTO uniform_request_lines(request_id,item,size,qty,unit_price) VALUES(?,?,?,?,?)', rid, item, size, qty, prices[item]]));
     await audit('employee', emp.id, 'uniform_requested', { request_id: rid });
     return json(res, 200, { ok: true, id: rid });
@@ -361,7 +399,7 @@ async function managerSide(req, res, manager) {
                 z && !Number.isNaN(Date.parse(z)) ? new Date(z).toISOString() : new Date(Date.now() + 86400000).toISOString()];
       };
       const [rs, re] = rg('req'), [is, ie] = rg('inv'), [fs, fe] = rg('free'), [bs, be] = rg('buy');
-      const ur = await sql`SELECT r.id,r.status,r.free,r.note,r.manager_note,r.created_at,r.decided_at,r.approved_at,e.name AS employee_name,e.title AS employee_title
+      const ur = await sql`SELECT r.id,r.status,r.free,r.kind,r.employee_id,r.note,r.manager_note,r.created_at,r.decided_at,r.approved_at,e.name AS employee_name,e.title AS employee_title
         FROM uniform_requests r JOIN employees e ON e.id=r.employee_id
         WHERE r.status IN ('pending','approved') OR (r.created_at>=${rs} AND r.created_at<${re})
         ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, r.created_at DESC LIMIT 500`;
@@ -378,7 +416,8 @@ async function managerSide(req, res, manager) {
       ends.forEach(r => { cell(r.item, r.size).end = r.qty_after; });
       moves.forEach(r => { const c = cell(r.item, r.size); c.added = r.added || 0; c.removed = r.removed || 0; });
       const ulog = await sql`SELECT l.id,l.item,l.size,l.change,l.qty_after,l.reason,l.created_at,e.name AS employee_name FROM uniform_stock_log l LEFT JOIN employees e ON e.id=l.employee_id WHERE l.created_at>=${is} AND l.created_at<${ie} ORDER BY l.created_at DESC,l.id DESC LIMIT 500`;
-      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), requests: await withUniformLines(ur),
+      const rules = await freeRules();
+      return json(res, 200, { items: UNIFORM_ITEMS, sizes: UNIFORM_SIZES, prices: await uniformPrices(), freePeriod: rules.period, freeLimits: rules.limits, requests: await withUniformLines(ur),
         inventory: inv, inventoryLog: ulog, freeGiven: await withUniformLines(await del(fs, fe, 1)), bought: await withUniformLines(await del(bs, be, 0)) });
     }
     if (u.searchParams.get('deductions')) {
@@ -494,6 +533,21 @@ async function managerSide(req, res, manager) {
     await audit('manager', manager.id, 'uniform_prices_updated', { prices });
     return json(res, 200, { ok: true, prices: await uniformPrices() });
   }
+  if (req.method === 'POST' && b.action === 'uniform_free_limits') {
+    const lim = b.limits || {}, now = nowIso(), stmts = [];
+    const period = b.period === 'month' ? 'month' : b.period === 'year' ? 'year' : null;
+    if (!period) return json(res, 400, { error: 'Choose per month or per year.' });
+    for (const k of UNIFORM_ITEMS) {
+      if (lim[k] === undefined) continue;
+      const v = wholeNumber(lim[k], 0, 50); if (v === null) return json(res, 400, { error: 'Free limits must be whole numbers from 0 to 50.' });
+      stmts.push(['INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', 'uniform_free_limit_' + k, String(v), now]);
+    }
+    stmts.push(['INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at', 'uniform_free_period', period, now]);
+    await sqlBatch(stmts);
+    await audit('manager', manager.id, 'uniform_free_limits_updated', { period, limits: lim });
+    const rules = await freeRules();
+    return json(res, 200, { ok: true, freePeriod: rules.period, freeLimits: rules.limits });
+  }
   if (req.method === 'POST' && b.action === 'uniform_stock') {
     // Set the counted amount for one item and size (or add a delivery with add:true).
     if (!UNIFORM_ITEMS.includes(b.item) || !UNIFORM_SIZES.includes(b.size)) return json(res, 400, { error: 'Choose an item and a size.' });
@@ -515,8 +569,9 @@ async function managerSide(req, res, manager) {
     const lines = (Array.isArray(b.lines) ? b.lines : []).map(l => ({ item: l.item, size: l.size, qty: wholeNumber(l.qty, 1, 20) }));
     if (!lines.length || lines.some(l => !UNIFORM_ITEMS.includes(l.item) || !UNIFORM_SIZES.includes(l.size) || !l.qty)) return json(res, 400, { error: 'Choose an item, a size and a quantity from 1 to 20.' });
     const note = cleanText(b.note, 300); if (note === null) return json(res, 400, { error: 'The note must be 300 characters or fewer.' });
+    if (b.free && !b.overLimit) { const lim = await freeLimitError(empId, lines); if (lim) return json(res, 400, { ...lim, error: lim.error.replace('Send it as a paid request instead.', 'Give it anyway, or record it as bought.') }); }
     const now = nowIso(), prices = await uniformPrices();
-    const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,note,created_at,approved_at) VALUES(${empId},'approved',${'Handed out by manager'},${now},${now}) RETURNING id`)[0].id);
+    const rid = Number((await sql`INSERT INTO uniform_requests(employee_id,status,kind,note,created_at,approved_at) VALUES(${empId},'approved',${b.free ? 'free' : 'paid'},${'Handed out by manager'},${now},${now}) RETURNING id`)[0].id);
     await sqlBatch(lines.map(l => ['INSERT INTO uniform_request_lines(request_id,item,size,qty,unit_price) VALUES(?,?,?,?,?)', rid, l.item, l.size, l.qty, prices[l.item]]));
     const saved = (await uniformLines([rid])).get(rid) || [];
     const out = await deliverUniforms(rid, empId, saved, !!b.free, note, manager.id, now);
@@ -540,9 +595,11 @@ async function managerSide(req, res, manager) {
     const request = (await sql`SELECT * FROM uniform_requests WHERE id=${id}`)[0];
     if (!request || !['pending', 'approved'].includes(request.status)) return json(res, 400, { error: 'This request has already been handled.' });
     const lines = (await uniformLines([id])).get(id) || [];
-    const out = await deliverUniforms(id, request.employee_id, lines, !!b.free, note, manager.id, now);
+    // The painter's choice decides free or paid; older requests without a choice use the manager's button.
+    const free = request.kind === 'free' ? true : request.kind === 'paid' ? false : !!b.free;
+    const out = await deliverUniforms(id, request.employee_id, lines, free, note, manager.id, now);
     if (out) return json(res, 400, out);
-    await audit('manager', manager.id, 'uniform_request_given', { request_id: id, free: !!b.free });
+    await audit('manager', manager.id, 'uniform_request_given', { request_id: id, free });
     return json(res, 200, { ok: true });
   }
   if (req.method === 'POST' && b.action === 'decide') {
