@@ -79,7 +79,21 @@ export default async function handler(req, res) {
       return json(res,200,{employee:rows[0]});
     }
     if (req.method === 'DELETE') {
-      const id=validId(new URL(req.url,'https://workclock.invalid').searchParams.get('id')); if(!id)return json(res,400,{error:'Employee id required.'});
+      const du=new URL(req.url,'https://workclock.invalid');
+      const id=validId(du.searchParams.get('id')); if(!id)return json(res,400,{error:'Employee id required.'});
+      if(du.searchParams.get('hard')==='1'){
+        // Delete for good only when the person has no work history; otherwise
+        // they must be marked Terminated so payroll and records stay intact.
+        const has=async t=>{try{return (await sql([`SELECT 1 AS x FROM ${t} WHERE employee_id=`,' LIMIT 1'],id)).length>0;}catch{return false;}};
+        for(const t of ['shifts','supply_requests','uniform_requests','vacation_used','vacation_bank'])
+          if(await has(t))return json(res,400,{error:'This employee has work history (shifts, requests or vacation), so they cannot be deleted. Mark them Terminated instead: they can no longer sign in and their records are kept.',code:'HAS_HISTORY'});
+        const emp=(await sql`SELECT name FROM employees WHERE id=${id}`)[0];if(!emp)return json(res,404,{error:'Employee not found.'});
+        for(const t of ['employee_sessions','employee_files','employee_records','project_employees','performance_inputs','pin_reset_requests']){try{await sql([`DELETE FROM ${t} WHERE employee_id=`,''],id);}catch{}}
+        try{await sql`UPDATE vehicles SET employee_id=NULL WHERE employee_id=${id}`;}catch{}
+        await sql`DELETE FROM employees WHERE id=${id}`;
+        await audit('manager',manager.id,'employee_deleted',{employee_id:id,name:emp.name});
+        return json(res,200,{ok:true,deleted:true});
+      }
       const rows=await sql`UPDATE employees SET active=0,employment_status='terminated',updated_at=${nowIso()} WHERE id=${id} AND active=1 RETURNING id,name`;
       if(!rows.length)return json(res,404,{error:'Employee not found.'});
       await sql`DELETE FROM employee_sessions WHERE employee_id=${id}`;

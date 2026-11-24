@@ -427,7 +427,7 @@
   const reasonNeedsReview = r => ['Project completed','Client request','Manager approval'].includes(String(r||''));
 
   let empCache=null, employeeIdentity=null, projectMinimum=8, employeeMap=null, employeeMarkers=[];
-  function showEmployeeLogin(){employeeIdentity=null;empCache=null;clearInterval(empPollTimer);empCountsKnown=null;empCounts.supplies=0;empCounts.uniforms=0;if($('empBurgerDot'))setEmpCounts();if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
+  function showEmployeeLogin(){employeeIdentity=null;empCache=null;{const el=$('empSectionName');if(el){el.dataset.i18n='brandSub';el.textContent=t('brandSub');}}clearInterval(empPollTimer);empCountsKnown=null;empCounts.supplies=0;empCounts.uniforms=0;if($('empBurgerDot'))setEmpCounts();if($('empBurger')){$('empBurger').classList.add('hide');setEmpDrawer(false);}$('employeeApp').classList.add('hide');$('employeeLogin').classList.remove('hide');$('employeeLoginError').textContent='';}
   function showEmployeeApp(emp){employeeIdentity=emp;$('employeeLogin').classList.add('hide');$('employeeApp').classList.remove('hide');$('employeeNameDisplay').textContent=emp.name||'—';$('employeeTitleDisplay').textContent=emp.title||'';$('employeeRateDisplay').textContent=`$${Number(emp.hourly_wage||0).toFixed(2)}${t('perHour')}`;setEmpWeek($('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),false);loadEmployee();$('empBurger').classList.remove('hide');$('empDrawerName').textContent=emp.name||'';startEmpPoll();if(empPage()==='supplies')showEmpPage();else{showEmpPage();if(!$('empSupBody').classList.contains('hide'))loadEmpSupplies();}}
   // Fills the ring on the live shift card toward a full 8-hour day.
   function updateShiftRing(h){
@@ -873,6 +873,7 @@
     if(managerMode||!employeeIdentity)return;
     const pg=empPage();
     document.querySelectorAll('#employeeApp [data-epage]').forEach(el=>el.classList.toggle('pageOff',el.dataset.epage!==pg));
+    {const k={clock:'navClock',supplies:'navSupplies',uniforms:'navUniforms',vacation:'navVacation',performance:'navPerf',projects:'navProj',vehicle:'navVeh',resources:'navRes',info:'navInfo',help:'navHelp'}[pg];const el=$('empSectionName');if(el&&k){el.dataset.i18n=k;el.textContent=t(k);}}
     document.querySelectorAll('[data-eroute]').forEach(a=>{const on=a.dataset.eroute===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // On its own page the supplies list is always open.
     $('toggleEmpSup').classList.toggle('hide',pg==='supplies');
@@ -948,6 +949,9 @@
     $('epStatusWrap').classList.toggle('hide',isNew);$('epStatus').value=p?statusOfP(p):'active';
     $('epPin').value='';$('epPin').placeholder=isNew?'Required':'Blank = keep current PIN';$('epPinLabel').textContent=isNew?'4-digit PIN':'New 4-digit PIN';
     $('empPanelMsg').textContent='';$('empPanelSave').textContent=isNew?'Add employee':'Save changes';
+    $('empPanelDelete').classList.toggle('hide',isNew);
+    $('epStart').value='';$('epEnd').value='';$('epEndReason').value='';
+    if(!isNew)api(`/api/records?id=${p.id}`).then(j=>{const r=j.record||{};$('epStart').value=r.start_date||'';$('epEnd').value=r.termination_date||'';$('epEndReason').value=r.termination_reason||'';}).catch(()=>{});
     $('empPanel').classList.remove('hide');(isNew?$('epName'):$('epTitle')).focus();
   }
   function closeEmpPanel(){$('empPanel').classList.add('hide');}
@@ -959,7 +963,8 @@
     if((isNew||pin)&&!/^\d{4}$/.test(pin))return msg.textContent='The PIN must be exactly 4 digits.';
     msg.textContent='Saving…';
     try{
-      if(isNew){await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});toast(`${name} added.`);}
+      const dates={start_date:$('epStart').value,termination_date:$('epEnd').value,termination_reason:$('epEndReason').value};
+      if(isNew){const j=await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});if(dates.start_date||dates.termination_date)await api('/api/records',{method:'PATCH',body:JSON.stringify({employeeId:Number(j.employee.id),...dates})});toast(`${name} added.`);}
       else{
         const p=managerPeople.find(x=>String(x.id)===String(id));
         await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),wage,title,email})});
@@ -968,10 +973,17 @@
           await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});
         }
         if(pin)await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),pin})});
+        await api('/api/records',{method:'PATCH',body:JSON.stringify({employeeId:Number(id),...dates})});
         toast(pin?'Saved. The new PIN is active; they must sign in again.':'Employee saved.');
       }
-      closeEmpPanel();await loadPeople();await mgrRender();
+      closeEmpPanel();await loadPeople();await mgrRender();if(currentMgrPage()==='employees')loadRecords();
     }catch(e){msg.textContent=displayMessage(e.payload||e.message);}
+  }
+  async function deleteEmpPanel(){
+    const id=$('empPanel').dataset.id,p=managerPeople.find(x=>String(x.id)===String(id));if(!p)return;
+    if(!confirm(`Delete ${p.name} for good?\n\nThis only works for someone with no work history. Anyone who has worked should be marked Terminated instead, so their records are kept.`))return;
+    try{await api(`/api/employees?id=${encodeURIComponent(id)}&hard=1`,{method:'DELETE'});closeEmpPanel();toast(`${p.name} deleted.`);await loadPeople();await mgrRender();loadRecords();}
+    catch(e){$('empPanelMsg').textContent=displayMessage(e.payload||e.message);}
   }
   const loc=(a,b,label='View')=>a==null?'—':`<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q=${encodeURIComponent(a+','+b)}">${label}</a>`;
   const statusLabel=s=>({pending:t('stPending'),approved_full:t('stFull'),approved_actual:t('stActual'),approved_custom:t('stCustom'),not_required:'—'}[s]||'—');
@@ -1518,7 +1530,7 @@
       const card=$(btn||id).closest('section.card');if(card){card.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');}
     };};
     const weekly=()=>$('weeklyRows');
-    go('empCount','toggleEmployees','employeesBody');
+    {const st=$('empCount').closest('.stat');st.classList.add('tileLink');st.onclick=()=>{location.hash='#/employees';};}
     ['mHours','payroll'].forEach(id=>{const el=$(id);el.closest('.stat').classList.add('tileLink');el.closest('.stat').onclick=()=>{const c=weekly().closest('section.card');c.scrollIntoView({behavior:calmMotion()?'auto':'smooth',block:'start'});c.classList.remove('flash');void c.offsetWidth;c.classList.add('flash');};});
     go('rejected','toggleRejected','rejectedBody');
     go('liveClockIns','toggleShiftDetails','shiftDetailsBody');
@@ -2051,13 +2063,13 @@
     if(pg==='supplies'){loadSupplies();loadUsage();}
     if(pg==='uniforms')loadUniforms();
     if(pg==='vacations')loadVacations();
-    if(pg==='employees')loadRecords();
+    if(pg==='employees'){open('toggleEmployees','employeesBody');renderPeople();loadRecords();}
     if(pg==='performance')loadPerf();
     if(pg==='resources')loadResources();
     if(pg==='vehicles')loadVehicles();
     if(pg==='projects')loadProjects();
     if(pg==='help')renderMgrHelp();
-    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees',resources:'Job Resources',vehicles:'Vehicles',projects:'Projects',help:'Help'})[pg]+' · WorkClock Manager';{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
+    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees',resources:'Job Resources',vehicles:'Vehicles',projects:'Projects',help:'Help'})[pg]+' · WorkClock Manager';if($('mgrSectionName'))$('mgrSectionName').textContent=document.title.split(' · ')[0];{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
   function initMgrNav(){
@@ -2112,6 +2124,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     $('addEmpBtn').onclick=()=>openEmpPanel(null);
     $('empPanelCancel').onclick=closeEmpPanel;
     $('empPanelSave').onclick=saveEmpPanel;
+    $('empPanelDelete').onclick=deleteEmpPanel;
     $('empPanel').onclick=e=>{if(e.target===$('empPanel'))closeEmpPanel();};
     $('epPin').oninput=()=>{$('epPin').value=$('epPin').value.replace(/\D/g,'').slice(0,4);};
     initSupplies();
