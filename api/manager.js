@@ -48,6 +48,18 @@ export default async function handler(req,res){
     const manager=await requireManager(req,res);if(!manager)return;
     const url=new URL(req.url,'https://workclock.invalid');
     // Vacation (kept in this file so the Vercel version stays within 12 functions).
+    if(req.method==='POST'&&(req.body||{}).action==='vacation_adjust'){
+      if(!requireSameOrigin(req,res))return;
+      const b=req.body,id=Number(b.employeeId),hours=Number(b.hours),note=String(b.note||'').trim().slice(0,200);
+      if(!Number.isInteger(id)||id<=0)return json(res,400,{error:'Choose an employee.'});
+      if(!Number.isFinite(hours)||hours===0||Math.abs(hours)>2000)return json(res,400,{error:'Enter the hours to add (for example 8) or to take away (for example -8).'});
+      if(!note)return json(res,400,{error:'Write a short reason for the adjustment.'});
+      const emp=await sql`SELECT id FROM employees WHERE id=${id}`;if(!emp.length)return json(res,404,{error:'Employee not found.'});
+      const day=new Date().toISOString().slice(0,10);
+      await recordVacationUsed(id,Math.round(hours*100)/100,day,note,manager.id,'adjust');
+      await audit('manager',manager.id,'vacation_adjusted',{employee_id:id,hours,note});
+      return json(res,200,{ok:true});
+    }
     if(req.method==='POST'&&(req.body||{}).action==='vacation_used'){
       if(!requireSameOrigin(req,res))return;
       const b=req.body,id=Number(b.employeeId),hours=Number(b.hours),day=String(b.takenOn||'');

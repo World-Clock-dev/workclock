@@ -32,6 +32,9 @@ let ready = false;
 export async function ensureVacationTables() {
   if (ready) return;
   await sqlBatch(SCHEMA.map(s => [s]));
+  // kind: 'taken' = vacation used; 'adjust' = manager correction (+ adds hours, − removes hours).
+  const cols = (await sql`SELECT name FROM pragma_table_info('vacation_used')`).map(c => c.name);
+  if (!cols.includes('kind')) await sql`ALTER TABLE vacation_used ADD COLUMN kind TEXT NOT NULL DEFAULT 'taken'`;
   ready = true;
 }
 
@@ -78,13 +81,14 @@ export async function vacationSummary(startIso, endIso) {
   const employees = await sql`SELECT id,name,title,employment_status FROM employees ORDER BY CASE employment_status WHEN 'active' THEN 0 WHEN 'vacation' THEN 1 ELSE 2 END, name`;
   const shifts = await sql([`SELECT ${SHIFT_COLS} FROM shifts s WHERE s.clock_out IS NOT NULL`]);
   const bank = await sql`SELECT employee_id,year,paid_hours FROM vacation_bank`;
-  const used = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used GROUP BY employee_id`;
-  const usedRange = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE taken_on>=${startIso.slice(0, 10)} AND taken_on<${endIso.slice(0, 10)} GROUP BY employee_id`;
+  const used = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE kind='taken' GROUP BY employee_id`;
+  const adj = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE kind='adjust' GROUP BY employee_id`;
+  const usedRange = await sql`SELECT employee_id,sum(hours) AS hours FROM vacation_used WHERE kind='taken' AND taken_on>=${startIso.slice(0, 10)} AND taken_on<${endIso.slice(0, 10)} GROUP BY employee_id`;
   let recs = [];
   try { recs = await sql`SELECT employee_id,start_date,vacation_opening_hours FROM employee_records`; } catch { recs = []; }
   const recBy = new Map(recs.map(r => [String(r.employee_id), r]));
   const s0 = new Date(startIso).getTime(), e0 = new Date(endIso).getTime();
-  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, range_paid_hours: 0, all_paid_hours: 0, used_hours: 0, range_used_hours: 0 }]));
+  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, range_paid_hours: 0, all_paid_hours: 0, used_hours: 0, range_used_hours: 0, adjust_hours: 0 }]));
   for (const sh of shifts) {
     const r = row.get(String(sh.employee_id)); if (!r) continue;
     const paid = effectiveShiftPay(sh, minimum), t = new Date(sh.clock_in).getTime();
@@ -98,30 +102,31 @@ export async function vacationSummary(startIso, endIso) {
     if (y0 >= s0 && y1 <= e0) r.range_paid_hours += Number(b.paid_hours || 0);
   }
   for (const u of used) { const r = row.get(String(u.employee_id)); if (r) r.used_hours = Number(u.hours || 0); }
+  for (const u of adj) { const r = row.get(String(u.employee_id)); if (r) r.adjust_hours = Number(u.hours || 0); }
   for (const u of usedRange) { const r = row.get(String(u.employee_id)); if (r) r.range_used_hours = Number(u.hours || 0); }
   const round = v => Math.round(v * 100) / 100, today = new Date().toISOString().slice(0, 10);
   return [...row.values()].map(r => {
     const rec = recBy.get(r.employee_id) || {}, opening = Number(rec.vacation_opening_hours || 0);
     const rangeEarned = r.range_paid_hours * VACATION_PER_HOUR, allEarned = r.all_paid_hours * VACATION_PER_HOUR + opening;
     const from = eligibleFrom(rec.start_date || null);
-    return { ...r, range_paid_hours: round(r.range_paid_hours), all_paid_hours: round(r.all_paid_hours), range_earned: round(rangeEarned), opening_hours: round(opening), all_earned: round(allEarned),
-      used_hours: round(r.used_hours), range_used_hours: round(r.range_used_hours), balance: round(allEarned - r.used_hours),
+    return { ...r, range_paid_hours: round(r.range_paid_hours), all_paid_hours: round(r.all_paid_hours), range_earned: round(rangeEarned), opening_hours: round(opening), all_earned: round(allEarned), adjust_hours: round(r.adjust_hours),
+      used_hours: round(r.used_hours), range_used_hours: round(r.range_used_hours), balance: round(allEarned + r.adjust_hours - r.used_hours),
       start_date: rec.start_date || null, eligible_from: from, eligible: !!from && from <= today };
   });
 }
 
 export async function vacationHistoryAll(startIso, endIso) {
   await ensureVacationTables();
-  return sql`SELECT v.id,v.employee_id,e.name AS employee_name,v.hours,v.taken_on,v.note,v.created_at FROM vacation_used v JOIN employees e ON e.id=v.employee_id
+  return sql`SELECT v.id,v.employee_id,e.name AS employee_name,v.hours,v.kind,v.taken_on,v.note,v.created_at FROM vacation_used v JOIN employees e ON e.id=v.employee_id
     WHERE v.taken_on>=${startIso.slice(0, 10)} AND v.taken_on<${endIso.slice(0, 10)} ORDER BY v.taken_on DESC, v.id DESC LIMIT 1000`;
 }
 
 export async function vacationHistory(employeeId) {
   await ensureVacationTables();
-  return sql`SELECT id,hours,taken_on,note,created_at FROM vacation_used WHERE employee_id=${employeeId} ORDER BY taken_on DESC, id DESC LIMIT 100`;
+  return sql`SELECT id,hours,kind,taken_on,note,created_at FROM vacation_used WHERE employee_id=${employeeId} ORDER BY taken_on DESC, id DESC LIMIT 100`;
 }
 
-export async function recordVacationUsed(employeeId, hours, takenOn, note, managerId) {
+export async function recordVacationUsed(employeeId, hours, takenOn, note, managerId, kind = 'taken') {
   await ensureVacationTables();
-  return sql`INSERT INTO vacation_used(employee_id,hours,taken_on,note,created_at,created_by) VALUES(${employeeId},${hours},${takenOn},${note || null},${nowIso()},${managerId}) RETURNING id`;
+  return sql`INSERT INTO vacation_used(employee_id,hours,kind,taken_on,note,created_at,created_by) VALUES(${employeeId},${hours},${kind},${takenOn},${note || null},${nowIso()},${managerId}) RETURNING id`;
 }
