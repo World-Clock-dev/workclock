@@ -1,4 +1,5 @@
 import { vacationSummary } from './_vacation.js';
+import { managerUnread, employeeUnread } from './chat.js';
 import { sql, sqlBatch, json, getManager, getEmployeeSession, requireSameOrigin, audit, nowIso } from './_db.js';
 
 /* Tools & Supplies.
@@ -278,7 +279,7 @@ async function employeeSide(req, res, emp) {
     if (u.searchParams.get('count')) {
       const a = await sql`SELECT count(*) AS n FROM supply_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
       const c = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
-      return json(res, 200, { supplies: a[0].n, uniforms: c[0].n });
+      return json(res, 200, { supplies: a[0].n, uniforms: c[0].n, chat: await employeeUnread(emp.id) });
     }
     if (u.searchParams.get('vacation')) {
       const year = new Date().getUTCFullYear();
@@ -390,7 +391,7 @@ async function managerSide(req, res, manager) {
       const latest = await sql`SELECT r.id,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
       const up = await sql`SELECT count(*) AS n FROM uniform_requests WHERE status='pending'`;
       const ulatest = await sql`SELECT r.id,e.name AS employee_name FROM uniform_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
-      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null, uniformPending: up[0].n, uniformLatest: ulatest[0] || null, low: await lowItems() });
+      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null, uniformPending: up[0].n, uniformLatest: ulatest[0] || null, low: await lowItems(), ...(await managerUnread()) });
     }
     if (u.searchParams.get('uniforms')) {
       const rg = k => {

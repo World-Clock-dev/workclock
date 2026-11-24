@@ -24,6 +24,13 @@ binding = "DB"
 database_name = "workclock"
 database_id = "8be6128e-c08a-41c4-bb45-e1853d04af04"
 
+# Uploaded files (documents, work orders, accident and chat photos).
+# Private R2 bucket in Eastern North America; 10 GB free. Without this
+# binding the app keeps files in D1 instead (see api/_files.js).
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "workclock-files"
+
 # Nightly data-retention job, 03:00 UTC (same as the Vercel cron).
 [triggers]
 crons = ["0 3 * * *"]

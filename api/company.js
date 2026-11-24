@@ -1,4 +1,5 @@
 import { sql, sqlBatch, json, getManager, getEmployeeSession, requireSameOrigin, audit, nowIso } from './_db.js';
+import { getBlob, deleteBlob, sendBlob, decodeBase64 } from './_files.js';
 
 /* Company: Job Resources (handbook / SOP PDFs), Vehicles, Assigned Projects.
    PDFs are kept in D1 in chunks (no extra storage service, stays free). */
@@ -31,12 +32,15 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS attachment_chunks (attachment_id INTEGER NOT NULL REFERENCES attachments(id), idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (attachment_id, idx))`
 ];
 let ready = false;
+export async function ensureCompany() { return ensure(); }
 async function ensure() {
   if (ready) return;
   await sqlBatch(SCHEMA.map(s => [s]));
   const add = async (table, col, def) => { const cols = (await sql([`SELECT name FROM pragma_table_info('${table}')`])).map(c => c.name); if (!cols.includes(col)) await sql([`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`]); };
   await add('resources', 'category', 'TEXT');
   await add('resources', 'mime', "TEXT NOT NULL DEFAULT 'application/pdf'");
+  await add('resources', 'blob_key', 'TEXT');
+  await add('attachments', 'blob_key', 'TEXT');
   await sql`UPDATE resources SET category=CASE kind WHEN 'handbook' THEN 'Employee Handbook' WHEN 'sop' THEN 'SOP' ELSE 'Other' END WHERE category IS NULL`;
   for (const [t, c, d] of EXTRA_COLS) await add(t, c, d);
   ready = true;
@@ -85,8 +89,7 @@ function readUpload(data, max = MAX_PDF) {
 }
 const chunk = b64 => { const out = []; for (let i = 0; i < b64.length; i += CHUNK) out.push(b64.slice(i, i + CHUNK)); return out; };
 function sendBytes(res, b64, mime, filename) {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const bytes = decodeBase64(b64);
   const inline = FILE_TYPES[mime] === 'pdf' || FILE_TYPES[mime] === 'img';
   res.setHeader('Content-Type', FILE_TYPES[mime] ? mime : 'application/octet-stream');
   res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${String(filename).replace(/[^\w.\- ]/g, '_')}"`);
@@ -103,14 +106,17 @@ async function saveAttachment(ownerType, ownerId, filename, up) {
 }
 const attachmentsFor = (ownerType, ids) => ids.length ? sql(`SELECT id,owner_id,filename,mime,size,created_at FROM attachments WHERE owner_type=? AND owner_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`.split('?'), ownerType, ...ids) : [];
 async function deleteAttachments(ownerType, ownerId) {
-  const ids = (await sql`SELECT id FROM attachments WHERE owner_type=${ownerType} AND owner_id=${ownerId}`).map(r => Number(r.id));
+  const found = await sql`SELECT id,blob_key FROM attachments WHERE owner_type=${ownerType} AND owner_id=${ownerId}`;
+  for (const f of found) if (f.blob_key) await deleteBlob(f.blob_key);
+  const ids = found.map(r => Number(r.id));
   if (ids.length) await sqlBatch(ids.flatMap(i => [['DELETE FROM attachment_chunks WHERE attachment_id=?', i], ['DELETE FROM attachments WHERE id=?', i]]));
 }
 
 async function listResources() { return sql`SELECT id,title,kind,category,mime,filename,size,created_at,updated_at FROM resources ORDER BY CASE category WHEN 'Employee Handbook' THEN 0 WHEN 'SOP' THEN 1 ELSE 2 END, category, title`; }
 async function sendPdf(res, id) {
-  const r = (await sql`SELECT id,filename,mime,chunks FROM resources WHERE id=${id}`)[0];
+  const r = (await sql`SELECT id,filename,mime,chunks,blob_key FROM resources WHERE id=${id}`)[0];
   if (!r) return json(res, 404, { error: 'Not found.' });
+  if (r.blob_key) { const body = await getBlob(r.blob_key); return body ? sendBlob(res, body, r.mime, r.filename) : json(res, 404, { error: 'File missing.' }); }
   const parts = await sql`SELECT data FROM resource_chunks WHERE resource_id=${id} ORDER BY idx`;
   return sendBytes(res, parts.map(p => p.data).join(''), r.mime || 'application/pdf', r.filename);
 }
@@ -154,6 +160,7 @@ export default async function handler(req, res) {
         const allowed = a.owner_type === 'project' && (await sql`SELECT 1 FROM project_employees WHERE project_id=${a.owner_id} AND employee_id=${emp.id}`).length;
         if (!allowed) return json(res, 403, { error: 'Not allowed.' });
       }
+      if (a.blob_key) { const body = await getBlob(a.blob_key); return body ? sendBlob(res, body, a.mime, a.filename) : json(res, 404, { error: 'File missing.' }); }
       const parts = await sql`SELECT data FROM attachment_chunks WHERE attachment_id=${att} ORDER BY idx`;
       return sendBytes(res, parts.map(p => p.data).join(''), a.mime, a.filename);
     }
@@ -211,6 +218,7 @@ export default async function handler(req, res) {
     }
     if (b.action === 'resource_delete') {
       const id = idOf(b.id); if (!id) return json(res, 400, { error: 'Choose a document.' });
+      const old = (await sql`SELECT blob_key FROM resources WHERE id=${id}`)[0]; if (old?.blob_key) await deleteBlob(old.blob_key);
       await sqlBatch([['DELETE FROM resource_chunks WHERE resource_id=?', id], ['DELETE FROM resources WHERE id=?', id]]);
       await audit('manager', manager.id, 'resource_deleted', { id });
       return json(res, 200, { ok: true });
@@ -324,6 +332,7 @@ export default async function handler(req, res) {
     }
     if (b.action === 'attachment_delete') {
       const aid = idOf(b.id); if (!aid) return json(res, 400, { error: 'Choose a file.' });
+      const old = (await sql`SELECT blob_key FROM attachments WHERE id=${aid}`)[0]; if (old?.blob_key) await deleteBlob(old.blob_key);
       await sqlBatch([['DELETE FROM attachment_chunks WHERE attachment_id=?', aid], ['DELETE FROM attachments WHERE id=?', aid]]);
       await audit('manager', manager.id, 'attachment_deleted', { id: aid });
       return json(res, 200, { ok: true });

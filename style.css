@@ -1043,3 +1043,49 @@ body.mgr .helpItem .helpHead{background:#fff}
 @media (max-width:520px){.pCrewRow{grid-template-columns:1fr 1fr}.pCrewRow .pEmp{grid-column:1/-1}}
 .crewDays{color:#64748b;font-size:11px}
 .chipX{border:0;background:none;font-weight:900;cursor:pointer;padding:0 2px;color:#991b1b}
+
+/* ---- Messages ---- */
+.chatCard{padding-bottom:12px}
+.chatLayout{display:grid;grid-template-columns:300px 1fr;gap:0;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;height:min(72vh,680px);min-height:420px;background:#fff}
+.chatList{border-right:1px solid #e2e8f0;display:flex;flex-direction:column;min-height:0;background:#f8fafc}
+.chatListHead{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid #e2e8f0}
+.chatListHead .searchBox{margin:0}
+.chatThreads{overflow-y:auto;flex:1;min-height:0}
+.chatThread{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #eef2f7;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+.chatThread:hover{background:#fff}.chatThread.on{background:#fff7ed;box-shadow:inset 3px 0 0 #f97316}
+.chatThread .avatar{flex:none}
+.chatThreadMain{flex:1;min-width:0;display:flex;flex-direction:column}
+.chatThreadMain span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatThread.unread .chatThreadMain b,.chatThread.unread .chatThreadMain span{color:#0f172a;font-weight:800}
+.chatThreadSide{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.chatPane{display:flex;flex-direction:column;min-height:0;min-width:0}
+.chatPaneHead{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #e2e8f0}
+.chatWho{display:flex;flex-direction:column;min-width:0}
+.chatBack{display:none;border:0;background:#f1f5f9;border-radius:10px;width:36px;height:36px;font-size:22px;font-weight:800;cursor:pointer}
+.chatMsgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:6px;background:#f8fafc;min-height:0}
+#empChat .chatMsgs{height:min(60vh,560px);min-height:300px;border:1px solid #e2e8f0;border-radius:14px}
+.chatEmpty{margin:auto;color:#64748b;text-align:center;max-width:320px;font-size:14px}
+.chatDay{text-align:center;margin:8px 0 4px}.chatDay span{background:#e2e8f0;color:#475569;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700}
+.chatRow{display:flex}.chatRow.mine{justify-content:flex-end}
+.chatBubble{max-width:min(78%,520px);border-radius:16px;padding:8px 12px;background:#fff;border:1px solid #e2e8f0;overflow-wrap:anywhere;box-shadow:0 1px 1px rgba(15,23,42,.04)}
+.chatRow.mine .chatBubble{background:#ffedd5;border-color:#fed7aa;border-bottom-right-radius:4px}
+.chatRow.theirs .chatBubble{border-bottom-left-radius:4px}
+.chatText{font-size:15px;line-height:1.4}
+.chatMeta{font-size:11px;color:#64748b;margin-top:3px;text-align:right}
+.chatImg{display:block;max-width:260px;max-height:260px;width:100%;object-fit:cover;border-radius:10px;margin-bottom:4px}
+.chatAllTag{display:inline-block;background:#dbeafe;color:#1e40af;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;margin-bottom:4px}
+.chatCompose{display:flex;gap:8px;align-items:flex-end;padding:10px;border-top:1px solid #e2e8f0;background:#fff}
+#empChat .chatCompose{border:1px solid #e2e8f0;border-radius:14px;margin-top:8px}
+.chatCompose textarea{flex:1;resize:none;min-height:42px;max-height:140px;border:1px solid #cbd5e1;border-radius:12px;padding:10px 12px;font:inherit;font-size:16px;line-height:1.35}
+.chatAttach{flex:none;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#f1f5f9;cursor:pointer;color:#334155}
+.chatAttach svg{width:22px;height:22px}
+.chatSendBtn{flex:none;height:42px}
+.chatMsg{padding:0 10px 4px}
+@media (max-width:760px){
+  .chatLayout{grid-template-columns:1fr;height:calc(100vh - 190px);min-height:400px}
+  .chatLayout .chatPane{display:none}.chatLayout.open .chatPane{display:flex}.chatLayout.open .chatList{display:none}
+  .chatBack{display:block}
+}
+.chatListHead .searchBox{flex:none}
+.chatThreadMain b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chatThreadSide .muted{white-space:nowrap;font-size:11px}

@@ -26,6 +26,9 @@ import supplies from '../api/supplies.js';
 import records from '../api/records.js';
 import performance from '../api/performance.js';
 import company from '../api/company.js';
+import chat from '../api/chat.js';
+import upload from '../api/upload.js';
+import { bindFiles } from '../api/_files.js';
 
 export const ROUTES = {
   'clock-in': clockIn,
@@ -44,6 +47,8 @@ export const ROUTES = {
   'records': records,
   'performance': performance,
   'company': company,
+  'chat': chat,
+  'upload': upload,
 };
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
@@ -59,7 +64,9 @@ export async function toVercelRequest(request, url) {
   if (ip) headers['x-forwarded-for'] = ip;
 
   let body;
-  if (!['GET', 'HEAD'].includes(request.method)) {
+  // File uploads arrive as the raw file: keep the bytes as they are.
+  if (request.method === 'POST' && url.pathname.replace(/\/$/, '') === '/api/upload') body = await request.arrayBuffer();
+  else if (!['GET', 'HEAD'].includes(request.method)) {
     const text = await request.text();
     if (text) {
       const type = headers['content-type'] || '';
@@ -113,6 +120,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) {
       bindEnv(env);
+      bindFiles(env);
       // vercel.json rewrite: /api/retention -> /api/settings?action=retention
       if (url.pathname.replace(/\/$/, '') === '/api/retention') {
         url.pathname = '/api/settings';

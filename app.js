@@ -208,7 +208,11 @@
     supQty:['Each item needs a quantity from 1 to 999.','Cada artículo necesita una cantidad de 1 a 999.'],
     supHandled:['This request has already been handled.','Este pedido ya fue atendido.'],
     supLess:['Less','Menos'],supMore:['More','Más'],
-    navUniforms:['Uniforms','Uniformes'],uniTitle:['Request Uniform','Pedir uniforme'],
+    navUniforms:['Uniforms','Uniformes'],navChat:['Messages','Mensajes'],chatTitle:['Messages','Mensajes'],
+    chatHelp:['Write to your manager here. You can also send a photo, for example of a job or a problem.','Escriba a su gerente aquí. También puede enviar una foto, por ejemplo de un trabajo o un problema.'],
+    chatPh:['Write a message…','Escriba un mensaje…'],chatSend:['Send','Enviar'],chatAttach:['Send a photo or PDF','Enviar una foto o PDF'],chatEmptyEmp:['No messages yet. Write to your manager below.','Todavía no hay mensajes. Escriba a su gerente abajo.'],
+    chatYou:['You','Usted'],chatMgr:['Manager','Gerente'],chatSeen:['Seen','Visto'],chatSent:['Sent','Enviado'],chatAll:['To everyone','Para todos'],chatToday:['Today','Hoy'],chatYesterday:['Yesterday','Ayer'],
+    chatNew:['New message from your manager.','Nuevo mensaje de su gerente.'],chatSending:['Sending…','Enviando…'],chatPhoto:['Photo','Foto'],uniTitle:['Request Uniform','Pedir uniforme'],
     uniHelp:['Pick the items you need, choose your size and how many, then send.','Elija las prendas que necesita, su talla y cuántas, y envíe.'],
     uniNotePh:['e.g. my jacket is torn','p. ej. mi chaqueta está rota'],
     uni_tshirt_half:['T-shirt, half sleeve','Camiseta, manga corta'],uni_tshirt_full:['T-shirt, full sleeve','Camiseta, manga larga'],uni_trousers:['Trousers','Pantalón'],uni_jacket:['Jacket','Chaqueta'],
@@ -274,6 +278,10 @@
   /* Server replies are English. Map the ones an employee can see, so a
      rejected clock-out or a locked PIN reads in their language too. */
   const SERVER_ES = {
+    'Write a message.':'Escriba un mensaje.',
+    'A message can be up to 2000 characters.':'Un mensaje puede tener hasta 2000 caracteres.',
+    'Send a photo or a PDF.':'Envíe una foto o un PDF.',
+    'The upload failed. Please try again.':'No se pudo subir. Inténtelo de nuevo.',
     'Not allowed.':'No permitido.',
     'Choose Free or Paid.':'Elija Gratis o Pagado.',
     'Choose an item, a size and a quantity from 1 to 20.':'Elija una prenda, una talla y una cantidad de 1 a 20.',
@@ -354,6 +362,7 @@
     document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
     document.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.placeholder=t(el.dataset.i18nPh);});
     document.querySelectorAll('[data-i18n-aria]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAria));});
+    document.querySelectorAll('[data-i18n-title]').forEach(el=>{el.setAttribute('title',t(el.dataset.i18nTitle));});
     if($('employeeRecovery')&&!$('employeeRecovery').classList.contains('hide'))$('employeeRecoveryMsg').textContent=t('recoveryHelp');
     if(employeeIdentity&&$('employeeRateDisplay'))$('employeeRateDisplay').textContent=`$${Number((empCache?.employee||employeeIdentity).hourly_wage||0).toFixed(2)}${t('perHour')}`;
     // Reason options: translate the label, never the stored value.
@@ -364,6 +373,7 @@
     const btn=$('langToggle');
     if(btn){btn.textContent=t('langLabel');btn.title=t('langTitle');btn.setAttribute('aria-label',t('langTitle'));}
     if(!managerMode)document.title=t('tabTitle');
+    if(!managerMode&&typeof eChatMsgs!=='undefined'&&eChatMsgs.length&&$('eChatMsgs'))renderEmpChat(false);
     // Re-run the report so its dates, month names and reasons follow the language.
     if($('erResult')?.dataset.loaded)runEmployeeReport();
     if(employeeIdentity&&empCache)renderEmployee();
@@ -397,6 +407,13 @@
     let j={}; try{j=await r.json();}catch{}
     if(!r.ok){const e=new Error(j.error||'Request failed');e.status=r.status;e.payload=j;throw e;} return j;
   };
+  // Upload a file as-is (not as text), with details in the address.
+  const upFile = async (params,blob,mime) => {
+    const r = await fetch('/api/upload?'+new URLSearchParams(params),{method:'POST',body:blob,headers:{'content-type':mime},cache:'no-store'});
+    let j={}; try{j=await r.json();}catch{}
+    if(!r.ok){const e=new Error(j.error||(r.status===413?'The file is too large.':'Upload failed'));e.status=r.status;e.payload=j;throw e;} return j;
+  };
+  const dataUrlToBlob = d => {const [h,b]=d.split(',');const bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:(h.match(/data:([^;]+)/)||[])[1]||'application/octet-stream'});};
   const geo = () => new Promise((resolve,reject)=>{
     if(!navigator.geolocation)return reject(new Error(t('geoUnavailable')));
     navigator.geolocation.getCurrentPosition(p=>resolve(p.coords),e=>reject(new Error(e.code===1?t('geoDenied'):t('geoFailed'))),{enableHighAccuracy:true,timeout:15000,maximumAge:0});
@@ -718,20 +735,20 @@
   }
 
   /* ---- Employee: answers from the manager, and vacation ---- */
-  const empCounts={supplies:0,uniforms:0};let empCountsKnown=null,empPollTimer=null;
+  const empCounts={supplies:0,uniforms:0,chat:0};let empCountsKnown=null,empPollTimer=null;
   function setEmpCounts(){
-    [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
-    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms)&&!(infoRec?.missing?.length));
+    [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms],['empChatCount',empCounts.chat]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
+    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms+empCounts.chat)&&!(infoRec?.missing?.length));
   }
   async function pollEmpCounts(){
     if(managerMode||!employeeIdentity)return;
     try{const j=await api('/api/supplies?mine=1&count=1');const pg=empPage();
-      if(empCountsKnown){if(j.supplies>empCountsKnown.supplies&&pg!=='supplies')toast(t('supUpdated'));if(j.uniforms>empCountsKnown.uniforms&&pg!=='uniforms')toast(t('uniUpdated'));}
-      empCountsKnown={supplies:j.supplies,uniforms:j.uniforms};
+      if(empCountsKnown){if(j.supplies>empCountsKnown.supplies&&pg!=='supplies')toast(t('supUpdated'));if(j.uniforms>empCountsKnown.uniforms&&pg!=='uniforms')toast(t('uniUpdated'));if((j.chat||0)>(empCountsKnown.chat||0)&&pg!=='messages')toast(t('chatNew'));}
+      empCountsKnown={supplies:j.supplies,uniforms:j.uniforms,chat:j.chat||0};
       // The page being looked at counts as read.
       if(pg==='supplies'&&j.supplies)return loadEmpSupplies();
       if(pg==='uniforms'&&j.uniforms)return loadEmpUniforms();
-      empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;setEmpCounts();
+      empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;empCounts.chat=pg==='messages'?0:(j.chat||0);setEmpCounts();
     }catch{}
   }
   function startEmpPoll(){api('/api/company?area=menu').then(j=>$('empVehLink').classList.toggle('hide',!j.hasVehicle)).catch(()=>{});api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
@@ -805,6 +822,55 @@
     $('ePerfNext').onclick=()=>{if(ePerfMode==='year')ePerfYear++;else ePerfMonth=new Date(ePerfMonth.getFullYear(),ePerfMonth.getMonth()+1,1);loadEmpPerf();};
   }
 
+  /* ---- Messages (shared bubbles) ---- */
+  // asManager: true when the manager is looking. Messages "from me" sit on the right.
+  function chatBubbles(msgs,asManager,L){
+    let day='',html='';
+    const loc=asManager?[]:locale(),dayName=d=>{const k=d.toDateString(),n=new Date();const y=new Date(n);y.setDate(n.getDate()-1);return k===n.toDateString()?L('today'):k===y.toDateString()?L('yesterday'):d.toLocaleDateString(loc,{weekday:'short',month:'short',day:'numeric'});};
+    for(const m of msgs){const d=new Date(m.created_at),k=d.toDateString();if(k!==day){day=k;html+=`<div class="chatDay"><span>${esc(dayName(d))}</span></div>`;}
+      const mine=!!m.from_manager===asManager,file=m.has_file?(String(m.mime||'').startsWith('image/')?`<a href="/api/chat?file=${m.id}" target="_blank" rel="noopener"><img class="chatImg" alt="${esc(L('photo'))}" src="/api/chat?file=${m.id}" loading="lazy"/></a>`:`<a class="fileChip" href="/api/chat?file=${m.id}" target="_blank" rel="noopener">📄 ${esc(m.filename||'PDF')}</a>`):'';
+      html+=`<div class="chatRow ${mine?'mine':'theirs'}" data-mid="${m.id}"><div class="chatBubble">${m.broadcast?`<span class="chatAllTag">${esc(L('all'))}</span>`:''}${file}${m.body?`<div class="chatText">${esc(m.body).replace(/\n/g,'<br>')}</div>`:''}<div class="chatMeta">${esc(d.toLocaleTimeString(loc,{hour:'numeric',minute:'2-digit'}))}${mine?` · ${esc(m.seen_at?L('seen'):L('sent'))}`:''}</div></div></div>`;}
+    return html;
+  }
+  const chatAutoGrow=el=>{el.style.height='auto';el.style.height=Math.min(140,el.scrollHeight)+'px';};
+  /* ---- Employee: messages ---- */
+  let eChatMsgs=[],eChatTimer=null;
+  const eChatL=k=>t({today:'chatToday',yesterday:'chatYesterday',all:'chatAll',seen:'chatSeen',sent:'chatSent',photo:'chatPhoto'}[k]);
+  async function loadEmpChat(full){
+    if(empPage()!=='messages'){clearInterval(eChatTimer);eChatTimer=null;return;}
+    try{const after=!full&&eChatMsgs.length?eChatMsgs[eChatMsgs.length-1].id:0;
+      const j=await api('/api/chat'+(after?`?after=${after}`:''));
+      if(full||!after)eChatMsgs=j.messages||[];else if(j.messages?.length)eChatMsgs=eChatMsgs.concat(j.messages);else if(eChatMsgs.length&&!eChatMsgs.some(m=>m.from_manager===0&&!m.seen_at))return;
+      if(!after||j.messages?.length||full)renderEmpChat(true);
+      empCounts.chat=0;setEmpCounts();
+    }catch(e){if(e.status!==401)$('eChatMsg').textContent=displayMessage(e.payload||e.message);}
+    if(!eChatTimer)eChatTimer=setInterval(()=>loadEmpChat(false),8000);
+  }
+  function renderEmpChat(scroll){
+    const el=$('eChatMsgs');el.innerHTML=eChatMsgs.length?chatBubbles(eChatMsgs,false,eChatL):`<div class="chatEmpty">${esc(t('chatEmptyEmp'))}</div>`;
+    if(scroll)el.scrollTop=el.scrollHeight;
+  }
+  async function sendEmpChat(e){
+    e?.preventDefault();const inp=$('eChatInput'),text=inp.value.trim();if(!text)return;
+    $('eChatSend').disabled=true;$('eChatMsg').textContent='';
+    try{await api('/api/chat',{method:'POST',body:JSON.stringify({action:'send',body:text})});inp.value='';chatAutoGrow(inp);await loadEmpChat(false);}
+    catch(err){$('eChatMsg').textContent=displayMessage(err.payload||err.message);}
+    finally{$('eChatSend').disabled=false;inp.focus();}
+  }
+  function initEmpChat(){
+    $('eChatCompose').onsubmit=sendEmpChat;
+    $('eChatInput').oninput=()=>chatAutoGrow($('eChatInput'));
+    $('eChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!/Mobi|Android/i.test(navigator.userAgent)){e.preventDefault();sendEmpChat();}};
+    $('eChatFile').onchange=async()=>{const f=$('eChatFile').files[0];if(!f)return;$('eChatMsg').textContent=t('chatSending');
+      try{await sendChatFile({kind:'chat'},f);$('eChatMsg').textContent='';await loadEmpChat(false);}catch(err){$('eChatMsg').textContent=displayMessage(err.payload||err.message);}finally{$('eChatFile').value='';}};
+  }
+  // Photos are made smaller first.
+  async function sendChatFile(params,f){
+    if(/^image\//.test(f.type)&&!/gif|svg/.test(f.type)){const blob=dataUrlToBlob(await shrinkImage(f));return upFile({...params,name:(f.name||'photo').replace(/\.\w+$/,'')+'.jpg'},blob,'image/jpeg');}
+    if(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name))throw new Error(t('chatAttach'));
+    return upFile({...params,name:f.name},f,'application/pdf');
+  }
+
   /* ---- Employee: Projects, Vehicle, Resources ---- */
   let eProjMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),eProjRows=[];
   async function loadEmpProjects(){
@@ -857,6 +923,8 @@
      es:{t:'Vacaciones',k:'vacaciones descanso saldo ganado derecho primer año',b:['Gana 40 horas de vacaciones por cada 2,080 horas pagadas (unas 0.77 horas por semana de 40 horas).','Debe completar su primer año completo (desde su fecha de inicio) para tener derecho a vacaciones pagadas. La página de Vacaciones muestra la fecha en que tendrá derecho.','“Disponible ahora” es lo que ha ganado menos lo que ha usado. Para tomar vacaciones, hable con su gerente; él lo registra.']}},
     {id:'performance',page:'performance',en:{t:'Performance score',k:'performance score evaluation on time hours touch-up complaint bonus 85',b:['Your score each month adds up to 100% from five parts: manager evaluation (up to 30%), clocking in on time at 8:10 am or earlier (up to 10%), working 38.5 hours or more each week, over 40 included (up to 10%), customer touch-ups or complaints (0–1 = 30%, 2 = 10%, 3 or more = 0%), and being absent without notice (none = 20%, once or more = 0%).','Until your manager enters all of the month’s scores (evaluation, touch-ups, absences), the score is “Not final” and shows the points possible so far.','Switch between Monthly and Yearly. The year is the average of the months you worked.','Your score affects your importance in the company and any future bonus or yearly vacation. 85% and above is perfect.']},
      es:{t:'Puntaje de desempeño',k:'desempeño puntaje evaluación a tiempo horas retoque queja bono 85',b:['Su puntaje de cada mes suma 100% con cinco partes: evaluación del gerente (hasta 30%), marcar la entrada a tiempo a las 8:10 am o antes (hasta 10%), trabajar 38.5 horas o más cada semana, incluso más de 40 (hasta 10%), retoques o quejas de clientes (0–1 = 30%, 2 = 10%, 3 o más = 0%), y ausencias sin aviso (ninguna = 20%, una o más = 0%).','Hasta que su gerente ingrese todos los puntajes del mes (evaluación, retoques, ausencias), el puntaje “No es final” y muestra los puntos posibles hasta ahora.','Cambie entre Mensual y Anual. El año es el promedio de los meses trabajados.','Su puntaje afecta su importancia en la compañía y cualquier bono futuro o vacaciones anuales. 85% o más es perfecto.']}},
+    {id:'messages',page:'messages',en:{t:'Messages with your manager',k:'messages chat talk write manager photo send seen',b:['Open Messages in the menu to write to your manager. Type and tap Send.','Tap the camera to send a photo (for example of a job or a problem) or a PDF.','Your messages show “Sent”, then “Seen” once your manager has read them. Messages from your manager to everyone are marked “To everyone”.','When your manager writes to you, a number appears on Messages in the menu.']},
+     es:{t:'Mensajes con su gerente',k:'mensajes chat hablar escribir gerente foto enviar visto',b:['Abra Mensajes en el menú para escribir a su gerente. Escriba y toque Enviar.','Toque la cámara para enviar una foto (por ejemplo de un trabajo o un problema) o un PDF.','Sus mensajes dicen “Enviado” y luego “Visto” cuando su gerente los lee. Los mensajes del gerente para todos dicen “Para todos”.','Cuando su gerente le escribe, aparece un número en Mensajes en el menú.']}},
     {id:'projects',page:'projects',en:{t:'My Projects',k:'projects jobs calendar address map crew start finish work order days',b:['My Projects shows a calendar of the jobs you are assigned to, on the days you work on them.','Tap a job to see the address (tap it to open the map), the project dates, your own days if they are different, who else is on the crew, and the work order link or files.']},
      es:{t:'Mis proyectos',k:'proyectos trabajos calendario dirección mapa equipo inicio fin orden días',b:['Mis proyectos muestra un calendario de los trabajos que tiene asignados, en los días que trabaja en ellos.','Toque un trabajo para ver la dirección (tóquela para abrir el mapa), las fechas del proyecto, sus propios días si son distintos, quién más está en el equipo y la orden de trabajo (enlace o archivos).']}},
     {id:'vehicle',page:'vehicle',en:{t:'My Vehicle',k:'vehicle truck van car plate vin maintenance',b:['If a company vehicle is assigned to you, My Vehicle appears in the menu.','It shows the year, make, model, plate, VIN and the maintenance history.']},
@@ -880,19 +948,20 @@
     document.querySelectorAll('[data-help]').forEach(b=>b.onclick=()=>{const id=b.dataset.help;helpOpen.has(id)?helpOpen.delete(id):helpOpen.add(id);if(!$('helpSearch').value.trim())renderHelp();else b.closest('.helpItem').classList.toggle('open');});
   }
   /* ---- Employee menu: Time Clock and Supplies as separate sections ---- */
-  const EMP_PAGES=['clock','supplies','uniforms','vacation','performance','projects','vehicle','resources','info','help'];
+  const EMP_PAGES=['clock','messages','supplies','uniforms','vacation','performance','projects','vehicle','resources','info','help'];
   const empPage=()=>{const pg=(location.hash.match(/^#\/(\w+)/)||[])[1];return EMP_PAGES.includes(pg)?pg:'clock';};
   function setEmpDrawer(open){const d=$('empDrawer');d.classList.toggle('open',open);$('empScrim').classList.toggle('hide',!open);$('empBurger').setAttribute('aria-expanded',String(open));document.body.classList.toggle('drawerOpen',open);}
   function showEmpPage(){
     if(managerMode||!employeeIdentity)return;
     const pg=empPage();
     document.querySelectorAll('#employeeApp [data-epage]').forEach(el=>el.classList.toggle('pageOff',el.dataset.epage!==pg));
-    {const k={clock:'navClock',supplies:'navSupplies',uniforms:'navUniforms',vacation:'navVacation',performance:'navPerf',projects:'navProj',vehicle:'navVeh',resources:'navRes',info:'navInfo',help:'navHelp'}[pg];const el=$('empSectionName');if(el&&k){el.dataset.i18n=k;el.textContent=t(k);}}
+    {const k={clock:'navClock',messages:'navChat',supplies:'navSupplies',uniforms:'navUniforms',vacation:'navVacation',performance:'navPerf',projects:'navProj',vehicle:'navVeh',resources:'navRes',info:'navInfo',help:'navHelp'}[pg];const el=$('empSectionName');if(el&&k){el.dataset.i18n=k;el.textContent=t(k);}}
     document.querySelectorAll('[data-eroute]').forEach(a=>{const on=a.dataset.eroute===pg;a.classList.toggle('on',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     // On its own page the supplies list is always open.
     $('toggleEmpSup').classList.toggle('hide',pg==='supplies');
     if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
     if(pg==='uniforms')loadEmpUniforms();
+    if(pg==='messages')loadEmpChat(true);
     if(pg==='vacation')loadEmpVacation();
     if(pg==='info')loadEmpInfo();
     if(pg==='performance')loadEmpPerf();
@@ -920,7 +989,7 @@
     initEmpMenu();
     initEmpInfo();
     initEmpPerf();
-    initEmpCompany();
+    initEmpCompany();initEmpChat();
     $('helpSearch').oninput=renderHelp;
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
@@ -1666,8 +1735,9 @@
       {id:'m-perf',t:'Performance score and entering it',k:'performance evaluation on time hours touch-up complaint absent absence notice 85 perfect monthly yearly time zone',b:['Each month adds up to 100%: your evaluation (0–30), on-time clock-in at 8:10 am or earlier (share of days × 10), weeks with 38.5 or more paid hours, including over 40 (share of weeks × 10), customer touch-ups/complaints (0–1 = 30%, 2 = 10%, 3+ = 0%), and absences without notice (0 = 20%, 1 or more = 0%).','Type the evaluation, the touch-up count and the absences for each person; they save by themselves. Until all three are entered, the score leaves them out and shows as “Not final”: it is the share of the points possible so far.','Switch to Yearly to see every month and the year average. On-time is checked in the time zone shown on the page; change it if needed. 85% and above is perfect.']}]},
     {sec:'Employees, Resources, Vehicles, Projects',items:[
       {id:'m-records',page:'employees',t:'Employee records',k:'records personal details ssn licence license emergency start date termination reveal',b:['Each person’s hiring details: name, date of birth, address, phone, email, SSN, emergency contact, licence photo, job start date, termination date and reason. Painters fill in their own under My Info.','“Missing” shows what still needs to be filled in. Tap a person to view or edit.','The SSN shows only the last 4 digits; Reveal shows it in full and is logged, as is viewing the licence photo. SSNs and photos are stored encrypted with the app’s SESSION_SECRET in Cloudflare: never change that setting, or they can no longer be read.','Active / On vacation / Terminated is changed in the Employees list on the Dashboard.']},
-      {id:'m-res',page:'resources',t:'Job Resources (Handbook and SOP)',k:'resources handbook sop pdf upload replace delete documents',b:['Enter a title, choose the type (Employee Handbook, SOP or Other), pick a PDF (8 MB at most) and tap Upload PDF.','Open, Replace or Delete each document. Painters see them under Job Resources.']},
+      {id:'m-res',page:'resources',t:'Job Resources (documents and categories)',k:'resources handbook sop pdf upload replace delete documents category name add document word excel picture',b:['Under Add a document: type a name, pick a category from the list or type a new one, choose the file (PDF, picture, Word or Excel; up to 25 MB once file storage is connected, 8 MB until then) and tap + Add document.','Documents are grouped by category. Open, Rename (name and category), Replace or Delete each one. Painters see them under Job Resources, grouped the same way.']},
       {id:'m-veh',page:'vehicles',t:'Company vehicles and maintenance',k:'vehicles truck van vin plate driver assign maintenance oil odometer registration inspection expire expiration notice accident incident photo crash insurance',b:['+ Add vehicle: year, make, model, plate, VIN, the assigned driver and the odometer at purchase. Edit changes them; Remove takes the vehicle out of use.','Registration: enter the current registration date and the date it expires. Inspection: enter the month and year of the current inspection and of its expiration (no days).','1 month before the registration or inspection expires, a notice shows at the top of the Dashboard and on the vehicle card. It turns red once the date has passed. Update the dates after you renew to clear it.','+ Maintenance records the date, what was done, mileage, cost and notes.','+ Accident note records the date and what happened, with up to 10 photos or files (pictures are made smaller automatically). Add more photos later with + Photo on the entry. Only you see accident notes.','The assigned driver sees the vehicle (My Vehicle), its dates and its maintenance; costs and accident notes are shown only to you.']},
+      {id:'m-chat',page:'messages',t:'Messages with painters',k:'messages chat talk message painter photo everyone broadcast seen unread notification',b:['Messages (in the menu) lists every painter with their last message. A number shows unread messages; the same number appears on the Messages link, and a notice pops up when a new one arrives.','Tap a painter to open the conversation. Type and tap Send (on a computer, Enter sends and Shift+Enter starts a new line). Tap the camera to send a photo or a PDF; photos are made smaller automatically.','Your messages show “Sent”, then “Seen” once the painter has opened them.','Message everyone sends one message to every painter who is not terminated, for news like holidays, weather or safety notices. It shows in each painter’s conversation marked “To everyone”.','Painters see their conversation under Messages, in English or Spanish. Your words are shown as you wrote them (not translated).']},
       {id:'m-proj',page:'projects',t:'Assigned projects calendar',k:'projects calendar address crew assign start finish job work order link file upload add painter help days',b:['+ New project: name, address, start and finish days, notes, the work order, and tick the employees assigned.','Work order: paste a link to it, and/or upload files (PDF, pictures, Word, Excel; up to 10). Painters on the project can open them. Remove a file with × when editing.','To add help without making a second project: open the project, tick the extra painters and set their From and To days (for example, from Tuesday to the end). Leave the dates empty for someone on the whole project.','The calendar shows each project on the days it runs; tap it to edit or delete. The list shows each person’s days when they differ from the project.','Each painter sees only the projects they are assigned to, and only on their own days, with the address, crew and work order.']}]},
     {sec:'Employee portal',items:[
       {id:'m-emp',t:'What painters see',k:'employee portal painters spanish help what they see',b:['Painters have Time Clock, Supplies, Uniforms, Vacation, Performance, My Projects, My Vehicle (only if assigned), Job Resources, My Info and Help, in English or Spanish.','They get a red dot when you answer a request and see uniform deductions and Week pay in their Weekly Summary.','Their employee link is the same address without “?manager=1”.']}]}
@@ -1703,10 +1773,9 @@
       try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id:Number(r.id),title:title.trim(),category:category.trim()})});toast('Saved.');loadResources();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
   }
   async function uploadPdf(f,title,category,id){
-    if(f.size>8*1048576)return toast('The file is too large (8 MB at most).','bad');
+    if(f.size>25*1048576)return toast('The file is too large (25 MB at most).','bad');
     $('resMsg').textContent='Uploading…';
-    try{let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:'+fileMime(f)+';');
-      await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id,title,category,filename:f.name,data})});$('resMsg').textContent='';toast(id?'Document replaced.':'Document added.');$('resFile').value='';$('resTitle').value='';$('resCat').value='';loadResources();}
+    try{await upFile(id?{kind:'resource',id,name:f.name}:{kind:'resource',title,category,name:f.name},f,fileMime(f));$('resMsg').textContent='';toast(id?'Document replaced.':'Document added.');$('resFile').value='';$('resTitle').value='';$('resCat').value='';loadResources();}
     catch(e){$('resMsg').textContent=displayMessage(e.payload||e.message);}
   }
   async function loadVehicles(){try{vehRows=(await api('/api/company?area=vehicles')).vehicles||[];renderVehicles($('vehList'),vehRows,true);}catch(e){$('vehList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
@@ -1733,7 +1802,7 @@
     el.querySelectorAll('[data-veh-mnt]').forEach(b=>b.onclick=()=>{vehCurrent=vehRows.find(v=>String(v.id)===b.dataset.vehMnt);$('mntSub').textContent=[vehCurrent.year,vehCurrent.make,vehCurrent.model].filter(Boolean).join(' ');$('mDate').value=iso(new Date());['mType','mMiles','mCost','mNotes'].forEach(i=>$(i).value='');$('mntMsg').textContent='';$('mntPanel').classList.remove('hide');});
     el.querySelectorAll('[data-veh-inc]').forEach(b=>b.onclick=()=>{vehCurrent=vehRows.find(v=>String(v.id)===b.dataset.vehInc);$('incSub').textContent=[vehCurrent.year,vehCurrent.make,vehCurrent.model].filter(Boolean).join(' ')+(vehCurrent.plate?' · '+vehCurrent.plate:'');$('incDate').value=iso(new Date());$('incNotes').value='';$('incFiles').value='';$('incMsg').textContent='';$('incPanel').classList.remove('hide');});
     el.querySelectorAll('[data-inc-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this accident note and its photos? This cannot be undone.'))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'incident_delete',id:Number(b.dataset.incDel)})});toast('Deleted.');loadVehicles();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
-    el.querySelectorAll('[data-inc-file]').forEach(inp=>inp.onchange=async()=>{const f=inp.files[0];if(!f)return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'incident_file_add',id:Number(inp.dataset.incFile),...(await incFilePayload(f))})});toast('Added.');loadVehicles();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
+    el.querySelectorAll('[data-inc-file]').forEach(inp=>inp.onchange=async()=>{const f=inp.files[0];if(!f)return;try{await sendFile({kind:'incident',id:Number(inp.dataset.incFile)},f);toast('Added.');loadVehicles();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
     el.querySelectorAll('[data-mnt-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this maintenance entry?'))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'maintenance_delete',id:Number(b.dataset.mntDel)})});loadVehicles();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
   }
   function openVehicle(v){
@@ -1743,10 +1812,11 @@
     $('vehRemove').classList.toggle('hide',!v);$('vehMsg').textContent='';$('vehPanel').classList.remove('hide');
   }
   // Pictures are shrunk before upload; other files go as they are (6 MB at most).
-  async function incFilePayload(f){
-    if(/^image\//.test(f.type)&&!/gif|svg/.test(f.type)){const data=await shrinkImage(f);return {name:f.name.replace(/\.\w+$/,'')+'.jpg',data};}
-    if(f.size>6*1048576)throw new Error(`${f.name} is too large (6 MB at most).`);
-    let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:'+fileMime(f)+';');return {name:f.name,data};
+  // Pictures are made smaller first; other files go as they are.
+  async function sendFile(params,f){
+    if(/^image\//.test(f.type)&&!/gif|svg/.test(f.type)){const blob=dataUrlToBlob(await shrinkImage(f));return upFile({...params,name:f.name.replace(/\.\w+$/,'')+'.jpg'},blob,'image/jpeg');}
+    if(f.size>25*1048576)throw new Error(`${f.name} is too large (25 MB at most).`);
+    return upFile({...params,name:f.name},f,fileMime(f));
   }
   async function saveIncident(){
     const msg=$('incMsg'),files=[...$('incFiles').files];
@@ -1754,7 +1824,7 @@
     if(files.length>10)return msg.textContent='Up to 10 photos or files.';
     msg.textContent='Saving…';$('incSave').disabled=true;
     try{const j=await api('/api/company',{method:'POST',body:JSON.stringify({action:'incident_add',vehicleId:Number(vehCurrent.id),date:$('incDate').value,notes:$('incNotes').value.trim()})});
-      for(let i=0;i<files.length;i++){msg.textContent=`Uploading ${i+1} of ${files.length}…`;await api('/api/company',{method:'POST',body:JSON.stringify({action:'incident_file_add',id:j.id,...(await incFilePayload(files[i]))})});}
+      for(let i=0;i<files.length;i++){msg.textContent=`Uploading ${i+1} of ${files.length}…`;await sendFile({kind:'incident',id:j.id},files[i]);}
       $('incPanel').classList.add('hide');toast('Accident note saved.');loadVehicles();}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);loadVehicles();}
     finally{$('incSave').disabled=false;}
@@ -1795,9 +1865,64 @@
   async function saveProject(){
     $('projMsg').textContent='Saving…';
     let j;try{j=await api('/api/company',{method:'POST',body:JSON.stringify({action:'project_save',id:projCurrent?Number(projCurrent.id):null,name:$('pName').value,address:$('pAddr').value,start_date:$('pStart').value,end_date:$('pEnd').value,notes:$('pNotes').value,work_order_url:$('pWoUrl').value.trim(),employees:[...$('pEmps').querySelectorAll('input[type=checkbox]:checked')].map(i=>({id:Number(i.value),start_date:document.querySelector(`[data-crew-from="${i.value}"]`).value,end_date:document.querySelector(`[data-crew-to="${i.value}"]`).value}))})});
-      const files=[...$('pFiles').files];for(let i=0;i<files.length;i++){$('projMsg').textContent=`Uploading ${i+1} of ${files.length}…`;const f=files[i];if(f.size>8*1048576)throw new Error(`${f.name} is too large (8 MB at most).`);let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:'+fileMime(f)+';');await api('/api/company',{method:'POST',body:JSON.stringify({action:'project_file_add',id:j.id,name:f.name,data})});}
+      const files=[...$('pFiles').files];for(let i=0;i<files.length;i++){$('projMsg').textContent=`Uploading ${i+1} of ${files.length}…`;await sendFile({kind:'project',id:j.id},files[i]);}
       $('projPanel').classList.add('hide');toast('Project saved.');loadProjects();}
     catch(e){$('projMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  /* ---- Manager: messages ---- */
+  let chatThreads=[],chatCurrent=null,chatMsgList=[],chatTimer=null,chatUnread=null;
+  const mChatL=k=>({today:'Today',yesterday:'Yesterday',all:'To everyone',seen:'Seen',sent:'Sent',photo:'Photo'}[k]);
+  const chatShortWhen=v=>{const d=new Date(v),n=new Date();return d.toDateString()===n.toDateString()?d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):d.toLocaleDateString([],{month:'short',day:'numeric'});};
+  function setChatBadge(n){document.querySelectorAll('[data-chat-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});}
+  async function loadChatThreads(){
+    try{chatThreads=(await api('/api/chat?threads=1')).threads||[];renderChatThreads();}catch(e){$('chatThreads').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
+  }
+  function renderChatThreads(){
+    const q=($('chatSearch').value||'').trim().toLowerCase();
+    const rows=chatThreads.filter(x=>!q||String(x.name).toLowerCase().includes(q));
+    $('chatThreads').innerHTML=rows.map(x=>`<button type="button" class="chatThread${chatCurrent===String(x.employee_id)?' on':''}${Number(x.unread)?' unread':''}" data-chat-emp="${x.employee_id}"><span class="avatar">${esc(initials(x.name))}</span><span class="chatThreadMain"><b>${esc(x.name)}</b><span class="muted small">${x.last_text?(x.last_from_manager?'You: ':'')+esc(x.last_text):esc(x.title||'No messages yet')}</span></span><span class="chatThreadSide">${x.last_at?`<span class="muted small">${esc(chatShortWhen(x.last_at))}</span>`:''}${Number(x.unread)?`<span class="navCount">${x.unread}</span>`:''}</span></button>`).join('')||'<div class="muted small" style="padding:10px">No painters match.</div>';
+    $('chatThreads').querySelectorAll('[data-chat-emp]').forEach(b=>b.onclick=()=>openChat(b.dataset.chatEmp));
+    const total=chatThreads.reduce((a,x)=>a+Number(x.unread||0),0);setChatBadge(total);chatUnread=total;
+  }
+  async function openChat(id){
+    chatCurrent=id;chatMsgList=[];$('chatLayout').classList.add('open');$('chatMsg').textContent='';
+    if(id==='all'){$('chatWho').innerHTML='<b>Message everyone</b><span class="muted small">Goes to every painter who is not terminated. Each one sees it in their own conversation.</span>';$('chatMsgs').innerHTML='<div class="chatEmpty">Write below. Use this for news like holidays, weather or safety notices.</div>';$('chatFile').closest('.chatAttach').classList.add('hide');renderChatThreads();$('chatInput').focus();return;}
+    $('chatFile').closest('.chatAttach').classList.remove('hide');
+    const th=chatThreads.find(x=>String(x.employee_id)===String(id));
+    $('chatWho').innerHTML=`<b>${esc(th?.name||'Painter')}</b><span class="muted small">${esc(th?.title||'')}</span>`;
+    $('chatMsgs').innerHTML='<div class="chatEmpty">Loading…</div>';
+    await loadChatMsgs(true);
+    if(th){th.unread=0;renderChatThreads();}
+    $('chatInput').focus();
+  }
+  async function loadChatMsgs(full){
+    if(!chatCurrent||chatCurrent==='all')return;
+    const id=chatCurrent,after=!full&&chatMsgList.length?chatMsgList[chatMsgList.length-1].id:0;
+    try{const j=await api(`/api/chat?employeeId=${encodeURIComponent(id)}${after?`&after=${after}`:''}`);if(id!==chatCurrent)return;
+      if(full||!after)chatMsgList=j.messages||[];else if(j.messages?.length)chatMsgList=chatMsgList.concat(j.messages);else return;
+      const el=$('chatMsgs');el.innerHTML=chatMsgList.length?chatBubbles(chatMsgList,true,mChatL):'<div class="chatEmpty">No messages yet. Write the first one below.</div>';el.scrollTop=el.scrollHeight;
+    }catch(e){$('chatMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  // "Seen" ticks change without new messages, so the open conversation is fully reloaded now and then.
+  let chatTick=0;
+  function startChatTimer(){clearInterval(chatTimer);chatTick=0;chatTimer=setInterval(()=>{if(currentMgrPage()!=='messages'||$('managerApp').classList.contains('hide')){clearInterval(chatTimer);chatTimer=null;return;}chatTick++;loadChatMsgs(chatTick%4===0);if(chatTick%2===0)loadChatThreads();},8000);}
+  async function sendMgrChat(e){
+    e?.preventDefault();const inp=$('chatInput'),text=inp.value.trim();if(!text||!chatCurrent)return;
+    if(chatCurrent==='all'&&!confirm('Send this message to every painter?'))return;
+    $('chatSend').disabled=true;$('chatMsg').textContent='';
+    try{if(chatCurrent==='all'){const j=await api('/api/chat',{method:'POST',body:JSON.stringify({action:'broadcast',body:text})});toast(`Sent to ${j.sent} painters.`);inp.value='';chatAutoGrow(inp);loadChatThreads();}
+      else{await api('/api/chat',{method:'POST',body:JSON.stringify({action:'send',employeeId:Number(chatCurrent),body:text})});inp.value='';chatAutoGrow(inp);await loadChatMsgs(false);loadChatThreads();}}
+    catch(err){$('chatMsg').textContent=displayMessage(err.payload||err.message);}
+    finally{$('chatSend').disabled=false;inp.focus();}
+  }
+  function initChat(){
+    $('chatCompose').onsubmit=sendMgrChat;$('chatSearch').oninput=renderChatThreads;
+    $('chatInput').oninput=()=>chatAutoGrow($('chatInput'));
+    $('chatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!/Mobi|Android/i.test(navigator.userAgent)){e.preventDefault();sendMgrChat();}};
+    $('chatAllBtn').onclick=()=>openChat('all');
+    $('chatBack').onclick=()=>{$('chatLayout').classList.remove('open');chatCurrent=null;renderChatThreads();};
+    $('chatFile').onchange=async()=>{const f=$('chatFile').files[0];if(!f||!chatCurrent||chatCurrent==='all')return;$('chatMsg').textContent='Sending…';
+      try{await sendChatFile({kind:'chat',employeeId:chatCurrent},f);$('chatMsg').textContent='';await loadChatMsgs(false);loadChatThreads();}catch(err){$('chatMsg').textContent=displayMessage(err.payload||err.message);}finally{$('chatFile').value='';}};
   }
   function initCompany(){
     $('resUploadBtn').onclick=()=>{const f=$('resFile').files[0],title=$('resTitle').value.trim()||(f&&f.name.replace(/\.pdf$/i,''));if(!f)return $('resMsg').textContent='Choose a file.';if(!$('resCat').value.trim())return $('resMsg').textContent='Choose or type a category.';uploadPdf(f,title,$('resCat').value.trim(),null);};
@@ -1845,7 +1970,10 @@
       const un=Number(j.uniformPending||0);
       if(uniKnownPending!==null&&un>uniKnownPending){toast(j.uniformLatest?`New uniform request from ${j.uniformLatest.employee_name}`:'New uniform request');if(currentMgrPage()==='uniforms')loadUniforms();}
       uniKnownPending=un;setUniBadge(un);renderLowAlert(j.low||[]);
-      document.title=document.title.replace(/^\(\d+\)\s*/,'');if(n+un)document.title=`(${n+un}) `+document.title;}catch{}
+      const cu=Number(j.chatUnread||0);
+      if(chatUnread!==null&&cu>chatUnread){const onIt=currentMgrPage()==='messages'&&chatCurrent&&j.chatLatest&&String(j.chatLatest.employee_id)===String(chatCurrent);if(!onIt)toast(j.chatLatest?`New message from ${j.chatLatest.name}`:'New message');if(currentMgrPage()==='messages')loadChatThreads();}
+      if(currentMgrPage()!=='messages'){chatUnread=cu;setChatBadge(cu);}
+      document.title=document.title.replace(/^\(\d+\)\s*/,'');{const tot=n+un+Number(j.chatUnread||0);if(tot)document.title=`(${tot}) `+document.title;}}catch{}
   }
   async function loadSupplies(){
     try{const q=(k,bar)=>{const [a,z]=bar.range();return `${k}Start=${encodeURIComponent(a.toISOString())}&${k}End=${encodeURIComponent(z.toISOString())}`;};supData=await api(`/api/supplies?${q('req',supReqBar)}&${q('stock',supStockBar)}&${q('log',supLogBar)}`);supKnownPending=Number(supData.pending||0);setSupBadge(supKnownPending);renderSupplies();}
@@ -2145,7 +2273,7 @@
   // Section menu: Dashboard, Employees, Supplies, Settings. Each section shows
   // its own cards (tagged data-page) in the original layout; the address keeps
   // the section (#/employees) so refresh and the back button stay put.
-  const MGR_PAGES=['dashboard','vacations','supplies','uniforms','performance','employees','resources','vehicles','projects','help'];
+  const MGR_PAGES=['dashboard','messages','vacations','supplies','uniforms','performance','employees','resources','vehicles','projects','help'];
   function setDrawer(open){
     const d=$('mgrDrawer'),s=$('mgrScrim'),b=$('mgrBurger');if(!d)return;
     d.classList.toggle('open',open);s.classList.toggle('hide',!open);b.setAttribute('aria-expanded',String(open));
@@ -2169,7 +2297,8 @@
     if(pg==='vehicles')loadVehicles();
     if(pg==='projects')loadProjects();
     if(pg==='help')renderMgrHelp();
-    document.title=({dashboard:'Dashboard',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees',resources:'Job Resources',vehicles:'Vehicles',projects:'Projects',help:'Help'})[pg]+' · WorkClock Manager';if($('mgrSectionName'))$('mgrSectionName').textContent=document.title.split(' · ')[0];{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
+    if(pg==='messages'){loadChatThreads();if(chatCurrent)loadChatMsgs(true);startChatTimer();}
+    document.title=({dashboard:'Dashboard',messages:'Messages',vacations:'Vacations',supplies:'Supplies',uniforms:'Uniforms',performance:'Performance',employees:'Employees',resources:'Job Resources',vehicles:'Vehicles',projects:'Projects',help:'Help'})[pg]+' · WorkClock Manager';if($('mgrSectionName'))$('mgrSectionName').textContent=document.title.split(' · ')[0];{const n=(supKnownPending||0)+(uniKnownPending||0);if(n)document.title=`(${n}) `+document.title;}
     setDrawer(false);window.scrollTo(0,0);
   }
   function initMgrNav(){
@@ -2230,7 +2359,7 @@ const collapse=(btn,body,showText='Show',hideText='Minimize')=>{const b=$(body),
     initSupplies();
     initRecords();
     initPerf();
-    initCompany();
+    initCompany();initChat();
     $('mHelpSearch').oninput=renderMgrHelp;
     initMgrNav();
     initManagerMotion();

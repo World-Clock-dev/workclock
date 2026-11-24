@@ -88,7 +88,7 @@ export default async function handler(req, res) {
         for(const t of ['shifts','supply_requests','uniform_requests','vacation_used','vacation_bank'])
           if(await has(t))return json(res,400,{error:'This employee has work history (shifts, requests or vacation), so they cannot be deleted. Mark them Terminated instead: they can no longer sign in and their records are kept.',code:'HAS_HISTORY'});
         const emp=(await sql`SELECT name FROM employees WHERE id=${id}`)[0];if(!emp)return json(res,404,{error:'Employee not found.'});
-        for(const t of ['employee_sessions','employee_files','employee_records','project_employees','performance_inputs','pin_reset_requests']){try{await sql([`DELETE FROM ${t} WHERE employee_id=`,''],id);}catch{}}
+        for(const t of ['employee_sessions','employee_files','employee_records','project_employees','performance_inputs','pin_reset_requests','chat_messages','chat_threads']){try{await sql([`DELETE FROM ${t} WHERE employee_id=`,''],id);}catch{}}
         try{await sql`UPDATE vehicles SET employee_id=NULL WHERE employee_id=${id}`;}catch{}
         await sql`DELETE FROM employees WHERE id=${id}`;
         await audit('manager',manager.id,'employee_deleted',{employee_id:id,name:emp.name});
