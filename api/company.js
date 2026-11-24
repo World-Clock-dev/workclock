@@ -19,30 +19,78 @@ const SCHEMA = [
      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, address TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL,
      notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS project_employees (project_id INTEGER NOT NULL REFERENCES projects(id), employee_id INTEGER NOT NULL REFERENCES employees(id), PRIMARY KEY (project_id, employee_id))`,
-  `CREATE INDEX IF NOT EXISTS projects_dates ON projects(start_date, end_date)`
+  `CREATE INDEX IF NOT EXISTS projects_dates ON projects(start_date, end_date)`,
+  // Files attached to other records (vehicle incident photos, project work orders).
+  `CREATE TABLE IF NOT EXISTS attachments (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, owner_type TEXT NOT NULL, owner_id INTEGER NOT NULL,
+     filename TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, chunks INTEGER NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS attachments_owner ON attachments(owner_type, owner_id)`,
+  `CREATE TABLE IF NOT EXISTS attachment_chunks (attachment_id INTEGER NOT NULL REFERENCES attachments(id), idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (attachment_id, idx))`
 ];
 let ready = false;
-async function ensure() { if (ready) return; await sqlBatch(SCHEMA.map(s => [s])); ready = true; }
+async function ensure() {
+  if (ready) return;
+  await sqlBatch(SCHEMA.map(s => [s]));
+  const add = async (table, col, def) => { const cols = (await sql([`SELECT name FROM pragma_table_info('${table}')`])).map(c => c.name); if (!cols.includes(col)) await sql([`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`]); };
+  await add('resources', 'category', 'TEXT');
+  await add('resources', 'mime', "TEXT NOT NULL DEFAULT 'application/pdf'");
+  await sql`UPDATE resources SET category=CASE kind WHEN 'handbook' THEN 'Employee Handbook' WHEN 'sop' THEN 'SOP' ELSE 'Other' END WHERE category IS NULL`;
+  for (const [t, c, d] of EXTRA_COLS) await add(t, c, d);
+  ready = true;
+}
+// Columns added by later rounds (vehicles, incidents, projects).
+const EXTRA_COLS = [];
 
 const MAX_PDF = 8 * 1024 * 1024, CHUNK = 900_000;
 const txt = (v, max) => { const s = String(v ?? '').trim().replace(/\s+/g, ' '); return s.length <= max ? s : null; };
 const day = v => { const s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) ? s : null; };
 const idOf = v => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
-async function listResources() { return sql`SELECT id,title,kind,filename,size,created_at,updated_at FROM resources ORDER BY CASE kind WHEN 'handbook' THEN 0 WHEN 'sop' THEN 1 ELSE 2 END, title`; }
-async function sendPdf(res, id) {
-  const r = (await sql`SELECT id,filename,chunks FROM resources WHERE id=${id}`)[0];
-  if (!r) return json(res, 404, { error: 'Not found.' });
-  const parts = await sql`SELECT data FROM resource_chunks WHERE resource_id=${id} ORDER BY idx`;
-  const bin = atob(parts.map(p => p.data).join(''));
+// File types that can be uploaded. PDFs and pictures open in the browser; the rest download.
+const FILE_TYPES = {
+  'application/pdf': 'pdf', 'image/jpeg': 'img', 'image/png': 'img', 'image/webp': 'img',
+  'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'doc',
+  'application/vnd.ms-excel': 'doc', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'doc', 'text/plain': 'doc'
+};
+// Reads a data: URL; returns { mime, b64, size } or an error message.
+function readUpload(data, max = MAX_PDF) {
+  const m = /^data:([\w.+\-\/]+);base64,([A-Za-z0-9+/=]+)$/.exec(String(data || ''));
+  if (!m || !FILE_TYPES[m[1]]) return { error: 'Choose a PDF, a picture (JPG/PNG), or a Word or Excel file.' };
+  const size = Math.floor(m[2].length * 3 / 4);
+  if (size > max) return { error: `The file is too large (${Math.round(max / 1048576)} MB at most).` };
+  return { mime: m[1], b64: m[2], size };
+}
+const chunk = b64 => { const out = []; for (let i = 0; i < b64.length; i += CHUNK) out.push(b64.slice(i, i + CHUNK)); return out; };
+function sendBytes(res, b64, mime, filename) {
+  const bin = atob(b64);
   const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${String(r.filename).replace(/[^\w.\- ]/g, '_')}"`);
+  const inline = FILE_TYPES[mime] === 'pdf' || FILE_TYPES[mime] === 'img';
+  res.setHeader('Content-Type', FILE_TYPES[mime] ? mime : 'application/octet-stream');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${String(filename).replace(/[^\w.\- ]/g, '_')}"`);
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
   return res.status(200).end(bytes);
 }
+async function saveAttachment(ownerType, ownerId, filename, up) {
+  const parts = chunk(up.b64), now = nowIso();
+  const id = Number((await sql`INSERT INTO attachments(owner_type,owner_id,filename,mime,size,chunks,created_at) VALUES(${ownerType},${ownerId},${filename},${up.mime},${up.size},${parts.length},${now}) RETURNING id`)[0].id);
+  await sqlBatch(parts.map((c, i) => ['INSERT INTO attachment_chunks(attachment_id,idx,data) VALUES(?,?,?)', id, i, c]));
+  return id;
+}
+const attachmentsFor = (ownerType, ids) => ids.length ? sql(`SELECT id,owner_id,filename,mime,size,created_at FROM attachments WHERE owner_type=? AND owner_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`.split('?'), ownerType, ...ids) : [];
+async function deleteAttachments(ownerType, ownerId) {
+  const ids = (await sql`SELECT id FROM attachments WHERE owner_type=${ownerType} AND owner_id=${ownerId}`).map(r => Number(r.id));
+  if (ids.length) await sqlBatch(ids.flatMap(i => [['DELETE FROM attachment_chunks WHERE attachment_id=?', i], ['DELETE FROM attachments WHERE id=?', i]]));
+}
 
+async function listResources() { return sql`SELECT id,title,kind,category,mime,filename,size,created_at,updated_at FROM resources ORDER BY CASE category WHEN 'Employee Handbook' THEN 0 WHEN 'SOP' THEN 1 ELSE 2 END, category, title`; }
+async function sendPdf(res, id) {
+  const r = (await sql`SELECT id,filename,mime,chunks FROM resources WHERE id=${id}`)[0];
+  if (!r) return json(res, 404, { error: 'Not found.' });
+  const parts = await sql`SELECT data FROM resource_chunks WHERE resource_id=${id} ORDER BY idx`;
+  return sendBytes(res, parts.map(p => p.data).join(''), r.mime || 'application/pdf', r.filename);
+}
 async function vehiclesFor(where) {
   const v = where === 'all'
     ? await sql`SELECT v.*,e.name AS employee_name FROM vehicles v LEFT JOIN employees e ON e.id=v.employee_id WHERE v.active=1 ORDER BY v.year DESC,v.make`
@@ -93,25 +141,26 @@ export default async function handler(req, res) {
 
     // ---- Resources
     if (b.action === 'resource_save') {
-      const title = txt(b.title, 120), kind = ['handbook', 'sop', 'other'].includes(b.kind) ? b.kind : 'other';
-      if (!title) return json(res, 400, { error: 'Give the document a title.' });
+      const title = txt(b.title, 120), category = txt(b.category, 40) || 'Other';
+      const kind = category === 'Employee Handbook' ? 'handbook' : category === 'SOP' ? 'sop' : 'other';
+      if (!title) return json(res, 400, { error: 'Give the document a name.' });
+      if (category === null) return json(res, 400, { error: 'The category must be 40 characters or fewer.' });
       const id = idOf(b.id);
       if (b.data) {
-        const m = /^data:application\/pdf;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.data));
-        if (!m) return json(res, 400, { error: 'Choose a PDF file.' });
-        const size = Math.floor(m[1].length * 3 / 4);
-        if (size > MAX_PDF) return json(res, 400, { error: 'The PDF is too large (8 MB at most).' });
-        const filename = txt(b.filename, 150) || 'document.pdf';
-        const chunks = []; for (let i = 0; i < m[1].length; i += CHUNK) chunks.push(m[1].slice(i, i + CHUNK));
+        const up = readUpload(b.data);
+        if (up.error) return json(res, 400, { error: up.error });
+        const size = up.size, mime = up.mime;
+        const filename = txt(b.filename, 150) || 'document';
+        const chunks = chunk(up.b64);
         let rid = id;
-        if (rid) await sql`UPDATE resources SET title=${title},kind=${kind},filename=${filename},size=${size},chunks=${chunks.length},updated_at=${now} WHERE id=${rid}`;
-        else rid = Number((await sql`INSERT INTO resources(title,kind,filename,size,chunks,created_at,updated_at) VALUES(${title},${kind},${filename},${size},${chunks.length},${now},${now}) RETURNING id`)[0].id);
+        if (rid) await sql`UPDATE resources SET title=${title},kind=${kind},category=${category},mime=${mime},filename=${filename},size=${size},chunks=${chunks.length},updated_at=${now} WHERE id=${rid}`;
+        else rid = Number((await sql`INSERT INTO resources(title,kind,category,mime,filename,size,chunks,created_at,updated_at) VALUES(${title},${kind},${category},${mime},${filename},${size},${chunks.length},${now},${now}) RETURNING id`)[0].id);
         await sqlBatch([['DELETE FROM resource_chunks WHERE resource_id=?', rid], ...chunks.map((c, i) => ['INSERT INTO resource_chunks(resource_id,idx,data) VALUES(?,?,?)', rid, i, c])]);
         await audit('manager', manager.id, 'resource_uploaded', { id: rid, title, size });
         return json(res, 200, { ok: true, id: rid });
       }
-      if (!id) return json(res, 400, { error: 'Choose a PDF file.' });
-      await sql`UPDATE resources SET title=${title},kind=${kind},updated_at=${now} WHERE id=${id}`;
+      if (!id) return json(res, 400, { error: 'Choose a file.' });
+      await sql`UPDATE resources SET title=${title},kind=${kind},category=${category},updated_at=${now} WHERE id=${id}`;
       return json(res, 200, { ok: true, id });
     }
     if (b.action === 'resource_delete') {

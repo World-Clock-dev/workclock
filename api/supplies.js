@@ -125,6 +125,8 @@ async function ensureTables() {
   const mig = [];
   if (!cols.includes('full_qty')) mig.push(['ALTER TABLE supply_items ADD COLUMN full_qty INTEGER NOT NULL DEFAULT 0']);
   if (!cols.includes('deleted_at')) mig.push(['ALTER TABLE supply_items ADD COLUMN deleted_at TEXT']);
+  // 'min' = kept on the shelf with a minimum; 'demand' = bought when someone asks, no stock kept.
+  if (!cols.includes('stock_mode')) mig.push(["ALTER TABLE supply_items ADD COLUMN stock_mode TEXT NOT NULL DEFAULT 'min'"]);
   const ucols = (await sql`SELECT name FROM pragma_table_info('uniform_request_lines')`).map(c => c.name);
   if (!ucols.includes('unit_price')) mig.push(['ALTER TABLE uniform_request_lines ADD COLUMN unit_price REAL']);
   // employee_seen = 0 once the manager decides, until the painter opens that page.
@@ -160,7 +162,7 @@ async function linesFor(requestIds) {
   const rows = [];
   for (let i = 0; i < requestIds.length; i += 90) {
     const part = requestIds.slice(i, i + 90);
-    const strings = ['SELECT l.id,l.request_id,l.item_id,l.item_name,l.unit,l.qty_requested,l.qty_given,i.quantity AS on_shelf FROM supply_request_lines l LEFT JOIN supply_items i ON i.id=l.item_id WHERE l.request_id IN ('];
+    const strings = ['SELECT l.id,l.request_id,l.item_id,l.item_name,l.unit,l.qty_requested,l.qty_given,i.quantity AS on_shelf,i.stock_mode FROM supply_request_lines l LEFT JOIN supply_items i ON i.id=l.item_id WHERE l.request_id IN ('];
     part.forEach((_, k) => strings.push(k < part.length - 1 ? ',' : ') ORDER BY l.id'));
     rows.push(...await sql(strings, ...part));
   }
@@ -195,7 +197,7 @@ const money = v => Math.round(Number(v) * 100) / 100;
 const lineAmount = (l, prices) => money(Number(l.qty) * (l.unit_price != null ? Number(l.unit_price) : prices[l.item] ?? DEFAULT_UNIFORM_PRICE));
 
 const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty,low_at FROM supply_items
-  WHERE deleted_at IS NULL AND active=1 AND ((full_qty>0 AND quantity*5<full_qty) OR (low_at>0 AND quantity<low_at)) ORDER BY CASE WHEN full_qty>0 THEN CAST(quantity AS REAL)/full_qty ELSE 0 END, name`;
+  WHERE deleted_at IS NULL AND active=1 AND stock_mode<>'demand' AND ((full_qty>0 AND quantity*5<full_qty) OR (low_at>0 AND quantity<low_at)) ORDER BY CASE WHEN full_qty>0 THEN CAST(quantity AS REAL)/full_qty ELSE 0 END, name`;
 
 async function uniformLines(ids) {
   if (!ids.length) return new Map();
@@ -418,7 +420,7 @@ async function managerSide(req, res, manager) {
       return [s0, e0];
     };
     const [rs, re] = rng('req', 31), [ss, se] = rng('stock', 31), [ls, le] = rng('log', 31);
-    const items = await sql`SELECT i.id,i.name,i.category,i.unit,i.quantity,i.low_at,i.full_qty,i.active,i.updated_at,
+    const items = await sql`SELECT i.id,i.name,i.category,i.unit,i.quantity,i.low_at,i.full_qty,i.stock_mode,i.active,i.updated_at,
         (SELECT g.quantity_after FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at<${ss} ORDER BY g.created_at DESC,g.id DESC LIMIT 1) AS begin_qty,
         (SELECT g.quantity_after FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at<${se} ORDER BY g.created_at DESC,g.id DESC LIMIT 1) AS end_qty,
         (SELECT COALESCE(sum(g.change),0) FROM supply_stock_log g WHERE g.item_id=i.id AND g.created_at>=${ss} AND g.created_at<${se} AND g.change>0) AS added,
@@ -444,11 +446,13 @@ async function managerSide(req, res, manager) {
     const name = b.name === undefined && old ? old.name : cleanText(b.name, 80);
     const category = b.category === undefined && old ? old.category : (cleanText(b.category, 40) || 'Other');
     const unit = b.unit === undefined && old ? old.unit : (cleanText(b.unit, 20) || 'Piece');
-    const quantity = b.quantity === undefined && old ? old.quantity : wholeNumber(b.quantity ?? 0, 0, MAX_QTY);
-    const lowAt = b.low_at === undefined && old ? old.low_at : wholeNumber(b.low_at ?? 0, 0, MAX_QTY);
+    const stockMode = b.stock_mode === undefined ? (old ? old.stock_mode || 'min' : 'min') : (b.stock_mode === 'demand' ? 'demand' : 'min');
+    const demand = stockMode === 'demand';
+    const quantity = demand ? 0 : b.quantity === undefined && old ? old.quantity : wholeNumber(b.quantity ?? 0, 0, MAX_QTY);
+    const lowAt = demand ? 0 : b.low_at === undefined && old ? old.low_at : wholeNumber(b.low_at ?? 0, 0, MAX_QTY);
     const active = b.active === undefined ? (old ? !!old.active : true) : !!b.active;
     // Full stock = 100%. Left blank, it follows the quantity entered.
-    let fullQty = b.full_qty === undefined || b.full_qty === '' || b.full_qty === null ? (old && old.full_qty ? old.full_qty : quantity) : wholeNumber(b.full_qty, 0, MAX_QTY);
+    let fullQty = demand ? 0 : b.full_qty === undefined || b.full_qty === '' || b.full_qty === null ? (old && old.full_qty ? old.full_qty : quantity) : wholeNumber(b.full_qty, 0, MAX_QTY);
     if (fullQty === null) return json(res, 400, { error: 'Full stock must be a whole number, 0 or more.' });
     if (!name) return json(res, 400, { error: 'Enter an item name (up to 80 characters).' });
     if (category === null || unit === null) return json(res, 400, { error: 'Category and unit must be short.' });
@@ -457,12 +461,12 @@ async function managerSide(req, res, manager) {
     const now = nowIso();
     try {
       let row;
-      if (isNew) row = (await sql`INSERT INTO supply_items(name,category,unit,quantity,low_at,full_qty,active,created_at,updated_at) VALUES(${name},${category},${unit},${quantity},${lowAt},${fullQty},${active},${now},${now}) RETURNING id`)[0];
-      else await sql`UPDATE supply_items SET name=${name},category=${category},unit=${unit},quantity=${quantity},low_at=${lowAt},full_qty=${fullQty},active=${active},updated_at=${now} WHERE id=${id}`;
+      if (isNew) row = (await sql`INSERT INTO supply_items(name,category,unit,quantity,low_at,full_qty,stock_mode,active,created_at,updated_at) VALUES(${name},${category},${unit},${quantity},${lowAt},${fullQty},${stockMode},${active},${now},${now}) RETURNING id`)[0];
+      else await sql`UPDATE supply_items SET name=${name},category=${category},unit=${unit},quantity=${quantity},low_at=${lowAt},full_qty=${fullQty},stock_mode=${stockMode},active=${active},updated_at=${now} WHERE id=${id}`;
       const itemId = isNew ? Number(row.id) : id;
       const change = quantity - (old ? old.quantity : 0);
-      if (change !== 0) await sql`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,created_at) VALUES(${itemId},${name},${change},${quantity},${isNew ? 'Starting quantity' : 'Quantity set by manager'},${now})`;
-      await audit('manager', manager.id, isNew ? 'supply_item_created' : 'supply_item_updated', { item_id: itemId, name, quantity, change, active });
+      if (change !== 0) await sql`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,created_at) VALUES(${itemId},${name},${change},${quantity},${isNew ? 'Starting quantity' : demand ? 'Changed to On demand' : 'Quantity set by manager'},${now})`;
+      await audit('manager', manager.id, isNew ? 'supply_item_created' : 'supply_item_updated', { item_id: itemId, name, quantity, change, active, stock_mode: stockMode });
       return json(res, 200, { ok: true, id: itemId });
     } catch (e) {
       if (e.code === '23505') return json(res, 400, { error: 'An item with this name already exists.' });
@@ -576,7 +580,7 @@ async function managerSide(req, res, manager) {
     for (const l of lines) {
       const q = given.has(Number(l.id)) ? wholeNumber(given.get(Number(l.id)), 0, MAX_QTY) : l.qty_requested;
       if (q === null) return json(res, 400, { error: `Enter a whole number for ${l.item_name}.` });
-      if (q > (l.on_shelf ?? 0)) return json(res, 400, { error: `Not enough ${l.item_name} on the shelf: ${l.on_shelf ?? 0} ${l.unit} left. Lower the amount or update the stock first.`, code: 'SUPPLY_SHORT' });
+      if (l.stock_mode !== 'demand' && q > (l.on_shelf ?? 0)) return json(res, 400, { error: `Not enough ${l.item_name} on the shelf: ${l.on_shelf ?? 0} ${l.unit} left. Lower the amount or update the stock first.`, code: 'SUPPLY_SHORT' });
       plan.push({ ...l, q });
     }
     if (!plan.some(p => p.q > 0) && !customPlan.some(p => p.q > 0)) return json(res, 400, { error: 'Deliver at least one item, or reject the request.' });
@@ -589,7 +593,7 @@ async function managerSide(req, res, manager) {
     const mine = 'EXISTS(SELECT 1 FROM supply_requests WHERE id=? AND status=\'given\' AND decided_at=?)';
     for (const p of plan) {
       stmts.push([`UPDATE supply_request_lines SET qty_given=? WHERE id=? AND ${mine}`, p.q, p.id, id, now]);
-      if (p.q > 0) {
+      if (p.q > 0 && p.stock_mode !== 'demand') {
         stmts.push([`UPDATE supply_items SET quantity=quantity-?,updated_at=? WHERE id=? AND ${mine}`, p.q, now, p.item_id, id, now]);
         stmts.push([`INSERT INTO supply_stock_log(item_id,item_name,change,quantity_after,reason,request_id,employee_id,created_at) SELECT id,name,?,quantity,?,?,?,? FROM supply_items WHERE id=? AND ${mine}`, -p.q, 'Delivered to employee', id, request.employee_id, now, p.item_id, id, now]);
       }

@@ -813,7 +813,8 @@
   }
   async function loadEmpResources(){
     try{const r=(await api('/api/company?area=resources')).resources||[];
-      $('eResList').innerHTML=r.map(x=>`<a class="resRow resLink" href="/api/company?file=${x.id}" target="_blank" rel="noopener"><span class="resIcon">PDF</span><div class="resMain"><b>${esc(x.title)}</b><span class="muted small">${esc(t('resK_'+x.kind))} · ${fileSize(x.size)}</span></div><span class="mini secondary">${esc(t('resOpen'))}</span></a>`).join('')||`<div class="dashEmpty">${esc(t('resEmpty'))}</div>`;}catch{}
+      const catName=c=>c==='Employee Handbook'?t('resK_handbook'):c==='SOP'?t('resK_sop'):c==='Other'?t('resK_other'):c;
+      $('eResList').innerHTML=resGroups(r).map(([c,rows])=>`<div class="supCat">${esc(catName(c))}</div>`+rows.map(x=>`<a class="resRow resLink" href="/api/company?file=${x.id}" target="_blank" rel="noopener"><span class="resIcon">${fileTag(x.mime)}</span><div class="resMain"><b>${esc(x.title)}</b><span class="muted small">${fileSize(x.size)}</span></div><span class="mini secondary">${esc(t('resOpen'))}</span></a>`).join('')).join('')||`<div class="dashEmpty">${esc(t('resEmpty'))}</div>`;}catch{}
   }
   function initEmpCompany(){
     $('eProjPrev').onclick=()=>{eProjMonth=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()-1,1);loadEmpProjects();};
@@ -1674,16 +1675,26 @@
   const RES_KIND={handbook:'Employee Handbook',sop:'SOP',other:'Other'};
   let resRows=[],vehRows=[],vehCurrent=null,projRows=[],projMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),projCurrent=null;
   async function loadResources(){try{resRows=(await api('/api/company?area=resources')).resources||[];renderResources();}catch(e){$('resList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
+  // Some phones send Word/Excel files with no type: work it out from the name.
+  const fileMime=f=>{const x=(f.name.split('.').pop()||'').toLowerCase();return ({pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xls:'application/vnd.ms-excel',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',txt:'text/plain'})[x]||f.type||'application/octet-stream';};
+  const RES_CATS=['Employee Handbook','SOP','Safety','Forms','Training','Other'];
+  const fileTag=m=>/^image\//.test(m||'')?'IMG':/pdf/.test(m||'application/pdf')?'PDF':/sheet|excel/.test(m)?'XLS':/word/.test(m)?'DOC':'FILE';
+  const resGroups=rows=>{const cats=[...new Set(rows.map(r=>r.category||'Other'))];return cats.map(c=>[c,rows.filter(r=>(r.category||'Other')===c)]);};
   function renderResources(){
-    $('resList').innerHTML=resRows.map(r=>`<div class="resRow"><span class="resIcon">PDF</span><div class="resMain"><b>${esc(r.title)}</b><span class="muted small">${esc(RES_KIND[r.kind]||r.kind)} · ${esc(r.filename)} · ${fileSize(r.size)} · updated ${esc(supWhen(r.updated_at))}</span></div><a class="mini secondary resOpen" href="/api/company?file=${r.id}" target="_blank" rel="noopener">Open</a><label class="mini secondary resReplace">Replace<input type="file" accept="application/pdf" data-res-replace="${r.id}" hidden/></label><button class="mini secondary supDel" data-res-del="${r.id}" type="button">Delete</button></div>`).join('')||'<div class="dashEmpty">No documents yet. Upload the Employee Handbook and the SOP above.</div>';
+    const cats=[...new Set([...RES_CATS,...resRows.map(r=>r.category||'Other')])];
+    $('resCatList').innerHTML=cats.map(c=>`<option value="${esc(c)}"></option>`).join('');
+    $('resList').innerHTML=resGroups(resRows).map(([c,rows])=>`<div class="supCat">${esc(c)} <span class="muted small">(${rows.length})</span></div>`+rows.map(r=>`<div class="resRow"><span class="resIcon">${fileTag(r.mime)}</span><div class="resMain"><b>${esc(r.title)}</b><span class="muted small">${esc(r.filename)} · ${fileSize(r.size)} · updated ${esc(supWhen(r.updated_at))}</span></div><a class="mini secondary resOpen" href="/api/company?file=${r.id}" target="_blank" rel="noopener">Open</a><button class="mini secondary" data-res-edit="${r.id}" type="button">Rename</button><label class="mini secondary resReplace">Replace<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,.doc,.docx,.xls,.xlsx,.txt" data-res-replace="${r.id}" hidden/></label><button class="mini secondary supDel" data-res-del="${r.id}" type="button">Delete</button></div>`).join('')).join('')||'<div class="dashEmpty">No documents yet. Add the Employee Handbook, the SOP and anything else above.</div>';
     document.querySelectorAll('[data-res-del]').forEach(b=>b.onclick=async()=>{const r=resRows.find(x=>String(x.id)===b.dataset.resDel);if(!confirm(`Delete "${r.title}"? Employees will no longer see it.`))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_delete',id:Number(r.id)})});toast('Document deleted.');loadResources();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
-    document.querySelectorAll('[data-res-replace]').forEach(inp=>inp.onchange=async()=>{const f=inp.files[0];if(!f)return;const r=resRows.find(x=>String(x.id)===inp.dataset.resReplace);await uploadPdf(f,r.title,r.kind,Number(r.id));});
+    document.querySelectorAll('[data-res-replace]').forEach(inp=>inp.onchange=async()=>{const f=inp.files[0];if(!f)return;const r=resRows.find(x=>String(x.id)===inp.dataset.resReplace);await uploadPdf(f,r.title,r.category,Number(r.id));});
+    document.querySelectorAll('[data-res-edit]').forEach(b=>b.onclick=async()=>{const r=resRows.find(x=>String(x.id)===b.dataset.resEdit);
+      const title=prompt('Document name:',r.title);if(title===null)return;const category=prompt('Category (e.g. '+RES_CATS.join(', ')+'):',r.category||'Other');if(category===null)return;
+      try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id:Number(r.id),title:title.trim(),category:category.trim()})});toast('Saved.');loadResources();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
   }
-  async function uploadPdf(f,title,kind,id){
-    if(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name))return toast('Choose a PDF file.','bad');
-    if(f.size>8*1048576)return toast('The PDF is too large (8 MB at most).','bad');
+  async function uploadPdf(f,title,category,id){
+    if(f.size>8*1048576)return toast('The file is too large (8 MB at most).','bad');
     $('resMsg').textContent='Uploading…';
-    try{let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:application/pdf;');await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id,title,kind,filename:f.name,data})});$('resMsg').textContent='';toast(id?'Document replaced.':'Document uploaded.');$('resFile').value='';$('resTitle').value='';loadResources();}
+    try{let data=await readAsDataURL(f);data=data.replace(/^data:[^;]*;/,'data:'+fileMime(f)+';');
+      await api('/api/company',{method:'POST',body:JSON.stringify({action:'resource_save',id,title,category,filename:f.name,data})});$('resMsg').textContent='';toast(id?'Document replaced.':'Document added.');$('resFile').value='';$('resTitle').value='';$('resCat').value='';loadResources();}
     catch(e){$('resMsg').textContent=displayMessage(e.payload||e.message);}
   }
   async function loadVehicles(){try{vehRows=(await api('/api/company?area=vehicles')).vehicles||[];renderVehicles($('vehList'),vehRows,true);}catch(e){$('vehList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
@@ -1736,7 +1747,7 @@
     catch(e){$('projMsg').textContent=displayMessage(e.payload||e.message);}
   }
   function initCompany(){
-    $('resUploadBtn').onclick=()=>{const f=$('resFile').files[0],title=$('resTitle').value.trim()||(f&&f.name.replace(/\.pdf$/i,''));if(!f)return $('resMsg').textContent='Choose a PDF file.';uploadPdf(f,title,$('resKind').value,null);};
+    $('resUploadBtn').onclick=()=>{const f=$('resFile').files[0],title=$('resTitle').value.trim()||(f&&f.name.replace(/\.pdf$/i,''));if(!f)return $('resMsg').textContent='Choose a file.';if(!$('resCat').value.trim())return $('resMsg').textContent='Choose or type a category.';uploadPdf(f,title,$('resCat').value.trim(),null);};
     $('vehAddBtn').onclick=()=>openVehicle(null);$('vehCancel').onclick=()=>$('vehPanel').classList.add('hide');$('vehSave').onclick=saveVehicle;
     $('vehRemove').onclick=async()=>{if(!confirm('Remove this vehicle? Its maintenance history is kept in the database.'))return;try{await api('/api/company',{method:'POST',body:JSON.stringify({action:'vehicle_remove',id:Number(vehCurrent.id)})});$('vehPanel').classList.add('hide');loadVehicles();}catch(e){$('vehMsg').textContent=displayMessage(e.payload||e.message);}};
     $('mntCancel').onclick=()=>$('mntPanel').classList.add('hide');
@@ -1796,8 +1807,8 @@
     const empty={pending:'No new requests. New ones show up here and on the Supplies link.',approved:'Nothing approved and waiting to be delivered.',given:'Nothing delivered in these dates.',rejected:'No rejected or cancelled requests in these dates.',all:'No requests in these dates.'}[supTab];
     $('supReqList').innerHTML=reqs.map(r=>{
       const open=r.status==='pending'||r.status==='approved';
-      const rows=r.lines.map(l=>{const shelf=l.on_shelf??0,short=open&&l.qty_requested>shelf;
-        return `<tr><td><b>${esc(l.item_name)}</b></td><td>${l.qty_requested} <span class="muted">${esc(l.unit)}</span></td>`+(open?`<td class="${short?'supShort':''}">${shelf} <span class="muted">${esc(l.unit)}</span>${short?'<div class="supShortTxt">Not enough</div>':''}</td><td><input class="supGiveQty" data-sup-line="${l.id}" data-sup-req="${r.id}" inputmode="numeric" type="number" min="0" max="${shelf}" value="${Math.min(l.qty_requested,shelf)}" aria-label="Deliver ${esc(l.item_name)}"/></td>`:`<td>${r.status==='given'?`<b>${l.qty_given??0}</b> <span class="muted">${esc(l.unit)}</span>`:'—'}</td>`)+`</tr>`;}).join('')
+      const rows=r.lines.map(l=>{const dem=l.stock_mode==='demand',shelf=l.on_shelf??0,short=open&&!dem&&l.qty_requested>shelf;
+        return `<tr><td><b>${esc(l.item_name)}</b></td><td>${l.qty_requested} <span class="muted">${esc(l.unit)}</span></td>`+(open?`<td class="${short?'supShort':''}">${dem?'<span class="demandTag">On demand</span>':`${shelf} <span class="muted">${esc(l.unit)}</span>`}${short?'<div class="supShortTxt">Not enough</div>':''}</td><td><input class="supGiveQty" data-sup-line="${l.id}" data-sup-req="${r.id}" inputmode="numeric" type="number" min="0" ${dem?'':`max="${shelf}"`} value="${dem?l.qty_requested:Math.min(l.qty_requested,shelf)}" aria-label="Deliver ${esc(l.item_name)}"/></td>`:`<td>${r.status==='given'?`<b>${l.qty_given??0}</b> <span class="muted">${esc(l.unit)}</span>`:'—'}</td>`)+`</tr>`;}).join('')
        +(r.custom||[]).map(c=>`<tr class="supCustomRow"><td><b>${esc(c.name)}</b> <span class="customTag">Not on the list</span></td><td>${c.qty}</td>`+(open?`<td class="muted small">Not stocked</td><td><input class="supGiveQty" data-sup-custom="${c.id}" data-sup-creq="${r.id}" inputmode="numeric" type="number" min="0" value="${c.qty}" aria-label="Deliver ${esc(c.name)}"/></td>`:`<td>${r.status==='given'?`<b>${c.qty_given??0}</b>`:'—'}</td>`)+`</tr>`).join('');
       const when=r.status==='approved'?` · approved ${esc(supWhen(r.approved_at))}`:'';
       const actions=r.status==='pending'
@@ -1815,11 +1826,13 @@
     const q=($('supSearch').value||'').trim().toLowerCase(),lowOnly=$('supLowOnly').checked;
     const isLow=supIsLow;
     const items=supData.items.filter(i=>(!q||(i.name+' '+i.category).toLowerCase().includes(q))&&(!cf.value||i.category===cf.value)&&(!lowOnly||isLow(i)));
-    const lowN=supData.items.filter(isLow).length,outN=supData.items.filter(i=>i.active&&i.quantity===0).length;
-    $('supStockSummary').innerHTML=`<span><b>${supData.items.filter(i=>i.active).length}</b> items</span><span class="${lowN?'warn':''}"><b>${lowN}</b> low</span><span class="${outN?'warn':''}"><b>${outN}</b> at zero</span>`;
+    const lowN=supData.items.filter(isLow).length,outN=supData.items.filter(i=>i.active&&i.stock_mode!=='demand'&&i.quantity===0).length,demN=supData.items.filter(i=>i.active&&i.stock_mode==='demand').length;
+    $('supStockSummary').innerHTML=`<span><b>${supData.items.filter(i=>i.active).length}</b> items</span><span class="${lowN?'warn':''}"><b>${lowN}</b> low</span><span class="${outN?'warn':''}"><b>${outN}</b> at zero</span>${demN?`<span><b>${demN}</b> on demand</span>`:''}`;
     const shown=[...new Set(items.map(i=>i.category))];
     $('supItemList').innerHTML=shown.map(c=>`<div class="supCat">${esc(c)}</div><div class="supItems">`+items.filter(i=>i.category===c).map(i=>{
       const begin=i.begin_qty??0,end=i.end_qty??i.quantity;
+      const dem=i.stock_mode==='demand';
+      if(dem)return `<div class="supItem demand${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)} · bought when asked${i.active?'':' · hidden from painters'}</span></div><div class="supQty"><span class="demandTag">On demand</span></div><div class="supItemBtns"><button class="mini secondary" data-sup-edit="${i.id}" type="button">Edit</button><button class="mini secondary supDel" data-sup-del="${i.id}" type="button" aria-label="Delete ${esc(i.name)}">Delete</button></div></div>`;
       return `<div class="supItem${isLow(i)?' low':''}${i.quantity===0&&i.active?' zero':''}${i.active?'':' off'}"><div class="supItemName"><b>${esc(i.name)}</b><span class="muted small">${esc(i.unit)}${i.low_at?` · keep at least ${i.low_at}`:''}${i.full_qty?` · full ${i.full_qty} · ${supPct(i)}%`:''}${i.active?'':' · hidden from painters'}</span><span class="supPeriod">Start <b>${begin}</b> · <span class="pos">+${i.added||0}</span> · <span class="neg">−${i.removed||0}</span> · End <b>${end}</b></span></div><div class="supQty"><b>${i.quantity}</b><span>${isLow(i)?'Low':i.quantity===0&&i.active?'None left':'in stock now'}</span></div><div class="supItemBtns"><button class="mini secondary" data-sup-edit="${i.id}" type="button">Edit</button><button class="mini secondary supDel" data-sup-del="${i.id}" type="button" aria-label="Delete ${esc(i.name)}">Delete</button></div></div>`;}).join('')+`</div>`).join('')||`<div class="dashEmpty">No items match.</div>`;
     document.querySelectorAll('[data-sup-edit]').forEach(b=>b.onclick=()=>openSupItem(supData.items.find(i=>String(i.id)===b.dataset.supEdit)));
     document.querySelectorAll('[data-sup-del]').forEach(b=>b.onclick=()=>deleteSupItem(supData.items.find(i=>String(i.id)===b.dataset.supDel)));
@@ -1837,7 +1850,7 @@
     try{await api('/api/supplies',{method:'POST',body:JSON.stringify({action:'decide',id:Number(id),decision,note,lines,custom})});toast(decision==='given'?'Marked as delivered. Stock updated.':decision==='approved'?'Approved. Mark it delivered when you hand it over.':'Request rejected.');await loadSupplies();}
     catch(e){msg.textContent=displayMessage(e.payload||e.message);btn.disabled=false;}
   }
-  const supIsLow=i=>!!i.active&&((i.full_qty>0&&i.quantity*5<i.full_qty)||(i.low_at>0&&i.quantity<i.low_at));
+  const supIsLow=i=>!!i.active&&i.stock_mode!=='demand'&&((i.full_qty>0&&i.quantity*5<i.full_qty)||(i.low_at>0&&i.quantity<i.low_at));
   const supPct=i=>i.full_qty?Math.round(i.quantity/i.full_qty*100):0;
   // Dashboard notice when any item is below 20% of its full stock.
   function renderLowAlert(low){
@@ -1997,13 +2010,20 @@
     $('supItemTitle').textContent=isNew?'Add item':'Update item';
     $('supItemSub').textContent=isNew?'Painters will see it in their supplies list.':`Last changed ${supWhen(it.updated_at)}. Changing the quantity is recorded in Stock History.`;
     $('siName').value=it?.name||'';$('siCat').value=it?.category||($('supCatFilter').value||'');$('siUnit').value=it?.unit||'Piece';
-    $('siQty').value=it?it.quantity:'';$('siFull').value=it&&it.full_qty?it.full_qty:'';$('siMin').value=it&&it.low_at?it.low_at:'';$('supItemDelete').classList.toggle('hide',isNew);$('siActive').value=!it||it.active?'1':'0';
+    $('siQty').value=it?it.quantity:'';$('siFull').value=it&&it.full_qty?it.full_qty:'';$('siMin').value=it&&it.low_at?it.low_at:'';setSiMode(it?.stock_mode==='demand'?'demand':'min');$('supItemDelete').classList.toggle('hide',isNew);$('siActive').value=!it||it.active?'1':'0';
     $('supItemMsg').textContent='';$('supItemSave').textContent=isNew?'Add item':'Save';
     $('supItemPanel').classList.remove('hide');(isNew?$('siName'):$('siQty')).focus();
   }
+  function setSiMode(m){
+    document.querySelectorAll('[data-si-mode]').forEach(b=>{const on=b.dataset.siMode===m;b.classList.toggle('on',on);b.setAttribute('aria-checked',on?'true':'false');});
+    $('siMode').dataset.mode=m;document.querySelectorAll('.siStockF').forEach(l=>l.classList.toggle('hide',m==='demand'));$('siAlertHint').classList.toggle('hide',m==='demand');
+    $('siModeHint').textContent=m==='demand'?'Not kept on the shelf: you buy it when a painter asks. No stock count, no minimum and no low alert.':'Kept on the shelf. You get an alert when it drops below the minimum.';
+  }
+  document.querySelectorAll('[data-si-mode]').forEach(b=>b.onclick=()=>setSiMode(b.dataset.siMode));
   async function saveSupItem(){
     const id=$('supItemPanel').dataset.id,isNew=!id,msg=$('supItemMsg');
-    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),full_qty:$('siFull').value===''?'':Number($('siFull').value),low_at:Number($('siMin').value||0),active:$('siActive').value==='1'};
+    const body={action:'item',name:$('siName').value.trim(),category:$('siCat').value.trim(),unit:$('siUnit').value.trim(),quantity:Number($('siQty').value||0),full_qty:$('siFull').value===''?'':Number($('siFull').value),low_at:Number($('siMin').value||0),active:$('siActive').value==='1',stock_mode:$('siMode').dataset.mode||'min'};
+    if(body.stock_mode==='demand'){body.quantity=0;body.low_at=0;body.full_qty='';}
     if(!body.name)return msg.textContent='Enter an item name.';
     if(!Number.isInteger(body.quantity)||body.quantity<0)return msg.textContent='Quantity must be a whole number, 0 or more.';
     if(!Number.isInteger(body.low_at)||body.low_at<0)return msg.textContent='Minimum to keep must be a whole number, 0 or more.';

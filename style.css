@@ -1009,3 +1009,7 @@ body.mgr .helpItem .helpHead{background:#fff}
 .notFinalNote{display:block;width:100%;color:#92400e;font-weight:700}
 .mgrSectionName{color:#f97316!important;font-weight:800;font-size:13px}
 #empSectionName{color:var(--primary);font-weight:800}
+
+.stockModeTabs{margin:6px 0 4px;display:flex;width:max-content}
+.demandTag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;white-space:nowrap}
+.supItem.demand .supQty{display:flex;align-items:center;justify-content:center}
