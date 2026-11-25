@@ -53,7 +53,8 @@
     tshirt_half:UNI_SVG('<path d="M17 6l-9 5 3 8 5-2v25h16V17l5 2 3-8-9-5c-1 3-4 5-7 5s-6-2-7-5z"/>'),
     tshirt_full:UNI_SVG('<path d="M17 6l-7 4-5 26 6 1 4-18v23h18V19l4 18 6-1-5-26-7-4c-1 3-4 5-7 5s-6-2-7-5z"/>'),
     trousers:UNI_SVG('<path d="M13 5h22l3 38h-9l-5-26-5 26h-9z"/><path d="M13 11h22"/>'),
-    jacket:UNI_SVG('<path d="M17 5l-7 4-5 28 6 1 3-14v20h20V24l3 14 6-1-5-28-7-4-7 8z"/><path d="M24 13v30M20 24h1M27 24h1M20 31h1M27 31h1"/>')
+    jacket:UNI_SVG('<path d="M17 5l-7 4-5 28 6 1 3-14v20h20V24l3 14 6-1-5-28-7-4-7 8z"/><path d="M24 13v30M20 24h1M27 24h1M20 31h1M27 31h1"/>'),
+    hoodie:UNI_SVG('<path d="M17 7c0-2 3-4 7-4s7 2 7 4l7 4 5 26-6 1-3-14v20H14V24l-3 14-6-1 5-26z"/><path d="M17 7c1 4 4 7 7 7s6-3 7-7M21 14v6M27 14v6M18 33h12"/>')
   };
   /* ------------------------------------------------------------------
      Employee-portal language support (English / Spanish).
@@ -215,7 +216,7 @@
     chatNew:['New message from your manager.','Nuevo mensaje de su gerente.'],chatSending:['Sending…','Enviando…'],chatPhoto:['Photo','Foto'],uniTitle:['Request Uniform','Pedir uniforme'],
     uniHelp:['Pick the items you need, choose your size and how many, then send.','Elija las prendas que necesita, su talla y cuántas, y envíe.'],
     uniNotePh:['e.g. my jacket is torn','p. ej. mi chaqueta está rota'],
-    uni_tshirt_half:['T-shirt, half sleeve','Camiseta, manga corta'],uni_tshirt_full:['T-shirt, full sleeve','Camiseta, manga larga'],uni_trousers:['Trousers','Pantalón'],uni_jacket:['Jacket','Chaqueta'],
+    uni_tshirt_half:['T-shirt, half sleeve','Camiseta, manga corta'],uni_tshirt_full:['T-shirt, full sleeve','Camiseta, manga larga'],uni_trousers:['Trousers','Pantalón'],uni_jacket:['Jacket','Chaqueta'],uni_hoodie:['Hoodie','Sudadera con capucha'],
     uniSize:['Size','Talla'],uniEach:['${p} each','${p} cada una'],
     uniTotal:['Total: ${t}','Total: ${t}'],
     uniKindLbl:['Free or paid','Gratis o pagado'],uniKindFree:['Free (from the company)','Gratis (de la compañía)'],uniKindPaid:['Paid (I buy it)','Pagado (yo lo compro)'],
@@ -227,6 +228,11 @@
     uniPickSome:['Choose at least one item and its size.','Elija al menos una prenda y su talla.'],uniTooMany:['You already have uniform requests waiting.','Ya tiene pedidos de uniforme en espera.'],
     uniDeduction:['UNIFORM DEDUCTION','DESCUENTO DE UNIFORME'],weekPay:['WEEK PAY','PAGO DE LA SEMANA'],
     navVacation:['Vacation','Vacaciones'],vacTitle:['My Vacation','Mis vacaciones'],
+    vrTitle:['Request vacation','Pedir vacaciones'],vrHelp:['Choose the days and how many hours you need. Your manager approves or denies it, and you see the answer here.','Elija los días y cuántas horas necesita. Su gerente lo aprueba o lo niega, y usted ve la respuesta aquí.'],
+    vrStart:['First day','Primer día'],vrEnd:['Last day','Último día'],vrHours:['Vacation hours','Horas de vacaciones'],vrNote:['Note (optional)','Nota (opcional)'],vrNotePh:['e.g. family trip','p. ej. viaje familiar'],vrSend:['Send request','Enviar pedido'],vrMine:['My requests','Mis pedidos'],
+    vrHint:['{d} work days × 8 h = {h} hours. You have {b} hours available.','{d} días de trabajo × 8 h = {h} horas. Tiene {b} horas disponibles.'],vrOver:['That is more than your {b} available hours; your manager decides.','Es más que sus {b} horas disponibles; su gerente decide.'],
+    vrPending:['Pending','Pendiente'],vrApproved:['Approved','Aprobado'],vrDenied:['Denied','Negado'],vrCancelled:['Cancelled','Cancelado'],vrNone:['No requests yet.','Todavía no hay pedidos.'],vrSent:['Request sent. Your manager will answer here.','Pedido enviado. Su gerente responderá aquí.'],
+    vrNeedDays:['Choose the first and last day.','Elija el primer y el último día.'],vrNeedHours:['Enter how many hours you need.','Indique cuántas horas necesita.'],vrCancel:['Cancel request','Cancelar pedido'],vrCancelAsk:['Cancel this vacation request?','¿Cancelar este pedido de vacaciones?'],vrMgr:['Manager','Gerente'],vrUpdated:['Your manager answered a vacation request.','Su gerente respondió un pedido de vacaciones.'],
     vacHelp:['You earn 40 hours of vacation for every 2,080 paid hours you work: about 0.77 hours for each 40-hour week.','Gana 40 horas de vacaciones por cada 2,080 horas pagadas trabajadas: unas 0.77 horas por cada semana de 40 horas.'],
     vacBalance:['AVAILABLE NOW','DISPONIBLE AHORA'],vacEarnedYear:['EARNED THIS YEAR','GANADO ESTE AÑO'],vacEarnedAll:['EARNED IN TOTAL','GANADO EN TOTAL'],vacTaken:['VACATION TAKEN','VACACIONES USADAS'],
     vacHours:['hours','horas'],vacDays:['about {d} days of 8 hours','aprox. {d} días de 8 horas'],vacFrom:['from {h} paid hours','de {h} horas pagadas'],
@@ -239,9 +245,12 @@
     infoLic:["Photo of your driver's licence",'Foto de su licencia de conducir'],infoLicOn:['On file. Take a new photo only to replace it.','Guardada. Tome una nueva foto solo para reemplazarla.'],infoLicNone:['No photo yet','Aún no hay foto'],infoLicNew:['New photo ready. Press Save.','Nueva foto lista. Presione Guardar.'],infoView:['View','Ver'],
     infoEmergency:['Emergency contact','Contacto de emergencia'],infoEmName:['Name','Nombre'],infoEmRel:['Relation to you','Parentesco'],infoEmRelPh:['e.g. Wife, Brother','p. ej. Esposa, Hermano'],
     infoJob:['Job','Trabajo'],infoStatus:['Job status','Estado de trabajo'],infoStart:['Start date','Fecha de inicio'],infoStartNone:['Set by your manager','Lo registra su gerente'],
-    infoSave:['Save my info','Guardar mis datos'],infoSaved:['Your info was saved.','Sus datos se guardaron.'],infoSsnBad:['The SSN must have 9 digits.','El SSN debe tener 9 dígitos.'],
+    infoSave:['Save my info','Guardar mis datos'],infoNameLocked:['Only your manager can change your name.','Solo su gerente puede cambiar su nombre.'],infoUnlock:['Request a change','Pedir un cambio'],
+    infoLocked:['Details you already gave are locked. To fix one, tap Request a change: your manager must approve it.','Los datos que ya dio están bloqueados. Para corregir uno, toque Pedir un cambio: su gerente debe aprobarlo.'],
+    infoUnlocked:['Change what you need and tap Save. Your manager will approve or reject each change.','Cambie lo que necesite y toque Guardar. Su gerente aprobará o rechazará cada cambio.'],
+    infoPendingList:['Waiting for your manager to approve: {list}','Esperando que su gerente apruebe: {list}'],infoRequested:['Sent to your manager for approval.','Enviado a su gerente para aprobar.'],infoNothing:['Nothing changed.','No cambió nada.'],infoSaved:['Your info was saved.','Sus datos se guardaron.'],infoSsnBad:['The SSN must have 9 digits.','El SSN debe tener 9 dígitos.'],
     infoMissing:['Still missing: {list}','Falta: {list}'],
-    infoF_full_name:['full name','nombre'],infoF_dob:['date of birth','fecha de nacimiento'],infoF_address:['address','dirección'],infoF_phone:['phone','teléfono'],infoF_ssn_last4:['SSN','SSN'],infoF_emergency_name:['emergency contact','contacto de emergencia'],infoF_emergency_phone:['emergency phone','teléfono de emergencia'],infoF_emergency_relation:['relation','parentesco'],infoF_license:['licence photo','foto de licencia'],
+    infoF_full_name:['full name','nombre'],infoF_dob:['date of birth','fecha de nacimiento'],infoF_address:['address','dirección'],infoF_phone:['phone','teléfono'],infoF_ssn_last4:['SSN','SSN'],infoF_emergency_name:['emergency contact','contacto de emergencia'],infoF_emergency_phone:['emergency phone','teléfono de emergencia'],infoF_emergency_relation:['relation','parentesco'],infoF_license:['licence photo','foto de licencia'],infoF_email:['email','correo'],
     vacEligRule:['You need to complete your first full year to be eligible for paid vacation.','Debe completar su primer año completo para tener derecho a vacaciones pagadas.'],
     vacEligFrom:['You can use paid vacation from {d}.','Puede usar vacaciones pagadas a partir del {d}.'],vacEligYes:['You are eligible for paid vacation.','Ya tiene derecho a vacaciones pagadas.'],
     vacEligUnknown:['Your manager has not entered your start date yet.','Su gerente aún no ha ingresado su fecha de inicio.'],vacOpening:['includes {h} hours earned before WorkClock','incluye {h} horas ganadas antes de WorkClock'],
@@ -488,23 +497,23 @@
     if(open){const ci=new Date(open.clock_in),elapsedHours=Math.max(0,(Date.now()-ci.getTime())/3600000);$('clockedAt').textContent=ci.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});$('running').textContent=dur(Date.now()-ci.getTime());updateShiftRing(elapsedHours);const reasonEl=$('earlyNote');if(reasonEl){const placeholder=reasonEl.querySelector('option[value=""]');if(elapsedHours<8){reasonEl.required=true;if(placeholder){placeholder.hidden=false;placeholder.textContent=t('reasonPick');}if(reasonEl.dataset.autoSet==='1'){reasonEl.value='';reasonEl.dataset.autoSet='0';}}else{reasonEl.required=false;if(!reasonEl.value){reasonEl.value='Ending shift';reasonEl.dataset.autoSet='1';}if(placeholder)placeholder.hidden=true;}}}
     const selected=$('weekDate').value?new Date($('weekDate').value+'T12:00:00'):new Date(),start=ws(selected),end=new Date(start);end.setDate(end.getDate()+6);
     $('weekTitle').textContent=`${t('weekOf')}: ${start.toLocaleDateString(locale(),{month:'short',day:'numeric'})} – ${end.toLocaleDateString(locale(),{month:'short',day:'numeric',year:'numeric'})}`;
-    const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),names=DAYNAMES[lang]||DAYNAMES.en;let total=0;
+    const a=(empCache.summary?.days||Array(7).fill(0)),rate=Number(p.hourly_wage||0),de=empCache.summary?.day_earnings,dayEarn=i=>de?Number(de[i]||0):Number(a[i]||0)*rate,weekEarn=de?de.reduce((x,y)=>x+Number(y||0),0):null,names=DAYNAMES[lang]||DAYNAMES.en;let total=0;
     // Compact one-line-per-day list: today highlighted, empty days faded,
     // and a small bar showing how close each day came to a full 8 hours.
     const todayKey=iso(new Date()),full=Math.max(8,...a.map(Number));
     const daysHtml=names.map((name,i)=>{const dt=new Date(start);dt.setDate(dt.getDate()+i);const v=Number(a[i]||0);total+=v;
       const cls=['day'];if(v<=0.0001)cls.push('zero');if(iso(dt)===todayKey)cls.push('today');
       const pct=Math.min(100,Math.round(v/full*100));
-      return `<div class="${cls.join(' ')}"><div class="dLabel"><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString(locale(),{month:'short',day:'numeric'})}</div></div><div class="dBar"><i style="width:${pct}%"></i></div><div class="dVals"><div class="dh">${v>0.0001?v.toFixed(2):'–'}</div><div class="dm">${v>0.0001?'$'+(v*rate).toFixed(2):''}</div></div></div>`;}).join('');
+      return `<div class="${cls.join(' ')}"><div class="dLabel"><div class="dn">${name}</div><div class="dd">${dt.toLocaleDateString(locale(),{month:'short',day:'numeric'})}</div></div><div class="dBar"><i style="width:${pct}%"></i></div><div class="dVals"><div class="dh">${v>0.0001?v.toFixed(2):'–'}</div><div class="dm">${v>0.0001?'$'+(dayEarn(i)).toFixed(2):''}</div></div></div>`;}).join('');
     if($('days').dataset.html!==daysHtml){$('days').innerHTML=daysHtml;$('days').dataset.html=daysHtml;}
     renderWeekFlags(start);
-    animNum($('weekTotal'),total);animNum($('weekEarned'),total*rate,money);
+    animNum($('weekTotal'),total);animNum($('weekEarned'),weekEarn??total*rate,money);
     // Uniforms handed out this week come off this week's pay.
     const ded=Number(empCache.deduction?.total||0);
     $('weekDedBox').classList.toggle('hide',!ded);$('weekPayBox').classList.toggle('hide',!ded);
-    if(ded){$('weekDed').textContent=`−$${ded.toFixed(2)}`;$('weekDedItems').textContent=(empCache.deduction.lines||[]).map(l=>`${l.qty} × ${t('uni_'+l.item)} ${l.size}`).join(', ');$('weekPay').textContent=`$${Math.max(0,total*rate-ded).toFixed(2)}`;}
+    if(ded){$('weekDed').textContent=`−$${ded.toFixed(2)}`;$('weekDedItems').textContent=(empCache.deduction.lines||[]).map(l=>`${l.qty} × ${t('uni_'+l.item)} ${l.size}`).join(', ');$('weekPay').textContent=`$${Math.max(0,(weekEarn??total*rate)-ded).toFixed(2)}`;}
     const now=new Date(),curStart=ws(now),idx=Math.floor((ds(now)-ds(curStart))/86400000),today=curStart.getTime()===start.getTime()?Number(a[idx]||0):0;
-    animNum($('hoursToday'),today);animNum($('earnedToday'),today*rate,money);animNum($('hoursWeek'),total);animNum($('earnedWeek'),total*rate,money);
+    animNum($('hoursToday'),today);animNum($('earnedToday'),curStart.getTime()===start.getTime()?dayEarn(idx):0,money);animNum($('hoursWeek'),total);animNum($('earnedWeek'),weekEarn??total*rate,money);
     renderEmployeeMap();
   }
   function flagList(list,empty){
@@ -599,16 +608,16 @@
     const days={};
     for(const x of shifts){const k=iso(new Date(x.clock_in));(days[k]=days[k]||[]).push(x);}
     const keys=Object.keys(days).sort();
-    let totalPaid=0,totalActual=0,longest=0,longestDay='';
+    let totalEarn=0,totalPaid=0,totalActual=0,longest=0,longestDay='';
     const monthly={};
     for(const k of keys){
       const list=days[k];
-      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0);
+      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),earn=list.reduce((a,x)=>a+paidFor(x,minimum)*Number(x.hourly_wage??wage),0);
       const actual=list.reduce((a,x)=>a+hours(x),0);
-      totalPaid+=paid;totalActual+=actual;
+      totalPaid+=paid;totalActual+=actual;totalEarn+=earn;
       if(paid>longest){longest=paid;longestDay=k;}
       const mk=k.slice(0,7),m=monthly[mk]=monthly[mk]||{days:0,paid:0,actual:0};
-      m.days++;m.paid+=paid;m.actual+=actual;
+      m.days++;m.paid+=paid;m.actual+=actual;m.earn=(m.earn||0)+earn;
     }
     const worked=keys.length,avg=worked?totalPaid/worked:0;
     const tile=(label,value,sub)=>`<div class="stat"><span>${esc(label)}</span><b>${esc(value)}</b>${sub?`<small>${esc(sub)}</small>`:''}</div>`;
@@ -616,23 +625,23 @@
       tile(t2('erTDays'),String(worked),''),
       tile(t2('erTPaid'),totalPaid.toFixed(2),''),
       tile(t2('erTActual'),totalActual.toFixed(2),''),
-      tile(t2('erTEarn'),'$'+(totalPaid*wage).toFixed(2),t2('erAtRate',{r:wage.toFixed(2)})),
+      tile(t2('erTEarn'),'$'+totalEarn.toFixed(2),(()=>{const rs=[...new Set(shifts.map(x=>Number(x.hourly_wage??wage).toFixed(2)))];return t2('erAtRate',{r:rs.length?rs.join(', $'):wage.toFixed(2)});})()),
       tile(t2('erTAvg'),avg.toFixed(2)+' h',''),
       tile(t2('erTLongest'),longest?longest.toFixed(2)+' h':'—',longestDay?new Date(longestDay+'T12:00:00').toLocaleDateString(locale()):'')
     ].join('');
     $('erMonthRows').innerHTML=Object.keys(monthly).sort().reverse().map(mk=>{
       const m=monthly[mk],label=new Date(mk+'-01T12:00:00').toLocaleDateString(locale(),{month:'long',year:'numeric'});
-      return `<tr><td><b>${esc(label)}</b></td><td>${m.days}</td><td>${m.paid.toFixed(2)}</td><td>${m.actual.toFixed(2)}</td><td>$${(m.paid*wage).toFixed(2)}</td></tr>`;
+      return `<tr><td><b>${esc(label)}</b></td><td>${m.days}</td><td>${m.paid.toFixed(2)}</td><td>${m.actual.toFixed(2)}</td><td>$${Number(m.earn||0).toFixed(2)}</td></tr>`;
     }).join('')||`<tr><td colspan="5">${esc(t2('erNoMonths'))}</td></tr>`;
     $('erDayRows').innerHTML=keys.slice().reverse().map(k=>{
       const list=days[k].slice().sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
-      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),actual=list.reduce((a,x)=>a+hours(x),0);
+      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),actual=list.reduce((a,x)=>a+hours(x),0),earn=list.reduce((a,x)=>a+paidFor(x,minimum)*Number(x.hourly_wage??wage),0);
       const hm=v=>new Date(v).toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});
       const last=list[list.length-1];
       const notes=[...new Set(list.map(x=>reasonText(x.clock_out_note)).filter(Boolean))].join(', ');
       return `<tr><td><b>${esc(new Date(k+'T12:00:00').toLocaleDateString(locale(),{weekday:'short',month:'short',day:'numeric'}))}</b></td>
         <td>${list.length}</td><td>${hm(list[0].clock_in)}</td><td>${last.clock_out?hm(last.clock_out):'—'}</td>
-        <td>${actual.toFixed(2)}</td><td><b>${paid.toFixed(2)}</b></td><td>$${(paid*wage).toFixed(2)}</td>
+        <td>${actual.toFixed(2)}</td><td><b>${paid.toFixed(2)}</b></td><td>$${earn.toFixed(2)}</td>
         <td>${esc(notes||'—')}</td></tr>`;
     }).join('')||`<tr><td colspan="8">${esc(t2('erNoDays'))}</td></tr>`;
     $('erResult').dataset.loaded='1';
@@ -707,7 +716,7 @@
 
 
   /* ---- Employee: uniforms ---- */
-  const UNI_KEYS=['tshirt_half','tshirt_full','trousers','jacket'],UNI_SZ=['XS','S','M','L','XL','XXL','3XL'];
+  const UNI_KEYS=['tshirt_half','tshirt_full','trousers','jacket','hoodie'],UNI_SZ=['XS','S','M','L','XL','XXL'];
   let uniEmp={requests:[],prices:{}},uniKind='free';const uniFreeLeft=k=>Number(uniEmp.freeLeft?.[k]??0),uniPer=()=>t(uniEmp.freePeriod==='month'?'uniPerMonth':'uniPerYear');const uniPrice=k=>Number(uniEmp.prices?.[k]??20);const uniPick={};UNI_KEYS.forEach(k=>uniPick[k]={size:'',qty:0});
   async function loadEmpUniforms(){try{uniEmp=await api('/api/supplies?mine=1&uniforms=1&seen=1');empCounts.uniforms=0;setEmpCounts();renderEmpUniforms();}catch(e){if(e.status!==401)$('empUniMsg').textContent=displayMessage(e.payload||e.message);}}
   function renderEmpUniforms(){
@@ -735,32 +744,60 @@
   }
 
   /* ---- Employee: answers from the manager, and vacation ---- */
-  const empCounts={supplies:0,uniforms:0,chat:0};let empCountsKnown=null,empPollTimer=null;
+  const empCounts={supplies:0,uniforms:0,chat:0,vacation:0};let empCountsKnown=null,empPollTimer=null;
   function setEmpCounts(){
-    [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms],['empChatCount',empCounts.chat]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
-    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms+empCounts.chat)&&!(infoRec?.missing?.length));
+    [['empSupCount',empCounts.supplies],['empUniCount',empCounts.uniforms],['empChatCount',empCounts.chat],['empVacCount',empCounts.vacation]].forEach(([id,n])=>{const el=$(id);if(el){el.textContent=n;el.classList.toggle('hide',!n);}});
+    $('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms+empCounts.chat+empCounts.vacation)&&!(infoRec?.missing?.length));
   }
   async function pollEmpCounts(){
     if(managerMode||!employeeIdentity)return;
     try{const j=await api('/api/supplies?mine=1&count=1');const pg=empPage();
-      if(empCountsKnown){if(j.supplies>empCountsKnown.supplies&&pg!=='supplies')toast(t('supUpdated'));if(j.uniforms>empCountsKnown.uniforms&&pg!=='uniforms')toast(t('uniUpdated'));if((j.chat||0)>(empCountsKnown.chat||0)&&pg!=='messages')toast(t('chatNew'));}
-      empCountsKnown={supplies:j.supplies,uniforms:j.uniforms,chat:j.chat||0};
+      if(empCountsKnown){if(j.supplies>empCountsKnown.supplies&&pg!=='supplies')toast(t('supUpdated'));if(j.uniforms>empCountsKnown.uniforms&&pg!=='uniforms')toast(t('uniUpdated'));if((j.chat||0)>(empCountsKnown.chat||0)&&pg!=='messages')toast(t('chatNew'));if((j.vacation||0)>(empCountsKnown.vacation||0)&&pg!=='vacation')toast(t('vrUpdated'));}
+      empCountsKnown={supplies:j.supplies,uniforms:j.uniforms,chat:j.chat||0,vacation:j.vacation||0};
+      if(pg==='vacation'&&j.vacation)loadEmpVacReq();
       // The page being looked at counts as read.
       if(pg==='supplies'&&j.supplies)return loadEmpSupplies();
       if(pg==='uniforms'&&j.uniforms)return loadEmpUniforms();
-      empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;empCounts.chat=pg==='messages'?0:(j.chat||0);setEmpCounts();
+      empCounts.supplies=j.supplies;empCounts.uniforms=j.uniforms;empCounts.chat=pg==='messages'?0:(j.chat||0);empCounts.vacation=pg==='vacation'?0:(j.vacation||0);setEmpCounts();
     }catch{}
   }
-  function startEmpPoll(){api('/api/company?area=menu').then(j=>$('empVehLink').classList.toggle('hide',!j.hasVehicle)).catch(()=>{});api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,60000);}
+  function startEmpPoll(){api('/api/company?mine=1&area=menu').then(j=>$('empVehLink').classList.toggle('hide',!j.hasVehicle)).catch(()=>{});api('/api/records?mine=1').then(j=>{infoRec={...j.record,_status:j.status};renderEmpInfo(empPage()==='info');}).catch(()=>{});pollEmpCounts();clearInterval(empPollTimer);empPollTimer=setInterval(pollEmpCounts,20000);}
   async function loadEmpVacation(){
     try{const v=(await api('/api/supplies?mine=1&vacation=1')).vacation||{year_paid_hours:0,year_earned:0,all_earned:0,used_hours:0,balance:0};
       const h=x=>`${Number(x).toFixed(2)} ${t('vacHours')}`;
-      $('vBal').textContent=h(v.balance);$('vBalDays').textContent=t('vacDays',{d:(Math.max(0,v.balance)/8).toFixed(1)});
+      vrBalance=Math.max(0,Number(v.balance||0));$('vBal').textContent=h(v.balance);$('vBal').closest('.vacTile').classList.toggle('neg',Number(v.balance)<0);$('vBalDays').textContent=t('vacDays',{d:(Math.max(0,v.balance)/8).toFixed(1)});
       $('vYear').textContent=h(v.year_earned);$('vYearHrs').textContent=t('vacFrom',{h:Number(v.year_paid_hours).toFixed(2)});
       $('vAll').textContent=h(v.all_earned);$('vUsed').textContent=h(v.used_hours);$('vacMsg').textContent='';
       $('vacElig').innerHTML=`<b>${esc(t('vacEligRule'))}</b><br>${esc(v.start_date?(v.eligible?t('vacEligYes'):t('vacEligFrom',{d:fmtYmd(v.eligible_from)})):t('vacEligUnknown'))}${v.opening_hours?`<br><span class="small">${esc(t('vacOpening',{h:Number(v.opening_hours).toFixed(2)}))}</span>`:''}`;
       $('vacElig').classList.toggle('ok',!!v.eligible);
     }catch(e){if(e.status!==401)$('vacMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+
+  /* ---- Employee: vacation requests ---- */
+  let vrRows=[],vrBalance=0;
+  const vrDays=(a,b)=>{if(!a||!b||b<a)return 0;let n=0;for(let d=new Date(a+'T12:00:00');iso(d)<=b;d.setDate(d.getDate()+1)){const w=d.getDay();if(w>0&&w<6)n++;}return n;};
+  function vrHint(){const a=$('vrStart').value,b=$('vrEnd').value||a,d=vrDays(a,b);if(!a){$('vrHint').textContent='';return;}
+    if(!$('vrHours').dataset.touched)$('vrHours').value=d?String(d*8):'';
+    const h=Number($('vrHours').value||0);$('vrHint').textContent=t('vrHint',{d,h:(d*8).toFixed(0),b:vrBalance.toFixed(2)})+(h>vrBalance?' '+t('vrOver',{b:vrBalance.toFixed(2)}):'');}
+  async function loadEmpVacReq(){
+    try{vrRows=(await api('/api/vacreq?mine=1&seen=1')).requests||[];empCounts.vacation=0;setEmpCounts();renderEmpVacReq();}catch(e){if(e.status!==401)$('vrMsg').textContent=displayMessage(e.payload||e.message);}
+  }
+  function renderEmpVacReq(){
+    const st={pending:'vrPending',approved:'vrApproved',denied:'vrDenied',cancelled:'vrCancelled'};
+    $('vrList').innerHTML=vrRows.length?vrRows.map(r=>`<div class="supMine st-${r.status==='denied'?'rejected':r.status==='approved'?'given':r.status}"><div class="supMineHead"><span class="supBadge ${r.status==='denied'?'rejected':r.status==='approved'?'given':r.status}">${esc(t(st[r.status]||'vrPending'))}</span><span class="muted small">${esc(new Date(r.created_at).toLocaleDateString(locale(),{month:'short',day:'numeric'}))}</span></div><div><b>${esc(fmtYmd(r.start_date))}${r.end_date!==r.start_date?' → '+esc(fmtYmd(r.end_date)):''}</b> · ${Number(r.hours).toFixed(2)} h</div>${r.note?`<div class="muted small">“${esc(r.note)}”</div>`:''}${r.manager_note?`<div class="small"><b>${esc(t('vrMgr'))}:</b> ${esc(r.manager_note)}</div>`:''}${r.status==='pending'?`<button class="mini secondary" data-vr-cancel="${r.id}" type="button">${esc(t('vrCancel'))}</button>`:''}</div>`).join(''):`<div class="dashEmpty">${esc(t('vrNone'))}</div>`;
+    $('vrList').querySelectorAll('[data-vr-cancel]').forEach(b=>b.onclick=async()=>{if(!confirm(t('vrCancelAsk')))return;try{await api('/api/vacreq?mine=1',{method:'POST',body:JSON.stringify({action:'cancel',id:Number(b.dataset.vrCancel)})});}catch(e){toast(displayMessage(e.payload||e.message),'bad');}loadEmpVacReq();});
+  }
+  async function sendVacReq(){
+    const a=$('vrStart').value,b=$('vrEnd').value||a,h=Number($('vrHours').value);
+    if(!a||!b||b<a)return $('vrMsg').textContent=t('vrNeedDays');if(!(h>0))return $('vrMsg').textContent=t('vrNeedHours');
+    $('vrSend').disabled=true;$('vrMsg').textContent='…';
+    try{await api('/api/vacreq?mine=1',{method:'POST',body:JSON.stringify({start:a,end:b,hours:h,note:$('vrNote').value.trim()})});['vrStart','vrEnd','vrHours','vrNote'].forEach(i=>$(i).value='');delete $('vrHours').dataset.touched;$('vrHint').textContent='';$('vrMsg').textContent=t('vrSent');toast(t('vrSent'));loadEmpVacReq();}
+    catch(e){$('vrMsg').textContent=displayMessage(e.payload||e.message);}finally{$('vrSend').disabled=false;}
+  }
+  function initEmpVacReq(){
+    $('vrSend').onclick=sendVacReq;
+    $('vrStart').onchange=()=>{if(!$('vrEnd').value||$('vrEnd').value<$('vrStart').value)$('vrEnd').value=$('vrStart').value;vrHint();};
+    $('vrEnd').onchange=vrHint;$('vrHours').oninput=()=>{$('vrHours').dataset.touched='1';vrHint();};
   }
 
   /* ---- Employee: My Info ---- */
@@ -775,18 +812,28 @@
     $('iLicState').textContent=infoLic?t('infoLicNew'):r.has_license?t('infoLicOn'):t('infoLicNone');$('iLicView').classList.toggle('hide',!r.has_license||!!infoLic);
     $('iStatus').value=statusText(r._status||'active');$('iStart').value=r.start_date?fmtYmd(r.start_date):t('infoStartNone');
     const miss=r.missing||[];$('infoMissing').classList.toggle('hide',!miss.length);$('infoMissing').textContent=miss.length?t('infoMissing',{list:miss.map(k=>t('infoF_'+k)).join(', ')}):'';
+    // Anything already filled in is locked until the painter asks to change it.
+    const unlocked=$('empInfo').dataset.unlocked==='1',lockMap={iDob:r.dob,iAddr:r.address,iPhone:r.phone,iEmail:r.email,iEmName:r.emergency_name,iEmPhone:r.emergency_phone,iEmRel:r.emergency_relation};
+    let anyLocked=false;
+    for(const [id,val] of Object.entries(lockMap)){const lock=!!val&&!unlocked;anyLocked=anyLocked||!!val;$(id).readOnly=lock;$(id).disabled=lock&&id==='iDob';$(id).classList.toggle('lockedIn',lock);}
+    const ssnLock=!!r.ssn_masked&&!unlocked,licLock=!!r.has_license&&!unlocked;anyLocked=anyLocked||!!r.ssn_masked||!!r.has_license;
+    $('iSsn').classList.toggle('hide',ssnLock);$('iLic').classList.toggle('hide',licLock);
+    $('infoUnlock').classList.toggle('hide',!anyLocked||unlocked);
+    $('infoLockNote').classList.toggle('hide',!anyLocked);$('infoLockNote').textContent=unlocked?t('infoUnlocked'):t('infoLocked');
+    const pend=r.pending||[];$('infoPending').classList.toggle('hide',!pend.length);$('infoPending').textContent=pend.length?t('infoPendingList',{list:[...new Set(pend.map(p=>t('infoF_'+(p.field==='ssn'?'ssn_last4':p.field))))].join(', ')}):'';
     $('empInfoDot').classList.toggle('hide',!miss.length);$('empBurgerDot')?.classList.toggle('hide',!(empCounts.supplies+empCounts.uniforms)&&!miss.length);
   }
   async function saveEmpInfo(){
-    const body={action:'mine',full_name:$('iFull').value,dob:$('iDob').value,address:$('iAddr').value,phone:$('iPhone').value,email:$('iEmail').value,emergency_name:$('iEmName').value,emergency_phone:$('iEmPhone').value,emergency_relation:$('iEmRel').value};
+    const body={action:'mine',dob:$('iDob').value,address:$('iAddr').value,phone:$('iPhone').value,email:$('iEmail').value,emergency_name:$('iEmName').value,emergency_phone:$('iEmPhone').value,emergency_relation:$('iEmRel').value};
     if($('iSsn').value.trim()){if($('iSsn').value.replace(/\D/g,'').length!==9)return $('infoMsg').textContent=t('infoSsnBad');body.ssn=$('iSsn').value;}
     if(infoLic)body.license=infoLic;
     const btn=$('infoSave');btn.disabled=true;$('infoMsg').textContent='…';
-    try{const j=await api('/api/records?mine=1',{method:'PATCH',body:JSON.stringify(body)});infoRec={...j.record,_status:infoRec?._status};renderEmpInfo(true);$('infoMsg').textContent=t('infoSaved');toast(t('infoSaved'));}
+    try{const j=await api('/api/records?mine=1',{method:'PATCH',body:JSON.stringify(body)});infoRec={...j.record,_status:infoRec?._status};$('empInfo').dataset.unlocked='';renderEmpInfo(true);const m=j.requested?.length?t('infoRequested'):t('infoSaved');$('infoMsg').textContent=m;toast(m);}
     catch(e){$('infoMsg').textContent=displayMessage(e.payload||e.message);}finally{btn.disabled=false;}
   }
   function initEmpInfo(){
     $('infoSave').onclick=saveEmpInfo;
+    $('infoUnlock').onclick=()=>{$('empInfo').dataset.unlocked='1';renderEmpInfo(false);$('iAddr').focus();};
     $('iLic').onchange=async()=>{const f=$('iLic').files[0];if(!f)return;try{infoLic=await shrinkImage(f);$('iLicImg').src=infoLic;$('iLicImg').classList.remove('hide');renderEmpInfo(false);}catch{toast(t('photoBad'),'bad');}};
     $('iLicView').onclick=async()=>{try{const j=await api('/api/records?mine=1&license=1');if(j.image){$('iLicImg').src=j.image;$('iLicImg').classList.remove('hide');}}catch{}};
   }
@@ -839,12 +886,12 @@
   async function loadEmpChat(full){
     if(empPage()!=='messages'){clearInterval(eChatTimer);eChatTimer=null;return;}
     try{const after=!full&&eChatMsgs.length?eChatMsgs[eChatMsgs.length-1].id:0;
-      const j=await api('/api/chat'+(after?`?after=${after}`:''));
+      const j=await api('/api/chat?mine=1'+(after?`&after=${after}`:''));
       if(full||!after)eChatMsgs=j.messages||[];else if(j.messages?.length)eChatMsgs=eChatMsgs.concat(j.messages);else if(eChatMsgs.length&&!eChatMsgs.some(m=>m.from_manager===0&&!m.seen_at))return;
       if(!after||j.messages?.length||full)renderEmpChat(true);
       empCounts.chat=0;setEmpCounts();
     }catch(e){if(e.status!==401)$('eChatMsg').textContent=displayMessage(e.payload||e.message);}
-    if(!eChatTimer)eChatTimer=setInterval(()=>loadEmpChat(false),8000);
+    if(!eChatTimer)eChatTimer=setInterval(()=>loadEmpChat(false),4000);
   }
   function renderEmpChat(scroll){
     const el=$('eChatMsgs');el.innerHTML=eChatMsgs.length?chatBubbles(eChatMsgs,false,eChatL):`<div class="chatEmpty">${esc(t('chatEmptyEmp'))}</div>`;
@@ -853,7 +900,7 @@
   async function sendEmpChat(e){
     e?.preventDefault();const inp=$('eChatInput'),text=inp.value.trim();if(!text)return;
     $('eChatSend').disabled=true;$('eChatMsg').textContent='';
-    try{await api('/api/chat',{method:'POST',body:JSON.stringify({action:'send',body:text})});inp.value='';chatAutoGrow(inp);await loadEmpChat(false);}
+    try{await api('/api/chat?mine=1',{method:'POST',body:JSON.stringify({action:'send',body:text})});inp.value='';chatAutoGrow(inp);await loadEmpChat(false);}
     catch(err){$('eChatMsg').textContent=displayMessage(err.payload||err.message);}
     finally{$('eChatSend').disabled=false;inp.focus();}
   }
@@ -862,7 +909,7 @@
     $('eChatInput').oninput=()=>chatAutoGrow($('eChatInput'));
     $('eChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!/Mobi|Android/i.test(navigator.userAgent)){e.preventDefault();sendEmpChat();}};
     $('eChatFile').onchange=async()=>{const f=$('eChatFile').files[0];if(!f)return;$('eChatMsg').textContent=t('chatSending');
-      try{await sendChatFile({kind:'chat'},f);$('eChatMsg').textContent='';await loadEmpChat(false);}catch(err){$('eChatMsg').textContent=displayMessage(err.payload||err.message);}finally{$('eChatFile').value='';}};
+      try{await sendChatFile({kind:'chat',mine:1},f);$('eChatMsg').textContent='';await loadEmpChat(false);}catch(err){$('eChatMsg').textContent=displayMessage(err.payload||err.message);}finally{$('eChatFile').value='';}};
   }
   // Photos are made smaller first.
   async function sendChatFile(params,f){
@@ -876,7 +923,7 @@
   async function loadEmpProjects(){
     $('eProjMonth').textContent=eProjMonth.toLocaleDateString(locale(),{month:'long',year:'numeric'});
     const s=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth(),1),e=new Date(eProjMonth.getFullYear(),eProjMonth.getMonth()+1,0);
-    try{eProjRows=(await api(`/api/company?area=projects&start=${iso(new Date(s.getTime()-7*864e5))}&end=${iso(new Date(e.getTime()+7*864e5))}`)).projects||[];}catch{eProjRows=[];}
+    try{eProjRows=(await api(`/api/company?mine=1&area=projects&start=${iso(new Date(s.getTime()-7*864e5))}&end=${iso(new Date(e.getTime()+7*864e5))}`)).projects||[];}catch{eProjRows=[];}
     const L=k=>({crew:t('projCrew'),none:t('projNone'),map:'Map',yourDays:t('projYourDays'),wo:t('projWo'),project:t('projProject')}[k]);
     // The calendar shows only the painter's own days on each project.
     const calRows=eProjRows.map(p=>({...p,start_date:p.my_start||p.start_date,end_date:p.my_end||p.end_date}));
@@ -886,11 +933,11 @@
     $('eProjList').innerHTML=inMonth.map(p=>`<div data-p="${p.id}">${projectRow(p,false,L,locale())}</div>`).join('')||`<div class="dashEmpty">${esc(t('projEmpty'))}</div>`;
   }
   async function loadEmpVehicle(){
-    try{const v=(await api('/api/company?area=vehicles')).vehicles||[];const L=k=>t({odo:'vOdo',reg:'vReg',regExp:'vRegExp',insp:'vInsp',inspExp:'vInspExp',expReg:'vExpReg',expInsp:'vExpInsp',expiredReg:'vExpiredReg',expiredInsp:'vExpiredInsp',plate:'vPlate',vin:'vVin',driver:'vDriver',none:'vNone',mnt:'vMnt',noMnt:'vNoMnt',date:'vDate',what:'vWhat',miles:'vMiles',cost:'vCost',notes:'vNotes'}[k]);
+    try{const v=(await api('/api/company?mine=1&area=vehicles')).vehicles||[];const L=k=>t({odo:'vOdo',reg:'vReg',regExp:'vRegExp',insp:'vInsp',inspExp:'vInspExp',expReg:'vExpReg',expInsp:'vExpInsp',expiredReg:'vExpiredReg',expiredInsp:'vExpiredInsp',plate:'vPlate',vin:'vVin',driver:'vDriver',none:'vNone',mnt:'vMnt',noMnt:'vNoMnt',date:'vDate',what:'vWhat',miles:'vMiles',cost:'vCost',notes:'vNotes'}[k]);
       $('eVehList').innerHTML=v.map(x=>vehicleCard(x,false,L)).join('')||`<div class="dashEmpty">${esc(t('vehNone'))}</div>`;}catch{}
   }
   async function loadEmpResources(){
-    try{const r=(await api('/api/company?area=resources')).resources||[];
+    try{const r=(await api('/api/company?mine=1&area=resources')).resources||[];
       const catName=c=>c==='Employee Handbook'?t('resK_handbook'):c==='SOP'?t('resK_sop'):c==='Other'?t('resK_other'):c;
       $('eResList').innerHTML=resGroups(r).map(([c,rows])=>`<div class="supCat">${esc(catName(c))}</div>`+rows.map(x=>`<a class="resRow resLink" href="/api/company?file=${x.id}" target="_blank" rel="noopener"><span class="resIcon">${fileTag(x.mime)}</span><div class="resMain"><b>${esc(x.title)}</b><span class="muted small">${fileSize(x.size)}</span></div><span class="mini secondary">${esc(t('resOpen'))}</span></a>`).join('')).join('')||`<div class="dashEmpty">${esc(t('resEmpty'))}</div>`;}catch{}
   }
@@ -917,8 +964,8 @@
      es:{t:'Pedir materiales',k:'materiales cinta rodillos brochas pedido no está en la lista',b:['Abra Materiales, busque o desplácese, y use + / − para elegir cuántos de cada artículo necesita.','¿Necesita algo que no está en la lista? Escríbalo en “¿Algo que no está en la lista?” y toque Agregar.','Agregue una nota si quiere y toque Enviar pedido. Se avisa a su gerente.']}},
     {id:'status',page:'supplies',en:{t:'Request status: Requested, Approved, Delivered',k:'status approved delivered rejected cancel requested waiting',b:['Requested: your manager has your request.','Approved: your manager accepted it and will hand it to you.','Delivered: you received it. It shows how many you got.','Rejected: not approved; your manager may leave a note explaining why.','While a request is still Requested, you can cancel it.']},
      es:{t:'Estado del pedido: Pedido, Aprobado, Entregado',k:'estado aprobado entregado rechazado cancelar pedido espera',b:['Pedido: su gerente tiene su pedido.','Aprobado: su gerente lo aceptó y se lo entregará.','Entregado: usted lo recibió. Muestra cuántos recibió.','Rechazado: no fue aprobado; su gerente puede dejar una nota explicando por qué.','Mientras un pedido esté en Pedido, puede cancelarlo.']}},
-    {id:'uniforms',page:'uniforms',en:{t:'Uniforms, sizes and cost',k:'uniform shirt t-shirt trousers pants jacket size price cost deduction free paid limit left',b:['Open Uniforms and first choose Free (from the company) or Paid (I buy it). Then choose a size (XS to 3XL) for each item you need and how many, and tap Send request.','Free: the company gives a set number of each item free per month or year. Each item shows how many free you have left. When none are left, choose Paid.','Paid: each item shows its price. When your manager delivers it, the cost is taken off your pay that week.','My requests shows each request with a Free or Paid tag and its status.']},
-     es:{t:'Uniformes, tallas y costo',k:'uniforme camisa camiseta pantalón chaqueta talla precio costo descuento gratis pagado límite quedan',b:['Abra Uniformes y primero elija Gratis (de la compañía) o Pagado (yo lo compro). Luego elija una talla (XS a 3XL) para cada prenda que necesite y cuántas, y toque Enviar pedido.','Gratis: la compañía da un número fijo de cada prenda gratis por mes o por año. Cada prenda muestra cuántas gratis le quedan. Cuando no le queden, elija Pagado.','Pagado: cada prenda muestra su precio. Cuando su gerente se la entrega, el costo se descuenta de su pago esa semana.','Mis pedidos muestra cada pedido con la etiqueta Gratis o Pagado y su estado.']}},
+    {id:'uniforms',page:'uniforms',en:{t:'Uniforms, sizes and cost',k:'uniform shirt t-shirt trousers pants jacket hoodie size price cost deduction free paid limit left',b:['Open Uniforms and first choose Free (from the company) or Paid (I buy it). Then choose a size (XS to XXL) for each item you need and how many, and tap Send request.','Free: the company gives a set number of each item free per month or year. Each item shows how many free you have left. When none are left, choose Paid.','Paid: each item shows its price. When your manager delivers it, the cost is taken off your pay that week.','My requests shows each request with a Free or Paid tag and its status.']},
+     es:{t:'Uniformes, tallas y costo',k:'uniforme camisa camiseta pantalón chaqueta sudadera capucha talla precio costo descuento gratis pagado límite quedan',b:['Abra Uniformes y primero elija Gratis (de la compañía) o Pagado (yo lo compro). Luego elija una talla (XS a XXL) para cada prenda que necesite y cuántas, y toque Enviar pedido.','Gratis: la compañía da un número fijo de cada prenda gratis por mes o por año. Cada prenda muestra cuántas gratis le quedan. Cuando no le queden, elija Pagado.','Pagado: cada prenda muestra su precio. Cuando su gerente se la entrega, el costo se descuenta de su pago esa semana.','Mis pedidos muestra cada pedido con la etiqueta Gratis o Pagado y su estado.']}},
     {id:'vacation',page:'vacation',en:{t:'Vacation',k:'vacation holiday time off balance earned eligible first year',b:['You earn 40 hours of vacation for every 2,080 paid hours (about 0.77 hours per 40-hour week).','You need to complete your first full year (from your start date) to be eligible for paid vacation. The Vacation page shows the date you become eligible.','“Available now” is what you have earned minus what you have taken. To take vacation, talk to your manager; they record it.']},
      es:{t:'Vacaciones',k:'vacaciones descanso saldo ganado derecho primer año',b:['Gana 40 horas de vacaciones por cada 2,080 horas pagadas (unas 0.77 horas por semana de 40 horas).','Debe completar su primer año completo (desde su fecha de inicio) para tener derecho a vacaciones pagadas. La página de Vacaciones muestra la fecha en que tendrá derecho.','“Disponible ahora” es lo que ha ganado menos lo que ha usado. Para tomar vacaciones, hable con su gerente; él lo registra.']}},
     {id:'performance',page:'performance',en:{t:'Performance score',k:'performance score evaluation on time hours touch-up complaint bonus 85',b:['Your score each month adds up to 100% from five parts: manager evaluation (up to 30%), clocking in on time at 8:10 am or earlier (up to 10%), working 38.5 hours or more each week, over 40 included (up to 10%), customer touch-ups or complaints (0–1 = 30%, 2 = 10%, 3 or more = 0%), and being absent without notice (none = 20%, once or more = 0%).','Until your manager enters all of the month’s scores (evaluation, touch-ups, absences), the score is “Not final” and shows the points possible so far.','Switch between Monthly and Yearly. The year is the average of the months you worked.','Your score affects your importance in the company and any future bonus or yearly vacation. 85% and above is perfect.']},
@@ -962,7 +1009,7 @@
     if(pg==='supplies'){$('empSupBody').classList.remove('hide');loadEmpSupplies();}
     if(pg==='uniforms')loadEmpUniforms();
     if(pg==='messages')loadEmpChat(true);
-    if(pg==='vacation')loadEmpVacation();
+    if(pg==='vacation'){loadEmpVacation();loadEmpVacReq();}
     if(pg==='info')loadEmpInfo();
     if(pg==='performance')loadEmpPerf();
     if(pg==='projects')loadEmpProjects();
@@ -989,7 +1036,7 @@
     initEmpMenu();
     initEmpInfo();
     initEmpPerf();
-    initEmpCompany();initEmpChat();
+    initEmpCompany();initEmpChat();initEmpVacReq();
     $('helpSearch').oninput=renderHelp;
     try{const s=await api('/api/employee-auth');if(s.authenticated)showEmployeeApp(s.employee);else showEmployeeLogin();}catch{showEmployeeLogin();}
     $('employeeLoginBtn').onclick=async()=>{const name=$('employeeLoginName').value.trim(),pin=$('employeePin').value.trim();try{$('employeeLoginError').textContent='';const j=await api('/api/employee-auth',{method:'POST',body:JSON.stringify({name,pin})});$('employeePin').value='';showEmployeeApp(j.employee);}catch(e){$('employeeLoginError').textContent=displayMessage(e.payload||e.message);}};
@@ -1027,15 +1074,23 @@
     const isNew=!p;$('empPanel').dataset.id=p?p.id:'';
     $('empPanelTitle').textContent=isNew?'Add employee':'Edit employee';
     $('empPanelSub').textContent=isNew?'They sign in with their full name and this 4-digit PIN.':`Changes apply straight away. Changing the PIN signs ${p.name} out.`;
-    $('epName').value=p?p.name:'';$('epName').disabled=!isNew;
+    $('epName').value=p?p.name:'';$('epName').disabled=false;
     $('epTitle').value=p?.title||'';$('epEmail').value=p?.email||'';$('epWage').value=p?Number(p.hourly_wage).toFixed(2):'';
     $('epStatusWrap').classList.toggle('hide',isNew);$('epStatus').value=p?statusOfP(p):'active';
     $('epPin').value='';$('epPin').placeholder=isNew?'Required':'Blank = keep current PIN';$('epPinLabel').textContent=isNew?'4-digit PIN':'New 4-digit PIN';
     $('empPanelMsg').textContent='';$('empPanelSave').textContent=isNew?'Add employee':'Save changes';
     $('empPanelDelete').classList.toggle('hide',isNew);
+    $('epRateBox').classList.toggle('hide',isNew);$('epWageLabel').textContent=isNew?'Hourly wage ($)':'Hourly wage now ($)';$('epWageFrom').value=iso(new Date());$('epWageNote').value='';$('epWageHist').innerHTML='';
+    if(!isNew)loadWageHist(p.id);
     $('epStart').value='';$('epEnd').value='';$('epEndReason').value='';
     if(!isNew)api(`/api/records?id=${p.id}`).then(j=>{const r=j.record||{};$('epStart').value=r.start_date||'';$('epEnd').value=r.termination_date||'';$('epEndReason').value=r.termination_reason||'';}).catch(()=>{});
     $('empPanel').classList.remove('hide');(isNew?$('epName'):$('epTitle')).focus();
+  }
+  async function loadWageHist(id){
+    try{const h=(await api(`/api/employees?wageHistory=${id}`)).history||[];
+      $('epWageHist').innerHTML=h.length?`<div class="small"><b>Rate history</b></div>`+h.map(x=>`<div class="wageRow"><span><b>$${Number(x.hourly_wage).toFixed(2)}/h</b> ${x.effective_date==='0000-01-01'?'before the first change':'from '+esc(fmtYmd(x.effective_date))}${x.note&&x.effective_date!=='0000-01-01'?` · <span class="muted">${esc(x.note)}</span>`:''}</span>${x.effective_date!=='0000-01-01'?`<button type="button" class="mini secondary supDel" data-wage-del="${x.id}">Remove</button>`:''}</div>`).join(''):'<div class="muted small">No rate changes yet. The rate above applies to every day.</div>';
+      $('epWageHist').querySelectorAll('[data-wage-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Remove this rate change? Those days go back to the earlier rate.'))return;try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),action:'wage_delete',historyId:Number(b.dataset.wageDel)})});toast('Rate change removed.');await loadPeople();const p=managerPeople.find(x=>String(x.id)===String(id));if(p)$('epWage').value=Number(p.hourly_wage).toFixed(2);loadWageHist(id);mgrRender();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
+    }catch{}
   }
   function closeEmpPanel(){$('empPanel').classList.add('hide');}
   async function saveEmpPanel(){
@@ -1050,7 +1105,9 @@
       if(isNew){const j=await api('/api/employees',{method:'POST',body:JSON.stringify({name,title,email,wage,pin})});if(dates.start_date||dates.termination_date)await api('/api/records',{method:'PATCH',body:JSON.stringify({employeeId:Number(j.employee.id),...dates})});toast(`${name} added.`);}
       else{
         const p=managerPeople.find(x=>String(x.id)===String(id));
-        await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),wage,title,email})});
+        const wageChanged=p&&Math.round(wage*100)!==Math.round(Number(p.hourly_wage)*100);
+        if(wageChanged&&!confirm(`Change ${p.name}'s rate from $${Number(p.hourly_wage).toFixed(2)} to $${wage.toFixed(2)} starting ${fmtYmd($('epWageFrom').value||iso(new Date()))}?\n\nDays before that keep $${Number(p.hourly_wage).toFixed(2)}.`)){msg.textContent='';return;}
+        await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),wage,title,email,...(wageChanged?{effectiveDate:$('epWageFrom').value||iso(new Date()),wageNote:$('epWageNote').value.trim()}:{}),...(p&&name&&name!==p.name?{name}:{})})});
         if(p&&status!==statusOfP(p)){
           if(status==='terminated'&&!confirm(`Mark ${p.name} as terminated?\n\nThey will no longer be able to sign in, but all of their shifts, hours and earnings stay on record and remain searchable in Reports.`)){msg.textContent='Other changes saved; status not changed.';await loadPeople();return;}
           await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:Number(id),status})});
@@ -1302,9 +1359,11 @@
     if(box){box.classList.toggle('hide',!ded.length);
       box.innerHTML=ded.length?`<div class="uniDedHead"><span class="uniDedIcon" aria-hidden="true">$</span><div><b>Uniform deductions for this week</b><div class="small">Take these amounts off this week's pay.</div></div><strong class="uniDedSum">−$${ded.reduce((a,d)=>a+d.total,0).toFixed(2)}</strong></div><ul>${ded.map(d=>`<li><b>${esc(d.name)}</b>: −$${d.total.toFixed(2)} <span class="muted">(${d.lines.map(l=>`${l.qty} × ${esc(UNI_NAMES[l.item]||l.item)} ${esc(l.size)}`).join(', ')})</span></li>`).join('')}</ul>`:'';}
     $('weeklyRangeText').textContent=`Week of ${weekLabel(start)}`;
-    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b>${dedBy.has(String(e.employee_id))?`<div class="uniDed">−$${dedBy.get(String(e.employee_id)).total.toFixed(2)} uniform</div>${(()=>{const net=Number(e.earnings)-dedBy.get(String(e.employee_id)).total;return net>=0?`<div class="uniNet">Pay $${net.toFixed(2)}</div>`:`<div class="uniNet owed">Pay $0.00 · $${(-net).toFixed(2)} still owed</div>`;})()}`:''}</td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
+    $('weeklyRows').innerHTML=weekly.map(e=>`<tr><td class="stickyCol"><b>${esc(e.name)}</b></td><td class="totalCol"><b>${Number(e.total).toFixed(2)}</b></td><td class="totalCol"><b>$${Number(e.earnings).toFixed(2)}</b>${(e.rates||[]).length&&(e.rates.length>1||e.rates[0]!==Number(e.wage).toFixed(2))?`<div class="muted small">at $${e.rates.join(' + $')}/h</div>`:''}${dedBy.has(String(e.employee_id))?`<div class="uniDed">−$${dedBy.get(String(e.employee_id)).total.toFixed(2)} uniform</div>${(()=>{const net=Number(e.earnings)-dedBy.get(String(e.employee_id)).total;return net>=0?`<div class="uniNet">Pay $${net.toFixed(2)}</div>`:`<div class="uniNet owed">Pay $0.00 · $${(-net).toFixed(2)} still owed</div>`;})()}`:''}</td><td>${esc(e.title||'')}</td><td><input class="wage" type="number" min="0" max="100000" step="0.01" value="${Number(e.wage).toFixed(2)}" data-id="${e.employee_id}"></td>${e.days.map(v=>Number(v)>0.0001?`<td class="wDay">${Number(v).toFixed(2)}</td>`:'<td class="wDay"><span class="dgDash">–</span></td>').join('')}</tr>`).join('')||'<tr><td colspan="12">No employees.</td></tr>';
     playRowsIn($('weeklyRows'));
-    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{try{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||''})});await loadPeople();await loadWeeklyPaidHours();toast(`Wage updated for ${person?.name||'employee'}.`);}catch(e){toast(e.message,'bad');}});
+    document.querySelectorAll('.wage').forEach(i=>i.onchange=async()=>{const person=managerPeople.find(p=>String(p.id)===String(i.dataset.id));const old=Number(person?.hourly_wage||0);
+      if(!confirm(`Change ${person?.name||'this employee'}'s rate from $${old.toFixed(2)} to $${Number(i.value).toFixed(2)} starting today (${fmtYmd(iso(new Date()))})?\n\nEarlier days keep $${old.toFixed(2)}. To choose another start date, open the employee in Employees.`)){i.value=old.toFixed(2);return;}
+      try{await api('/api/employees',{method:'PATCH',body:JSON.stringify({id:i.dataset.id,wage:Number(i.value),title:person?.title||'',email:person?.email||'',effectiveDate:iso(new Date())})});await loadPeople();await loadWeeklyPaidHours();toast(`New rate for ${person?.name||'employee'} starts today.`);}catch(e){toast(displayMessage(e.payload||e.message),'bad');}});
   }
   const statusText=s=>({active:'Active',vacation:'On vacation',terminated:'Terminated'}[s]||'Active');
   function paidFor(x,minimum){
@@ -1363,13 +1422,13 @@
       (days[k]=days[k]||[]).push(x);
     }
     const dayKeys=Object.keys(days).sort();
-    let totalPaid=0,totalActual=0,denied=0,pending=0,fullDays=0,customDays=0,longest=0,longestDay='';
+    let totalEarn=0,totalPaid=0,totalActual=0,denied=0,pending=0,fullDays=0,customDays=0,longest=0,longestDay='';
     const monthly={};
     for(const k of dayKeys){
       const list=days[k];
-      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0);
+      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),earn=list.reduce((a,x)=>a+paidFor(x,minimum)*Number(x.hourly_wage??wage),0);
       const actual=list.reduce((a,x)=>a+hours(x),0);
-      totalPaid+=paid;totalActual+=actual;
+      totalPaid+=paid;totalActual+=actual;totalEarn+=earn;
       denied+=list.reduce((a,x)=>a+Number(x.rejected_count||0),0);
       pending+=list.filter(x=>x.manager_review_status==='pending').length;
       fullDays+=list.some(x=>x.manager_review_status==='approved_full')?1:0;
@@ -1377,7 +1436,7 @@
       if(paid>longest){longest=paid;longestDay=k;}
       const mk=k.slice(0,7);
       const m=monthly[mk]=monthly[mk]||{days:0,paid:0,actual:0};
-      m.days++;m.paid+=paid;m.actual+=actual;
+      m.days++;m.paid+=paid;m.actual+=actual;m.earn=(m.earn||0)+earn;
     }
     const worked=dayKeys.length;
     const avg=worked?totalPaid/worked:0;
@@ -1386,7 +1445,7 @@
       tile('DAYS WORKED',String(worked),months?`over ${months} month${months>1?'s':''}`:'in this range'),
       tile('PAID HOURS',totalPaid.toFixed(2),''),
       tile('ACTUAL HOURS',totalActual.toFixed(2),''),
-      tile('EARNINGS','$'+(totalPaid*wage).toFixed(2),`at $${wage.toFixed(2)}/h`),
+      tile('EARNINGS','$'+totalEarn.toFixed(2),(()=>{const rs=[...new Set(shifts.map(x=>Number(x.hourly_wage??wage).toFixed(2)))];return rs.length>1?`rates $${rs.join(', $')}/h`:`at $${(rs[0]||wage.toFixed(2))}/h`;})()),
       tile('AVG PER DAY',avg.toFixed(2)+' h',''),
       tile('LONGEST DAY',longest?longest.toFixed(2)+' h':'—',longestDay?new Date(longestDay+'T12:00:00').toLocaleDateString():''),
       tile('DENIED CLOCK-OUTS',String(denied),''),
@@ -1394,11 +1453,11 @@
     ].join('');
     $('reportMonths').innerHTML=Object.keys(monthly).sort().reverse().map(mk=>{
       const m=monthly[mk],label=new Date(mk+'-01T12:00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'});
-      return `<tr><td><b>${esc(label)}</b></td><td>${m.days}</td><td>${m.paid.toFixed(2)}</td><td>${m.actual.toFixed(2)}</td><td>$${(m.paid*wage).toFixed(2)}</td></tr>`;
+      return `<tr><td><b>${esc(label)}</b></td><td>${m.days}</td><td>${m.paid.toFixed(2)}</td><td>${m.actual.toFixed(2)}</td><td>$${Number(m.earn||0).toFixed(2)}</td></tr>`;
     }).join('')||'<tr><td colspan="5">No months with recorded work.</td></tr>';
     $('reportDays').innerHTML=dayKeys.slice().reverse().map(k=>{
       const list=days[k].slice().sort((a,b)=>new Date(a.clock_in)-new Date(b.clock_in));
-      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),actual=list.reduce((a,x)=>a+hours(x),0);
+      const paid=list.reduce((a,x)=>a+paidFor(x,minimum),0),actual=list.reduce((a,x)=>a+hours(x),0),earn=list.reduce((a,x)=>a+paidFor(x,minimum)*Number(x.hourly_wage??wage),0);
       const hm=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const last=list[list.length-1];
       const notes=[...new Set(list.map(x=>x.clock_out_note).filter(Boolean))].join(', ');
@@ -1406,7 +1465,7 @@
                    list.reduce((a,x)=>a+Number(x.rejected_count||0),0)?'<span class="dgTag warn">denied</span>':''].join('');
       return `<tr><td><b>${esc(new Date(k+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}))}</b></td>
         <td>${list.length}</td><td>${hm(list[0].clock_in)}</td><td>${last.clock_out?hm(last.clock_out):'Open'}</td>
-        <td>${actual.toFixed(2)}</td><td><b>${paid.toFixed(2)}</b></td><td>$${(paid*wage).toFixed(2)}</td>
+        <td>${actual.toFixed(2)}</td><td><b>${paid.toFixed(2)}</b></td><td>$${earn.toFixed(2)}</td>
         <td>${esc(notes||'—')} ${flags}</td></tr>`;
     }).join('')||'<tr><td colspan="8">No working days in this period.</td></tr>';
     $('reportResult').dataset.employeeId=String(emp.id);
@@ -1622,6 +1681,16 @@
   /* ---- Manager: Employee Records ---- */
   let recRows=[],recCurrent=null,recLicData=null;
   const REC_LABEL={full_name:'name',dob:'birth date',address:'address',phone:'phone',ssn_last4:'SSN',emergency_name:'emergency contact',emergency_phone:'emergency phone',emergency_relation:'relation',license:'licence photo'};
+  async function loadRecChanges(){
+    try{const c=(await api('/api/records?changes=1')).changes||[];
+      $('recChangesWrap').classList.toggle('hide',!c.length);$('recChangesCount').textContent=c.length;
+      $('recChanges').innerHTML=c.map(x=>`<div class="recChange"><div><b>${esc(x.name)}</b> · ${esc(x.label)}<div class="small">${x.field==='license'?`<button type="button" class="mini secondary" data-chg-photo="${x.id}">See new photo</button>`:`<span class="muted">${esc(x.from==null||x.from===''?'(empty)':x.field==='dob'?fmtYmd(x.from):x.from)}</span> → <b>${esc(x.to==null||x.to===''?'(empty)':x.field==='dob'?fmtYmd(x.to):x.to)}</b>`}</div><div class="muted small">asked ${esc(supWhen(x.created_at))}</div></div><div class="supItemBtns"><button type="button" class="mini secondary" data-chg-no="${x.id}">Reject</button><button type="button" class="mini primary" data-chg-yes="${x.id}">Approve</button></div></div>`).join('');
+      const decide=async(id,decision)=>{try{await api('/api/records',{method:'PATCH',body:JSON.stringify({action:'change_decide',id:Number(id),decision})});toast(decision==='approve'?'Change approved.':'Change rejected.');loadRecChanges();loadRecords();}catch(e){toast(displayMessage(e.payload||e.message),'bad');}};
+      $('recChanges').querySelectorAll('[data-chg-yes]').forEach(b=>b.onclick=()=>decide(b.dataset.chgYes,'approve'));
+      $('recChanges').querySelectorAll('[data-chg-no]').forEach(b=>b.onclick=()=>{if(confirm('Reject this change? The painter keeps the details already on file.'))decide(b.dataset.chgNo,'reject');});
+      $('recChanges').querySelectorAll('[data-chg-photo]').forEach(b=>b.onclick=async()=>{try{const j=await api(`/api/records?changePhoto=${b.dataset.chgPhoto}`);if(j.image){const w=window.open('');if(w){w.document.write(`<img src="${j.image}" style="max-width:100%">`);}}}catch{}});
+    }catch{}
+  }
   async function loadRecords(){try{recRows=(await api('/api/records')).employees||[];renderRecords();}catch(e){$('recList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}}
   function renderRecords(){
     const q=($('recSearch').value||'').trim().toLowerCase(),miss=$('recMissing').checked,term=$('recShowTerm').checked;
@@ -1642,7 +1711,7 @@
     $('recPanel').classList.remove('hide');
   }
   async function saveRecord(){
-    const body={employeeId:Number(recCurrent.id),full_name:$('rFull').value,dob:$('rDob').value,address:$('rAddr').value,phone:$('rPhone').value,email:$('rEmail').value,emergency_name:$('rEmName').value,emergency_phone:$('rEmPhone').value,emergency_relation:$('rEmRel').value,start_date:$('rStart').value,termination_date:$('rTermDate').value,termination_reason:$('rTermReason').value,vacation_opening_hours:$('rOpening').value||0};
+    const body={employeeId:Number(recCurrent.id),dob:$('rDob').value,address:$('rAddr').value,phone:$('rPhone').value,email:$('rEmail').value,emergency_name:$('rEmName').value,emergency_phone:$('rEmPhone').value,emergency_relation:$('rEmRel').value,start_date:$('rStart').value,termination_date:$('rTermDate').value,termination_reason:$('rTermReason').value,vacation_opening_hours:$('rOpening').value||0};
     if($('rSsn').value.trim()){if($('rSsn').value.replace(/\D/g,'').length!==9)return $('recMsg').textContent='The SSN must have 9 digits.';body.ssn=$('rSsn').value;}
     if(recLicData)body.license=recLicData;
     $('recMsg').textContent='Saving…';
@@ -1727,9 +1796,9 @@
       {id:'m-usage',t:'Supplies Usage Comparison',k:'usage comparison chart painter asked delivered month',b:['A monthly chart with one column per painter. Switch between Asked for and Delivered, and use ‹ › to change the month.']},
       {id:'m-suphist',t:'Stock History',k:'stock history log changes audit',b:['Every change to a stock amount: what you set and what was delivered to whom. Use the date bar to choose the period. Entries cannot be edited or deleted.']}]},
     {sec:'Uniforms',page:'uniforms',items:[
-      {id:'m-unireq',t:'Free and paid uniform requests',k:'uniform request approve deliver buy free paid reject limit',b:['Painters request T-shirts (half or full sleeve), trousers and jackets in sizes XS–3XL, and choose Free or Paid when they send it.','Free Uniform Requests (first on the page) lists the free ones; Paid Uniform Requests (second) lists the paid ones. Approve, then Mark delivered when you hand it over. A paid delivery is deducted from that week’s pay; a free one is not.','Delivery is blocked if Uniform Inventory does not have enough of that item and size. Add stock first.','Requests sent before the Free/Paid choice existed show with the free ones, with both delivery buttons.']},
+      {id:'m-unireq',t:'Free and paid uniform requests',k:'uniform request approve deliver buy free paid reject limit',b:['Painters request T-shirts (half or full sleeve), trousers, jackets and hoodies in sizes XS–XXL, and choose Free or Paid when they send it.','Free Uniform Requests (first on the page) lists the free ones; Paid Uniform Requests (second) lists the paid ones. Approve, then Mark delivered when you hand it over. A paid delivery is deducted from that week’s pay; a free one is not.','Delivery is blocked if Uniform Inventory does not have enough of that item and size. Add stock first.','Requests sent before the Free/Paid choice existed show with the free ones, with both delivery buttons.']},
       {id:'m-uniinv',t:'Uniform Inventory',k:'uniform inventory stock size count receive',b:['A grid of items by size. Tap a number to add stock that arrived or to set an exact count. Delivered uniforms come off automatically.','Under each item: amount at the start of the dates, received (+), handed out (−) and amount at the end. “Inventory changes” lists every change.']},
-      {id:'m-unifree',t:'Free uniforms given, purchases and giving a uniform',k:'free uniform company purchases history give uniform without request',b:['Under Free Uniform Requests, “Free uniforms given” lists everything given at no cost. Under Paid Uniform Requests, “Uniform purchases” lists what painters bought and how much was deducted. Each has its own date bar.','+ Give a uniform hands out a uniform without a request: choose the employee, item, size, how many, and Free or Bought. If a free one goes over the painter’s free limit you are asked to confirm.']},
+      {id:'m-unifree',t:'Free uniforms given, purchases and giving a uniform',k:'free uniform company purchases history give uniform without request',b:['Under Free Uniform Requests, “Free uniforms given” lists everything given at no cost. Under Paid Uniform Requests, “Paid uniforms given” lists what painters bought and how much was deducted. Each has its own date bar.','+ Give a uniform hands out a uniform without a request: choose the employee, item, size, how many, and Free or Bought. If a free one goes over the painter’s free limit you are asked to confirm.']},
       {id:'m-uniprice',t:'Uniform prices and free limits',k:'uniform prices cost change free limit maximum per month year blocked',b:['Prices & Free Limits (last on the page): change each item’s price for paid requests. A request keeps the price it had when it was sent.','Free per painter: the most of each item one painter can get free, per calendar month or per calendar year (choose at the top). Free requests already waiting count toward it. When a painter reaches the limit, free requests for that item are blocked until the next month or year, and the painter must send a paid request. Set 0 to never give that item free.','Tap Save prices & limits.']}]},
     {sec:'Performance',page:'performance',items:[
       {id:'m-perf',t:'Performance score and entering it',k:'performance evaluation on time hours touch-up complaint absent absence notice 85 perfect monthly yearly time zone',b:['Each month adds up to 100%: your evaluation (0–30), on-time clock-in at 8:10 am or earlier (share of days × 10), weeks with 38.5 or more paid hours, including over 40 (share of weeks × 10), customer touch-ups/complaints (0–1 = 30%, 2 = 10%, 3+ = 0%), and absences without notice (0 = 20%, 1 or more = 0%).','Type the evaluation, the touch-up count and the absences for each person; they save by themselves. Until all three are entered, the score leaves them out and shows as “Not final”: it is the share of the points possible so far.','Switch to Yearly to see every month and the year average. On-time is checked in the time zone shown on the page; change it if needed. 85% and above is perfect.']}]},
@@ -1905,7 +1974,7 @@
   }
   // "Seen" ticks change without new messages, so the open conversation is fully reloaded now and then.
   let chatTick=0;
-  function startChatTimer(){clearInterval(chatTimer);chatTick=0;chatTimer=setInterval(()=>{if(currentMgrPage()!=='messages'||$('managerApp').classList.contains('hide')){clearInterval(chatTimer);chatTimer=null;return;}chatTick++;loadChatMsgs(chatTick%4===0);if(chatTick%2===0)loadChatThreads();},8000);}
+  function startChatTimer(){clearInterval(chatTimer);chatTick=0;chatTimer=setInterval(()=>{if(currentMgrPage()!=='messages'||$('managerApp').classList.contains('hide')){clearInterval(chatTimer);chatTimer=null;return;}chatTick++;loadChatMsgs(chatTick%6===0);if(chatTick%3===0)loadChatThreads();},4000);}
   async function sendMgrChat(e){
     e?.preventDefault();const inp=$('chatInput'),text=inp.value.trim();if(!text||!chatCurrent)return;
     if(chatCurrent==='all'&&!confirm('Send this message to every painter?'))return;
@@ -1970,6 +2039,7 @@
       const un=Number(j.uniformPending||0);
       if(uniKnownPending!==null&&un>uniKnownPending){toast(j.uniformLatest?`New uniform request from ${j.uniformLatest.employee_name}`:'New uniform request');if(currentMgrPage()==='uniforms')loadUniforms();}
       uniKnownPending=un;setUniBadge(un);renderLowAlert(j.low||[]);
+      const vr=Number(j.vacationRequests||0);if(vrKnown!==null&&vr>vrKnown){toast('New vacation request');if(currentMgrPage()==='vacations')loadVacRequests();}vrKnown=vr;setVrBadge(vr);setRcBadge(Number(j.recordChanges||0));
       const cu=Number(j.chatUnread||0);
       if(chatUnread!==null&&cu>chatUnread){const onIt=currentMgrPage()==='messages'&&chatCurrent&&j.chatLatest&&String(j.chatLatest.employee_id)===String(chatCurrent);if(!onIt)toast(j.chatLatest?`New message from ${j.chatLatest.name}`:'New message');if(currentMgrPage()==='messages')loadChatThreads();}
       if(currentMgrPage()!=='messages'){chatUnread=cu;setChatBadge(cu);}
@@ -2066,8 +2136,8 @@
     $('usageNote').textContent=rows.length?`${total} items ${usageMode==='given'?'delivered':'asked for'} in total. Counted in units (rolls, pieces, packs, boxes).`:'';
   }
   // Uniforms
-  const UNI_NAMES={tshirt_half:'T-shirt, half sleeve',tshirt_full:'T-shirt, full sleeve',trousers:'Trousers',jacket:'Jacket'};
-  const UNI_SIZES=['XS','S','M','L','XL','XXL','3XL'];
+  const UNI_NAMES={tshirt_half:'T-shirt, half sleeve',tshirt_full:'T-shirt, full sleeve',trousers:'Trousers',jacket:'Jacket',hoodie:'Hoodie'};
+  const UNI_SIZES=['XS','S','M','L','XL','XXL'];
   let uniData={requests:[]},uniTab='pending',uniKnownPending=null;
   function setUniBadge(n){document.querySelectorAll('[data-uni-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});}
   let uniReqBar,uniPReqBar,uniInvBar,uniFreeBar,uniBuyBar,uniStockCell=null;
@@ -2166,7 +2236,7 @@
     const [a,z]=vacBar.range();document.querySelectorAll('.vacRangeH').forEach(el=>el.textContent=`(${vacBar.label()})`);
     try{vacRows=(await api(`/api/manager?view=vacations&start=${encodeURIComponent(a.toISOString())}&end=${encodeURIComponent(z.toISOString())}`)).employees||[];renderVacations();}
     catch(e){$('vacRows').innerHTML=`<tr><td colspan="8">${esc(displayMessage(e.payload||e.message))}</td></tr>`;}
-    loadVacHistory();
+    loadVacHistory();loadVacRequests();
   }
   async function loadVacHistory(){
     const [a,z]=vacHistBar.range();
@@ -2191,6 +2261,28 @@
       $('vacHistory').innerHTML=h.length?h.map(x=>`<div class="vacHist">${x.kind==='adjust'?`<span class="adjTag">Adjust</span> <b>${x.hours>0?'+':''}${Number(x.hours).toFixed(2)} h</b>`:`<b>${Number(x.hours).toFixed(2)} h</b>`} <span class="muted">· ${esc(x.taken_on)}${x.note?' · '+esc(x.note):''}</span></div>`).join(''):'<span class="muted">No vacation recorded yet.</span>';}catch{$('vacHistory').textContent='';}
   }
   function setVacMode(m){$('vacPanel').dataset.mode=m;document.querySelectorAll('[data-vac-mode]').forEach(b=>b.classList.toggle('on',b.dataset.vacMode===m));$('vacTakenForm').classList.toggle('hide',m!=='taken');$('vacAdjForm').classList.toggle('hide',m!=='adjust');$('vacPanelMsg').textContent='';}
+  let vrMgrRows=[],vrTab='pending',vrKnown=null;
+  function setVrBadge(n){document.querySelectorAll('[data-vr-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});}
+  function setRcBadge(n){document.querySelectorAll('[data-rc-count]').forEach(el=>{el.textContent=n;el.classList.toggle('hide',!n);});}
+  async function loadVacRequests(){
+    try{vrMgrRows=(await api('/api/vacreq')).requests||[];renderVacRequests();}catch(e){$('vrMgrList').innerHTML=`<div class="dashEmpty">${esc(displayMessage(e.payload||e.message))}</div>`;}
+  }
+  function renderVacRequests(){
+    document.querySelectorAll('[data-vr-tab]').forEach(b=>b.classList.toggle('on',b.dataset.vrTab===vrTab));
+    const pend=vrMgrRows.filter(r=>r.status==='pending').length;$('vrCountPending').textContent=pend;setVrBadge(pend);
+    const rows=vrMgrRows.filter(r=>vrTab==='all'?true:vrTab==='denied'?['denied','cancelled'].includes(r.status):r.status===vrTab);
+    const bal=id=>{const v=vacRows.find(x=>String(x.employee_id)===String(id));return v?Number(v.balance):null;};
+    $('vrMgrList').innerHTML=rows.map(r=>{const b=bal(r.employee_id),st={pending:'Pending',approved:'Approved',denied:'Denied',cancelled:'Cancelled by painter'}[r.status];
+      return `<article class="supReq st-${r.status==='denied'||r.status==='cancelled'?'rejected':r.status==='approved'?'given':'pending'}"><div class="supReqHead"><div class="who"><span class="avatar">${esc(initials(r.employee_name))}</span><div><b>${esc(r.employee_name)}</b><div class="muted small">asked ${esc(supWhen(r.created_at))}${b!=null?` · balance ${b.toFixed(2)} h`:''}</div></div></div><span class="supBadge ${r.status==='denied'||r.status==='cancelled'?'rejected':r.status==='approved'?'given':'pending'}">${esc(st)}</span></div>
+        <div class="vrDates"><b>${esc(fmtYmd(r.start_date))}${r.end_date!==r.start_date?' → '+esc(fmtYmd(r.end_date)):''}</b> · ${Number(r.hours).toFixed(2)} hours</div>${r.note?`<div class="supNote">“${esc(r.note)}”</div>`:''}
+        ${r.status==='pending'?`<div class="supReqActions"><label class="vrHoursLbl">Hours to record<input type="number" step="0.5" min="0.5" data-vr-hours="${r.id}" value="${Number(r.hours)}"/></label><input class="supMgrNote" data-vr-note="${r.id}" maxlength="300" placeholder="Note to the painter (optional)"/><button class="secondary" data-vr-deny="${r.id}" type="button">Deny</button><button class="primary" data-vr-ok="${r.id}" type="button">Approve</button></div><div class="muted small" data-vr-msg="${r.id}"></div>`:`<div class="muted small supDone">${esc(st)} ${r.decided_at?esc(supWhen(r.decided_at)):''}${r.manager_note?` · Your note: “${esc(r.manager_note)}”`:''}</div>`}</article>`;}).join('')||`<div class="dashEmpty">${vrTab==='pending'?'No vacation requests waiting.':'Nothing here.'}</div>`;
+    const decide=async(id,decision)=>{const msg=document.querySelector(`[data-vr-msg="${id}"]`),note=document.querySelector(`[data-vr-note="${id}"]`).value.trim(),hours=document.querySelector(`[data-vr-hours="${id}"]`).value;const r=vrMgrRows.find(x=>String(x.id)===String(id));
+      if(decision==='approved'){const v=vacRows.find(x=>String(x.employee_id)===String(r.employee_id));if(v&&!v.eligible&&!confirm(v.start_date?`${r.employee_name} is not eligible for paid vacation until ${fmtYmd(v.eligible_from)}. Approve anyway?`:`${r.employee_name} has no start date, so eligibility can't be checked. Approve anyway?`))return;if(!confirm(`Approve ${hours} vacation hours for ${r.employee_name}? They are recorded as vacation taken.`))return;}
+      else if(!confirm(`Deny this request from ${r.employee_name}?`))return;
+      msg.textContent='Saving…';try{await api('/api/vacreq',{method:'POST',body:JSON.stringify({action:'decide',id:Number(id),decision,note,hours})});toast(decision==='approved'?'Approved and recorded.':'Request denied.');await loadVacations();}catch(e){msg.textContent=displayMessage(e.payload||e.message);}};
+    document.querySelectorAll('[data-vr-ok]').forEach(b=>b.onclick=()=>decide(b.dataset.vrOk,'approved'));
+    document.querySelectorAll('[data-vr-deny]').forEach(b=>b.onclick=()=>decide(b.dataset.vrDeny,'denied'));
+  }
   async function saveVacAdjust(){
     const id=$('vacPanel').dataset.id,hours=Number($('vacAdjHours').value),note=$('vacAdjNote').value.trim(),msg=$('vacPanelMsg'),r=vacRows.find(x=>x.employee_id===id)||{};
     if(!hours||!Number.isFinite(hours))return msg.textContent='Enter the hours: 8 adds, -8 takes away.';if(!note)return msg.textContent='Write a short reason.';
@@ -2266,9 +2358,10 @@
     vacBar=makeDateBar('vacDates',loadVacations,{year:true,initial:'year'});vacHistBar=makeDateBar('vacHistDates',loadVacHistory,{year:true,initial:'year'});
     $('vacSearch').oninput=renderVacations;$('vacShowAll').onchange=renderVacations;
     document.querySelectorAll('[data-vac-mode]').forEach(b=>b.onclick=()=>setVacMode(b.dataset.vacMode));
+    document.querySelectorAll('[data-vr-tab]').forEach(b=>b.onclick=()=>{vrTab=b.dataset.vrTab;renderVacRequests();});$('vrRefresh').onclick=loadVacations;
     $('vacCancel').onclick=()=>$('vacPanel').classList.add('hide');$('vacSave').onclick=saveVac;
     $('vacPanel').onclick=e=>{if(e.target===$('vacPanel'))$('vacPanel').classList.add('hide');};
-    pollSupplies();setInterval(pollSupplies,30000);loadVehAlerts();setInterval(loadVehAlerts,600000);
+    pollSupplies();setInterval(pollSupplies,15000);loadVehAlerts();setInterval(loadVehAlerts,600000);
   }
   // Section menu: Dashboard, Employees, Supplies, Settings. Each section shows
   // its own cards (tagged data-page) in the original layout; the address keeps
@@ -2291,7 +2384,7 @@
     if(pg==='supplies'){loadSupplies();loadUsage();}
     if(pg==='uniforms')loadUniforms();
     if(pg==='vacations')loadVacations();
-    if(pg==='employees'){open('toggleEmployees','employeesBody');renderPeople();loadRecords();}
+    if(pg==='employees'){open('toggleEmployees','employeesBody');renderPeople();loadRecords();loadRecChanges();}
     if(pg==='performance')loadPerf();
     if(pg==='resources')loadResources();
     if(pg==='vehicles')loadVehicles();

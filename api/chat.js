@@ -85,7 +85,9 @@ export default async function handler(req, res) {
   try {
     await ensureChat();
     const u = new URL(req.url, 'https://workclock.invalid'), b = req.body || {};
-    const manager = await getManager(req), emp = manager ? null : await getEmployeeSession(req);
+    // ?mine=1 = the painter's own page. Needed when one browser is logged in as both.
+    const asEmp = u.searchParams.get('mine') === '1';
+    const manager = asEmp ? null : await getManager(req), emp = manager ? null : await getEmployeeSession(req);
     if (!manager && !emp) return json(res, 401, { error: 'Login required.' });
     const num = v => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 

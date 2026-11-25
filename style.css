@@ -1089,3 +1089,19 @@ body.mgr .helpItem .helpHead{background:#fff}
 .chatListHead .searchBox{flex:none}
 .chatThreadMain b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chatThreadSide .muted{white-space:nowrap;font-size:11px}
+/* Prices & Free Limits: the item names stay put while the numbers slide sideways. */
+.uniLimitWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px}
+table.uniLimitTable{min-width:560px;margin:0}
+.uniLimitTable th:first-child,.uniLimitTable td:first-child{position:sticky;left:0;background:#fff;z-index:2;box-shadow:1px 0 0 var(--line)}
+.uniLimitTable th:first-child{background:#fafafa}
+.wageHist{display:flex;flex-direction:column;gap:4px;margin:6px 0 4px}
+.wageRow{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px}
+.lockedIn{background:#f1f5f9!important;color:#475569}
+.infoLockNote{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:12px;padding:10px 12px;font-size:14px;margin:8px 0}
+.infoPending{background:#fef3c7;border:1px solid #fde68a;color:#92400e;border-radius:12px;padding:10px 12px;font-size:14px;font-weight:700;margin:8px 0}
+.recChanges{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.recChange{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:10px 12px}
+.vrDates{margin:8px 0 4px;font-size:15px}
+.vrHoursLbl{display:flex;flex-direction:column;font-size:12px;margin:0;max-width:130px}
+.vrHoursLbl input{margin-top:2px;padding:8px}
+.vacTile.big.neg{background:#fef2f2;border-color:#fecaca}.vacTile.big.neg strong{color:#b91c1c}

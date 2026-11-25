@@ -1,5 +1,6 @@
 import { sql, json, requireManager, requireSameOrigin, settingNumber, audit } from './_db.js';
 import { vacationSummary, vacationHistory, vacationHistoryAll, recordVacationUsed } from './_vacation.js';
+import { rateBook, rateOn } from './_wages.js';
 import { allocatePaidHours, normalizeDayStarts, hoursBetween, effectiveShiftPay } from './_time.js';
 
 function getRange(req){
@@ -40,6 +41,8 @@ async function handleReport(req,res,u){
     ORDER BY s.clock_in ASC
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum=await settingNumber('project_completed_min_paid_hours',8);
+  // Each shift carries the rate in effect on its own day.
+  const book=await rateBook();for(const sh of shifts)sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage);
   return json(res,200,{employee:employees[0],shifts,truncated:shifts.length>=MAX_REPORT_SHIFTS,settings:{project_completed_min_paid_hours:minimum}});
 }
 
@@ -99,9 +102,11 @@ export default async function handler(req,res){
       WHERE s.clock_in<${end.toISOString()} AND (s.clock_out IS NULL OR s.clock_out>${start.toISOString()})
       ORDER BY s.clock_in DESC`;
     const minimum=await settingNumber('project_completed_min_paid_hours',8);
-    const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,employment_status:e.employment_status,wage:Number(e.hourly_wage||0),days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
+    const book=await rateBook();
+    const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,employment_status:e.employment_status,wage:Number(e.hourly_wage||0),earnings:0,rates:{},days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
     let totalPaid=0,totalPayroll=0;
     for(const sh of shifts){
+      sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage);
       const actual=hoursBetween(sh.clock_in,sh.clock_out), paid=effectiveShiftPay(sh,minimum),alloc=allocatePaidHours(sh,days,minimum);const e=weekly[sh.employee_id];
       // Ship the per-day split with the shift so Shift Details can show exactly
       // the same numbers as Weekly Paid Hours instead of recomputing them.
@@ -113,6 +118,7 @@ export default async function handler(req,res){
       }
       const periodPaid=alloc.reduce((a,b)=>a+b,0);
       totalPaid+=periodPaid;totalPayroll+=periodPaid*Number(sh.hourly_wage||0);
+      if(e&&periodPaid>0){e.earnings+=periodPaid*Number(sh.hourly_wage||0);e.rates[Number(sh.hourly_wage||0).toFixed(2)]=true;}
     }
     const rejected=await sql`
       SELECT r.id,r.shift_id,r.created_at,r.lat,r.lng,r.distance_miles,r.reason,r.note,e.id AS employee_id,e.name,e.title
@@ -122,7 +128,7 @@ export default async function handler(req,res){
     const pendingCount=shifts.filter(s=>s.manager_review_status==='pending').length;
     const liveEmployees=shifts.filter(s=>!s.clock_out).length;
     const summary={total_paid_hours:totalPaid,total_payroll:totalPayroll,rejected_clock_outs:rejected.length,pending_approvals:pendingCount,live_clock_ins:liveEmployees};
-    for(const e of Object.values(weekly)){e.total=e.days.reduce((a,b)=>a+b,0);e.earnings=e.total*e.wage;}
+    for(const e of Object.values(weekly)){e.total=e.days.reduce((a,b)=>a+b,0);e.rates=Object.keys(e.rates);}
     return json(res,200,{employees,shifts,summary,weekly:Object.values(weekly),rejectedAttempts:rejected,settings:{project_completed_min_paid_hours:minimum}});
   }catch(e){console.error(e);return json(res,500,{error:'Server error'});}
 }

@@ -1,5 +1,6 @@
 import { vacationSummary } from './_vacation.js';
 import { managerUnread, employeeUnread } from './chat.js';
+import { pendingVacationRequests, unseenVacationAnswers } from './vacreq.js';
 import { sql, sqlBatch, json, getManager, getEmployeeSession, requireSameOrigin, audit, nowIso } from './_db.js';
 
 /* Tools & Supplies.
@@ -154,8 +155,9 @@ async function ensureTables() {
 }
 
 /* Uniform items and sizes. Keys are stored; the pages show the names. */
-export const UNIFORM_ITEMS = ['tshirt_half', 'tshirt_full', 'trousers', 'jacket'];
-export const UNIFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+export const UNIFORM_ITEMS = ['tshirt_half', 'tshirt_full', 'trousers', 'jacket', 'hoodie'];
+// 3XL was removed at the client's request; older 3XL records still show as they were.
+export const UNIFORM_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const MAX_QTY = 100000, MAX_LINES = 40, MAX_OPEN_PER_EMPLOYEE = 5;
 const cleanText = (v, max) => { const s = String(v ?? '').trim().replace(/\s+/g, ' '); return s.length <= max ? s : null; };
 const wholeNumber = (v, min, max) => { const n = Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : null; };
@@ -217,7 +219,7 @@ async function freeUsed(employeeId, period, exceptRequest = 0) {
   for (const r of rows) out[r.item] = Number(r.n || 0);
   return out;
 }
-const UNI_LABEL = { tshirt_half: 'T-shirt, half sleeve', tshirt_full: 'T-shirt, full sleeve', trousers: 'Trousers', jacket: 'Jacket' };
+const UNI_LABEL = { tshirt_half: 'T-shirt, half sleeve', tshirt_full: 'T-shirt, full sleeve', trousers: 'Trousers', jacket: 'Jacket', hoodie: 'Hoodie' };
 async function freeLimitError(employeeId, lines, exceptRequest = 0) {
   const { period, limits } = await freeRules(), used = await freeUsed(employeeId, period, exceptRequest), want = {};
   for (const l of lines) want[l.item] = (want[l.item] || 0) + Number(l.qty);
@@ -230,6 +232,9 @@ async function freeLimitError(employeeId, lines, exceptRequest = 0) {
 const money = v => Math.round(Number(v) * 100) / 100;
 const lineAmount = (l, prices) => money(Number(l.qty) * (l.unit_price != null ? Number(l.unit_price) : prices[l.item] ?? DEFAULT_UNIFORM_PRICE));
 
+async function pendingRecordChanges() {
+  try { return Number((await sql`SELECT count(*) AS n FROM record_change_requests WHERE status='pending'`)[0].n); } catch { return 0; }
+}
 const lowItems = () => sql`SELECT id,name,unit,quantity,full_qty,low_at FROM supply_items
   WHERE deleted_at IS NULL AND active=1 AND stock_mode<>'demand' AND ((full_qty>0 AND quantity*5<full_qty) OR (low_at>0 AND quantity<low_at)) ORDER BY CASE WHEN full_qty>0 THEN CAST(quantity AS REAL)/full_qty ELSE 0 END, name`;
 
@@ -279,7 +284,7 @@ async function employeeSide(req, res, emp) {
     if (u.searchParams.get('count')) {
       const a = await sql`SELECT count(*) AS n FROM supply_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
       const c = await sql`SELECT count(*) AS n FROM uniform_requests WHERE employee_id=${emp.id} AND employee_seen=0`;
-      return json(res, 200, { supplies: a[0].n, uniforms: c[0].n, chat: await employeeUnread(emp.id) });
+      return json(res, 200, { supplies: a[0].n, uniforms: c[0].n, chat: await employeeUnread(emp.id), vacation: await unseenVacationAnswers(emp.id) });
     }
     if (u.searchParams.get('vacation')) {
       const year = new Date().getUTCFullYear();
@@ -391,7 +396,7 @@ async function managerSide(req, res, manager) {
       const latest = await sql`SELECT r.id,e.name AS employee_name FROM supply_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
       const up = await sql`SELECT count(*) AS n FROM uniform_requests WHERE status='pending'`;
       const ulatest = await sql`SELECT r.id,e.name AS employee_name FROM uniform_requests r JOIN employees e ON e.id=r.employee_id WHERE r.status='pending' ORDER BY r.created_at DESC LIMIT 1`;
-      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null, uniformPending: up[0].n, uniformLatest: ulatest[0] || null, low: await lowItems(), ...(await managerUnread()) });
+      return json(res, 200, { pending: pending[0].n, latest: latest[0] || null, uniformPending: up[0].n, uniformLatest: ulatest[0] || null, low: await lowItems(), ...(await managerUnread()), vacationRequests: await pendingVacationRequests(), recordChanges: await pendingRecordChanges() });
     }
     if (u.searchParams.get('uniforms')) {
       const rg = k => {

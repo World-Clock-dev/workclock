@@ -18,7 +18,8 @@ const idOf = v => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-    const manager = await getManager(req), emp = manager ? null : await getEmployeeSession(req);
+    const asEmp = new URL(req.url, 'https://workclock.invalid').searchParams.get('mine') === '1';
+    const manager = asEmp ? null : await getManager(req), emp = manager ? null : await getEmployeeSession(req);
     if (!manager && !emp) return json(res, 401, { error: 'Login required.' });
     if (!requireSameOrigin(req, res)) return;
     const u = new URL(req.url, 'https://workclock.invalid'), q = k => u.searchParams.get(k);

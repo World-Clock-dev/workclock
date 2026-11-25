@@ -1,4 +1,5 @@
 import { sql, norm, json, requireManager, requireSameOrigin, audit, nowIso, hashSecret, round2 } from './_db.js';
+import { setWage, wageHistory, deleteWage, companyTz, localDate } from './_wages.js';
 
 function validEmail(value) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
@@ -19,6 +20,8 @@ export default async function handler(req, res) {
     const manager = await requireManager(req, res); if (!manager) return;
     if (!requireSameOrigin(req, res)) return;
     if (req.method === 'GET') {
+      const wh = validId(new URL(req.url, 'https://workclock.invalid').searchParams.get('wageHistory'));
+      if (wh) return json(res, 200, { history: await wageHistory(wh) });
       const rows = await sql`SELECT id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin FROM employees
         ORDER BY CASE employment_status WHEN 'active' THEN 0 WHEN 'vacation' THEN 1 ELSE 2 END, name`;
       return json(res, 200, { employees: rows });
@@ -45,6 +48,12 @@ export default async function handler(req, res) {
     }
     if (req.method === 'PATCH') {
       const b=req.body||{},id=validId(b.id); if(!id)return json(res,400,{error:'Employee id required.'});
+      if (b.action==='wage_delete') {
+        const ok=await deleteWage(id,validId(b.historyId));
+        if(!ok)return json(res,400,{error:'That rate cannot be removed.'});
+        await audit('manager',manager.id,'wage_change_removed',{employee_id:id,history_id:b.historyId});
+        return json(res,200,{ok:true});
+      }
       if (b.status!==undefined) {
         const status=String(b.status||'').trim();
         if(!['active','vacation','terminated'].includes(status))return json(res,400,{error:'Status must be active, vacation, or terminated.'});
@@ -73,7 +82,31 @@ export default async function handler(req, res) {
       const title=validTitle(b.title); if(title===undefined)return json(res,400,{error:'Employee title must be 80 characters or fewer.'});
       const email=validEmail(b.email); if(email===undefined)return json(res,400,{error:'Invalid employee email.'});
       const titleProvided=b.title!==undefined, emailProvided=b.email!==undefined;
-      const rows=await sql`UPDATE employees SET hourly_wage=${round2(wage)},title=CASE WHEN ${titleProvided} THEN ${title} ELSE title END,email=CASE WHEN ${emailProvided} THEN ${email} ELSE email END,updated_at=${nowIso()} WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
+      // A new rate starts on its effective date (today unless given); earlier shifts keep the old rate.
+      const cur=(await sql`SELECT hourly_wage FROM employees WHERE id=${id}`)[0];
+      if(!cur)return json(res,404,{error:'Employee not found.'});
+      const eff=b.effectiveDate===undefined||b.effectiveDate===''?null:String(b.effectiveDate);
+      if(eff!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(eff)||Number.isNaN(Date.parse(eff))))return json(res,400,{error:'Choose the date the new rate starts.'});
+      let wageNow=Number(cur.hourly_wage);
+      if(round2(wage)!==round2(cur.hourly_wage)||eff!==null){
+        const day=eff||localDate(new Date(),await companyTz());
+        wageNow=await setWage(id,wage,day,manager.id,String(b.wageNote||'').trim().slice(0,200)||null);
+        await audit('manager',manager.id,'wage_changed',{employee_id:id,from:Number(cur.hourly_wage),to:wage,effective_date:day});
+      }
+      // The manager is the only one who can change a name; it is the name the employee signs in with.
+      if(b.name!==undefined&&String(b.name).trim()){
+        const nm=String(b.name).trim().replace(/\s+/g,' ');
+        if(nm.length>120)return json(res,400,{error:'Enter a valid employee name (1–120 characters).'});
+        const clash=await sql`SELECT id FROM employees WHERE normalized_name=${norm(nm)} AND id<>${id}`;
+        if(clash.length)return json(res,400,{error:'Another employee already has this name.'});
+        const before=(await sql`SELECT name FROM employees WHERE id=${id}`)[0];
+        if(before&&before.name!==nm){
+          await sql`UPDATE employees SET name=${nm},normalized_name=${norm(nm)},updated_at=${nowIso()} WHERE id=${id}`;
+          try{await sql`UPDATE employee_records SET full_name=${nm} WHERE employee_id=${id}`;}catch{}
+          await audit('manager',manager.id,'employee_renamed',{employee_id:id,from:before.name,to:nm});
+        }
+      }
+      const rows=await sql`UPDATE employees SET hourly_wage=${round2(wageNow)},title=CASE WHEN ${titleProvided} THEN ${title} ELSE title END,email=CASE WHEN ${emailProvided} THEN ${email} ELSE email END,updated_at=${nowIso()} WHERE id=${id} RETURNING id,name,title,email,hourly_wage,active,employment_status,(pin_hash IS NOT NULL) AS has_pin`;
       if(!rows.length)return json(res,404,{error:'Employee not found.'});
       await audit('manager',manager.id,'employee_updated',{employee_id:id,wage,title,email});
       return json(res,200,{employee:rows[0]});

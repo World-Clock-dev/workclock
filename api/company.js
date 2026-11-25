@@ -148,7 +148,8 @@ export default async function handler(req, res) {
   try {
     await ensure();
     const u = new URL(req.url, 'https://workclock.invalid'), b = req.body || {};
-    const manager = await getManager(req), emp = manager ? null : await getEmployeeSession(req);
+    const asEmp = new URL(req.url, 'https://workclock.invalid').searchParams.get('mine') === '1';
+    const manager = asEmp ? null : await getManager(req), emp = manager ? null : await getEmployeeSession(req);
     if (!manager && !emp) return json(res, 401, { error: 'Login required.' });
     const file = idOf(u.searchParams.get('file'));
     if (req.method === 'GET' && file) return sendPdf(res, file);

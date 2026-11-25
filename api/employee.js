@@ -1,5 +1,6 @@
 import { sql, json, requireEmployee, settingNumber, toIso, isoIn, todayStartIso, DAY } from './_db.js';
 import { allocatePaidHours, normalizeDayStarts } from './_time.js';
+import { rateBook, rateOn } from './_wages.js';
 
 function parseRange(req) {
   const u = new URL(req.url, 'https://workclock.invalid');
@@ -35,6 +36,8 @@ async function handleReport(req, res, emp, u) {
     ORDER BY s.clock_in ASC
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum = await settingNumber('project_completed_min_paid_hours', 8);
+  const book = await rateBook();
+  for (const sh of shifts) sh.hourly_wage = rateOn(book, emp.id, sh.clock_in, emp.hourly_wage);
   return json(res, 200, {
     employee: { id: emp.id, name: emp.name, title: emp.title, hourly_wage: emp.hourly_wage },
     shifts, truncated: shifts.length >= MAX_REPORT_SHIFTS,
@@ -65,10 +68,13 @@ export default async function handler(req, res) {
     const paidMinimum = await settingNumber('project_completed_min_paid_hours', 8);
     const open = await sql`SELECT id,clock_in,clock_in_lat,clock_in_lng FROM shifts WHERE employee_id=${emp.id} AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1`;
     const daily = Array(Math.max(1, days.length - 1)).fill(0);
-    let totalPaid = 0;
+    let totalPaid = 0, totalEarn = 0;
+    const book = await rateBook(), dayEarn = Array(daily.length).fill(0);
     for (const sh of shifts) {
+      const rate = rateOn(book, emp.id, sh.clock_in, emp.hourly_wage);
+      sh.hourly_wage = rate;
       const alloc = allocatePaidHours(sh, days, paidMinimum);
-      alloc.forEach((v,i)=>{ if (i<daily.length) { daily[i]+=v; totalPaid += v; } });
+      alloc.forEach((v,i)=>{ if (i<daily.length) { daily[i]+=v; totalPaid += v; dayEarn[i] += v * rate; totalEarn += v * rate; } });
     }
     const recentRuleAlert = await sql`
       SELECT r.id,r.created_at,r.distance_miles,r.reason,r.note
@@ -80,7 +86,7 @@ export default async function handler(req, res) {
       employee:{id:emp.id,name:emp.name,title:emp.title,hourly_wage:emp.hourly_wage},
       shifts,
       openShift:open[0]||null,
-      summary:{days:daily,total_paid_hours:totalPaid,total_earnings:totalPaid*Number(emp.hourly_wage||0)},
+      summary:{days:daily,day_earnings:dayEarn,total_paid_hours:totalPaid,total_earnings:totalEarn},
       settings:{project_completed_min_paid_hours:paidMinimum},
       ruleAlert: recentRuleAlert[0] ? 'Notice: a previous clock-out attempt did not follow the location rule. Your manager has been notified.' : null,
       ruleAlertId: recentRuleAlert[0]?.id || null

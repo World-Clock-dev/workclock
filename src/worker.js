@@ -28,6 +28,7 @@ import performance from '../api/performance.js';
 import company from '../api/company.js';
 import chat from '../api/chat.js';
 import upload from '../api/upload.js';
+import vacreq from '../api/vacreq.js';
 import { bindFiles } from '../api/_files.js';
 
 export const ROUTES = {
@@ -49,6 +50,7 @@ export const ROUTES = {
   'company': company,
   'chat': chat,
   'upload': upload,
+  'vacreq': vacreq,
 };
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' };
