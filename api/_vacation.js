@@ -1,5 +1,6 @@
 import { sql, sqlBatch, settingNumber, nowIso } from './_db.js';
 import { effectiveShiftPay } from './_time.js';
+import { pdfVacation, RULES as PERF_RULES } from './performance.js';
 
 /* Vacation: 40 hours of vacation for every 2,080 paid hours worked
    (52 weeks x 40 hours), i.e. 0.769 hours per 40-hour week.
@@ -10,6 +11,10 @@ import { effectiveShiftPay } from './_time.js';
    therefore never lost when old shift rows are cleaned up. */
 
 export const VACATION_PER_HOUR = 40 / 2080;
+/* From the week of 2026-11-30 vacation follows the owner's performance PDF
+   (see performance.js): 0.77 h x min(hours/40, 1) x weekly performance, at
+   most 40 h a year. Hours earned before that keep the formula above. */
+export const PDF_FROM_TS = Date.parse(PERF_RULES.vacationFrom + 'T05:00:00Z'); // midnight Eastern
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS vacation_bank (
@@ -48,7 +53,9 @@ export async function bankShiftsBefore(cutoffIso) {
   // fails the cleanup stops before deleting any shift.
   ready = false;
   await ensureVacationTables();
-  const shifts = await sql([`SELECT ${SHIFT_COLS} FROM shifts s WHERE s.clock_in < `, ` AND s.clock_out IS NOT NULL`], cutoffIso);
+  // Only shifts from before the PDF formula are banked; later weeks are kept in
+  // vacation_accrual when the manager finalizes the month.
+  const shifts = (await sql([`SELECT ${SHIFT_COLS} FROM shifts s WHERE s.clock_in < `, ` AND s.clock_out IS NOT NULL`], cutoffIso)).filter(sh => Date.parse(sh.clock_in) < PDF_FROM_TS);
   if (!shifts.length) return 0;
   const minimum = await settingNumber('project_completed_min_paid_hours', 8);
   const sums = new Map();
@@ -88,18 +95,22 @@ export async function vacationSummary(startIso, endIso) {
   try { recs = await sql`SELECT employee_id,start_date,vacation_opening_hours FROM employee_records`; } catch { recs = []; }
   const recBy = new Map(recs.map(r => [String(r.employee_id), r]));
   const s0 = new Date(startIso).getTime(), e0 = new Date(endIso).getTime();
-  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, range_paid_hours: 0, all_paid_hours: 0, used_hours: 0, range_used_hours: 0, adjust_hours: 0 }]));
+  const row = new Map(employees.map(e => [String(e.id), { employee_id: String(e.id), name: e.name, title: e.title, employment_status: e.employment_status, range_paid_hours: 0, all_paid_hours: 0, used_hours: 0, range_used_hours: 0, adjust_hours: 0, old_paid_hours: 0, old_range_paid_hours: 0 }]));
   for (const sh of shifts) {
     const r = row.get(String(sh.employee_id)); if (!r) continue;
-    const paid = effectiveShiftPay(sh, minimum), t = new Date(sh.clock_in).getTime();
+    const paid = effectiveShiftPay(sh, minimum), t = new Date(sh.clock_in).getTime(), old = t < PDF_FROM_TS;
     r.all_paid_hours += paid;
-    if (t >= s0 && t < e0) r.range_paid_hours += paid;
+    if (old) r.old_paid_hours += paid;
+    if (t >= s0 && t < e0) { r.range_paid_hours += paid; if (old) r.old_range_paid_hours += paid; }
   }
+  // Vacation from performance (PDF formula), finalized and provisional.
+  let pdf = new Map();
+  try { pdf = await pdfVacation(); } catch (e) { console.error('pdf vacation', e); }
   for (const b of bank) {
     const r = row.get(String(b.employee_id)); if (!r) continue;
-    r.all_paid_hours += Number(b.paid_hours || 0);
+    r.all_paid_hours += Number(b.paid_hours || 0); r.old_paid_hours += Number(b.paid_hours || 0);
     const y0 = Date.UTC(Number(b.year), 0, 1), y1 = Date.UTC(Number(b.year) + 1, 0, 1);
-    if (y0 >= s0 && y1 <= e0) r.range_paid_hours += Number(b.paid_hours || 0);
+    if (y0 >= s0 && y1 <= e0) { r.range_paid_hours += Number(b.paid_hours || 0); r.old_range_paid_hours += Number(b.paid_hours || 0); }
   }
   for (const u of used) { const r = row.get(String(u.employee_id)); if (r) r.used_hours = Number(u.hours || 0); }
   for (const u of adj) { const r = row.get(String(u.employee_id)); if (r) r.adjust_hours = Number(u.hours || 0); }
@@ -107,9 +118,13 @@ export async function vacationSummary(startIso, endIso) {
   const round = v => Math.round(v * 100) / 100, today = new Date().toISOString().slice(0, 10);
   return [...row.values()].map(r => {
     const rec = recBy.get(r.employee_id) || {}, opening = Number(rec.vacation_opening_hours || 0);
-    const rangeEarned = r.range_paid_hours * VACATION_PER_HOUR, allEarned = r.all_paid_hours * VACATION_PER_HOUR + opening;
+    const p = pdf.get(r.employee_id) || { final: 0, provisional: 0, byWeek: [] };
+    const pdfRange = p.byWeek.filter(([wk]) => { const t = Date.parse(wk + 'T12:00:00Z'); return t >= s0 && t < e0; }).reduce((a, [, h]) => a + h, 0);
+    const oldEarned = r.old_paid_hours * VACATION_PER_HOUR;
+    const rangeEarned = r.old_range_paid_hours * VACATION_PER_HOUR + pdfRange, allEarned = oldEarned + opening + p.final + p.provisional;
     const from = eligibleFrom(rec.start_date || null);
     return { ...r, range_paid_hours: round(r.range_paid_hours), all_paid_hours: round(r.all_paid_hours), range_earned: round(rangeEarned), opening_hours: round(opening), all_earned: round(allEarned), adjust_hours: round(r.adjust_hours),
+      old_earned: round(oldEarned), perf_final: round(p.final), perf_provisional: round(p.provisional),
       used_hours: round(r.used_hours), range_used_hours: round(r.range_used_hours), balance: round(allEarned + r.adjust_hours - r.used_hours),
       start_date: rec.start_date || null, eligible_from: from, eligible: !!from && from <= today };
   });

@@ -42,7 +42,7 @@ async function handleReport(req,res,u){
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum=await settingNumber('project_completed_min_paid_hours',8);
   // Each shift carries the rate in effect on its own day.
-  const book=await rateBook();for(const sh of shifts)sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage);
+  const book=await rateBook();for(const sh of shifts)sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage).toFixed(2);
   return json(res,200,{employee:employees[0],shifts,truncated:shifts.length>=MAX_REPORT_SHIFTS,settings:{project_completed_min_paid_hours:minimum}});
 }
 
@@ -106,7 +106,7 @@ export default async function handler(req,res){
     const weekly={};for(const e of employees)weekly[e.id]={employee_id:e.id,name:e.name,title:e.title,employment_status:e.employment_status,wage:Number(e.hourly_wage||0),earnings:0,rates:{},days:Array(Math.max(1,days.length-1)).fill(0),actual_days:Array(Math.max(1,days.length-1)).fill(0)};
     let totalPaid=0,totalPayroll=0;
     for(const sh of shifts){
-      sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage);
+      sh.hourly_wage=rateOn(book,sh.employee_id,sh.clock_in,sh.hourly_wage).toFixed(2);
       const actual=hoursBetween(sh.clock_in,sh.clock_out), paid=effectiveShiftPay(sh,minimum),alloc=allocatePaidHours(sh,days,minimum);const e=weekly[sh.employee_id];
       // Ship the per-day split with the shift so Shift Details can show exactly
       // the same numbers as Weekly Paid Hours instead of recomputing them.

@@ -37,7 +37,7 @@ async function handleReport(req, res, emp, u) {
     LIMIT ${MAX_REPORT_SHIFTS}`;
   const minimum = await settingNumber('project_completed_min_paid_hours', 8);
   const book = await rateBook();
-  for (const sh of shifts) sh.hourly_wage = rateOn(book, emp.id, sh.clock_in, emp.hourly_wage);
+  for (const sh of shifts) sh.hourly_wage = rateOn(book, emp.id, sh.clock_in, emp.hourly_wage).toFixed(2);
   return json(res, 200, {
     employee: { id: emp.id, name: emp.name, title: emp.title, hourly_wage: emp.hourly_wage },
     shifts, truncated: shifts.length >= MAX_REPORT_SHIFTS,
@@ -72,7 +72,6 @@ export default async function handler(req, res) {
     const book = await rateBook(), dayEarn = Array(daily.length).fill(0);
     for (const sh of shifts) {
       const rate = rateOn(book, emp.id, sh.clock_in, emp.hourly_wage);
-      sh.hourly_wage = rate;
       const alloc = allocatePaidHours(sh, days, paidMinimum);
       alloc.forEach((v,i)=>{ if (i<daily.length) { daily[i]+=v; totalPaid += v; dayEarn[i] += v * rate; totalEarn += v * rate; } });
     }
